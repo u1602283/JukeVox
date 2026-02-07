@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Jukevox.Server/Jukevox.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Jukevox.Server.Tests/Jukevox.Server.Tests.csproj" />
+  </Folder>
+</Solution>

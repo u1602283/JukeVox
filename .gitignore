@@ -1,0 +1,32 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.swp
+*.*~
+
+## Node
+node_modules/
+dist/
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.code-workspace
+
+## Environment
+.env
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Claude
+.claude/
+
+## State file
+party-state.json
