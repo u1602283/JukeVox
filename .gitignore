@@ -30,3 +30,9 @@ Thumbs.db
 
 ## State file
 party-state.json
+
+## Host credential
+host-credential.json
+
+## TLS certs
+*.pem

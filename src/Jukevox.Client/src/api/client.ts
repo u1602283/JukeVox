@@ -7,8 +7,8 @@ import type {
   AddToQueueRequest,
   SpotifyDevice,
   SpotifyPlaylist,
-  PlaybackState,
   SavedPartySummary,
+  HostStatus,
 } from '../types';
 
 const BASE = '/api';
@@ -21,6 +21,14 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+
+    // On auth failure, redirect to the appropriate starting page
+    if ((res.status === 401 || res.status === 403) &&
+        !url.includes('/api/host/setup/') && !url.includes('/api/host/login/')) {
+      const isHostPage = window.location.pathname.startsWith('/host');
+      window.location.href = isHostPage ? '/host' : '/';
+    }
+
     throw new Error(body.error || `Request failed: ${res.status}`);
   }
   const text = await res.text();
@@ -29,13 +37,69 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  // Party
+  // Host auth
+  hostStatus: () =>
+    request<HostStatus>(`${BASE}/host/status`),
+
+  hostSetupStatus: () =>
+    request<{ available: boolean }>(`${BASE}/host/setup/status`),
+
+  hostSetupBegin: (token: string) =>
+    request<Record<string, unknown>>(`${BASE}/host/setup/begin`, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+
+  hostSetupComplete: (attestation: unknown) =>
+    request<{ success: boolean; dnsRecord: string }>(`${BASE}/host/setup/complete`, {
+      method: 'POST',
+      body: JSON.stringify(attestation),
+    }),
+
+  hostLoginBegin: () =>
+    request<Record<string, unknown>>(`${BASE}/host/login/begin`, { method: 'POST' }),
+
+  hostLoginComplete: (assertion: unknown) =>
+    request<{ success: boolean }>(`${BASE}/host/login/complete`, {
+      method: 'POST',
+      body: JSON.stringify(assertion),
+    }),
+
+  hostLogout: () =>
+    request<{ success: boolean }>(`${BASE}/host/logout`, { method: 'POST' }),
+
+  // Host party management
   createParty: (data: CreatePartyRequest) =>
-    request<PartyState>(`${BASE}/party`, {
+    request<PartyState>(`${BASE}/host/party`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
+  resumeParty: () =>
+    request<PartyState>(`${BASE}/host/party/resume`, { method: 'POST' }),
+
+  getSavedParty: () =>
+    request<SavedPartySummary>(`${BASE}/host/party/saved`),
+
+  updateSettings: (data: { inviteCode?: string; defaultCredits?: number }) =>
+    request<void>(`${BASE}/host/party/settings`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  getPlaylists: (limit = 50, offset = 0) =>
+    request<SpotifyPlaylist[]>(`${BASE}/host/party/playlists?limit=${limit}&offset=${offset}`),
+
+  setBasePlaylist: (playlistId: string) =>
+    request<{ queue: QueueItem[]; basePlaylistId: string; basePlaylistName: string }>(
+      `${BASE}/host/party/base-playlist`,
+      { method: 'PUT', body: JSON.stringify({ playlistId }) },
+    ),
+
+  clearBasePlaylist: () =>
+    request<{ queue: QueueItem[] }>(`${BASE}/host/party/base-playlist`, { method: 'DELETE' }),
+
+  // Guest party
   joinParty: (data: JoinPartyRequest) =>
     request<PartyState>(`${BASE}/party/join`, {
       method: 'POST',
@@ -44,30 +108,6 @@ export const api = {
 
   getPartyState: () =>
     request<PartyState & { hasParty?: boolean }>(`${BASE}/party/state`),
-
-  getSavedParty: () =>
-    request<SavedPartySummary>(`${BASE}/party/saved`),
-
-  resumeParty: () =>
-    request<PartyState>(`${BASE}/party/resume`, { method: 'POST' }),
-
-  updateSettings: (data: { inviteCode?: string; defaultCredits?: number }) =>
-    request<void>(`${BASE}/party/settings`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-
-  getPlaylists: (limit = 50, offset = 0) =>
-    request<SpotifyPlaylist[]>(`${BASE}/party/playlists?limit=${limit}&offset=${offset}`),
-
-  setBasePlaylist: (playlistId: string) =>
-    request<{ queue: QueueItem[]; basePlaylistId: string; basePlaylistName: string }>(
-      `${BASE}/party/base-playlist`,
-      { method: 'PUT', body: JSON.stringify({ playlistId }) },
-    ),
-
-  clearBasePlaylist: () =>
-    request<{ queue: QueueItem[] }>(`${BASE}/party/base-playlist`, { method: 'DELETE' }),
 
   // Auth
   getAuthStatus: () =>

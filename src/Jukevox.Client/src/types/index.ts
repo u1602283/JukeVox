@@ -88,3 +88,9 @@ export interface AddToQueueRequest {
   albumImageUrl?: string;
   durationMs: number;
 }
+
+export interface HostStatus {
+  authenticated: boolean;
+  hasCredential: boolean;
+  setupAvailable: boolean;
+}

@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using JukeVox.Server.Middleware;
+using JukeVox.Server.Extensions;
 using JukeVox.Server.Services;
 
 namespace JukeVox.Server.Controllers;
@@ -10,21 +10,22 @@ public class AuthController : ControllerBase
 {
     private readonly SpotifyAuthService _authService;
     private readonly PartyService _partyService;
+    private readonly string _frontendUrl;
 
-    public AuthController(SpotifyAuthService authService, PartyService partyService)
+    public AuthController(SpotifyAuthService authService, PartyService partyService, IConfiguration configuration)
     {
         _authService = authService;
         _partyService = partyService;
+        _frontendUrl = configuration["FrontendUrl"] ?? "http://localhost:5173";
     }
 
     [HttpGet("login")]
     public IActionResult Login()
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
-        var state = sessionId;
+        var state = Guid.NewGuid().ToString("N");
         var url = _authService.GetAuthorizeUrl(state);
         return Redirect(url);
     }
@@ -36,8 +37,7 @@ public class AuthController : ControllerBase
         if (tokens == null)
             return BadRequest("Failed to exchange authorization code");
 
-        // Redirect back to the Vite frontend
-        return Redirect("http://localhost:5173/");
+        return Redirect($"{_frontendUrl}/host");
     }
 
     [HttpGet("status")]

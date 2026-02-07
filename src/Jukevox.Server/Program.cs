@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using JukeVox.Server.Extensions;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
@@ -8,16 +9,29 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddJukeVoxServices(builder.Configuration);
 
+var frontendUrl = builder.Configuration["FrontendUrl"] ?? "http://localhost:5173";
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(frontendUrl)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
+
+// Auto-detect mkcert PEM files at project root for TLS
+var certPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../../cert.pem"));
+var keyPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../../key.pem"));
+if (File.Exists(certPath) && File.Exists(keyPath))
+{
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(5001, listenOptions => listenOptions.UseHttps(
+            X509Certificate2.CreateFromPemFile(certPath, keyPath)));
+    });
+}
 
 var app = builder.Build();
 
@@ -29,5 +43,8 @@ app.MapControllers();
 app.MapHub<PartyHub>("/hubs/party");
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy" }));
+
+// SPA fallback: serve index.html for non-API, non-file routes
+app.MapFallbackToFile("index.html");
 
 app.Run();

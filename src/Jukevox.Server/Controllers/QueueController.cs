@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using JukeVox.Server.Extensions;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
 using JukeVox.Server.Models.Dto;
@@ -35,7 +36,8 @@ public class QueueController : ControllerBase
     public IActionResult GetQueue()
     {
         var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsParticipant(sessionId))
+        var isHost = HttpContext.IsHostAuthenticated();
+        if (!isHost && !_partyService.IsParticipant(sessionId))
             return Unauthorized();
 
         return Ok(_queueService.GetQueue());
@@ -45,7 +47,8 @@ public class QueueController : ControllerBase
     public async Task<IActionResult> AddToQueue([FromBody] AddToQueueRequest request)
     {
         var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsParticipant(sessionId))
+        var isHost = HttpContext.IsHostAuthenticated();
+        if (!isHost && !_partyService.IsParticipant(sessionId))
             return Unauthorized();
 
         var (item, error) = _queueService.AddToQueue(sessionId, request);
@@ -64,7 +67,6 @@ public class QueueController : ControllerBase
             var playback = await _playerService.GetPlaybackStateAsync();
             if (playback == null || !playback.IsPlaying)
             {
-                // Nothing playing — start immediately
                 var next = _queueService.Dequeue();
                 if (next != null)
                 {
@@ -76,13 +78,12 @@ public class QueueController : ControllerBase
             }
             else
             {
-                // Spotify is playing (autoplay) — seed our track so it plays next
                 await _playerService.AddToQueueAsync(queue[0].TrackUri);
             }
         }
 
         // Send credits update to the guest who added the song
-        if (!_partyService.IsHost(sessionId))
+        if (!isHost)
         {
             var guest = _partyService.GetGuest(sessionId);
             if (guest != null)
@@ -97,8 +98,7 @@ public class QueueController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> RemoveFromQueue(string id)
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         if (!_queueService.RemoveFromQueue(id))
@@ -114,8 +114,7 @@ public class QueueController : ControllerBase
     [HttpPut("reorder")]
     public async Task<IActionResult> Reorder([FromBody] ReorderQueueRequest request)
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         if (!_queueService.Reorder(request.OrderedIds))

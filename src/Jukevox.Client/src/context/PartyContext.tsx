@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { PartyState, PlaybackState, QueueItem } from '../types';
 import { api } from '../api/client';
@@ -60,6 +60,11 @@ export function PartyProvider({ children }: { children: ReactNode }) {
       onPlaybackStateUpdated: (state) => setNowPlaying(state),
       onQueueUpdated: (q) => setQueue(q),
       onCreditsUpdated: (c) => setCredits(c),
+    });
+
+    conn.onclose(() => {
+      connectedRef.current = false;
+      setParty(null);
     });
 
     startConnection()

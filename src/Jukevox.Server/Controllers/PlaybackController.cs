@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using JukeVox.Server.Extensions;
 using JukeVox.Server.Hubs;
-using JukeVox.Server.Middleware;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
 
@@ -34,8 +34,7 @@ public class PlaybackController : ControllerBase
     [HttpPost("pause")]
     public async Task<IActionResult> Pause()
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         var success = await _playerService.PauseAsync();
@@ -45,8 +44,7 @@ public class PlaybackController : ControllerBase
     [HttpPost("resume")]
     public async Task<IActionResult> Resume()
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         var success = await _playerService.ResumeAsync();
@@ -56,8 +54,7 @@ public class PlaybackController : ControllerBase
     [HttpPost("previous")]
     public async Task<IActionResult> Previous()
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         var success = await _playerService.SkipPreviousAsync();
@@ -67,8 +64,7 @@ public class PlaybackController : ControllerBase
     [HttpPost("skip")]
     public async Task<IActionResult> Skip()
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         var party = _partyService.GetCurrentParty()!;
@@ -79,7 +75,6 @@ public class PlaybackController : ControllerBase
             await _playerService.PlayTrackAsync(next.TrackUri);
             _monitorService.NotifyTrackStarted(next.TrackUri);
 
-            // Seed the next track for hardware skip resilience
             var upcoming = _queueService.GetQueue();
             if (upcoming.Count > 0)
                 await _playerService.AddToQueueAsync(upcoming[0].TrackUri);
@@ -97,8 +92,7 @@ public class PlaybackController : ControllerBase
     [HttpPut("seek")]
     public async Task<IActionResult> Seek([FromQuery] int positionMs)
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         var success = await _playerService.SeekAsync(Math.Max(positionMs, 0));
@@ -108,8 +102,7 @@ public class PlaybackController : ControllerBase
     [HttpPut("volume")]
     public async Task<IActionResult> SetVolume([FromQuery] int percent)
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         var success = await _playerService.SetVolumeAsync(Math.Clamp(percent, 0, 100));
@@ -119,8 +112,7 @@ public class PlaybackController : ControllerBase
     [HttpGet("devices")]
     public async Task<IActionResult> GetDevices()
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         var devices = await _playerService.GetDevicesAsync();
@@ -130,8 +122,7 @@ public class PlaybackController : ControllerBase
     [HttpPut("device")]
     public async Task<IActionResult> SelectDevice([FromBody] SelectDeviceRequest request)
     {
-        var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsHost(sessionId))
+        if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
         var success = await _playerService.TransferPlaybackAsync(request.DeviceId);
