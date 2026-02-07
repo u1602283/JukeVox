@@ -1,4 +1,4 @@
-# Jukevox
+# JukeVox
 
 Collaborative music queue powered by Spotify. One person hosts a party, everyone else joins to add songs and vote on what plays next.
 
@@ -37,7 +37,7 @@ export $(cat .env | xargs)
 ### Install dependencies
 
 ```sh
-cd src/Jukevox.Client && npm install
+cd src/JukeVox.Client && npm install
 ```
 
 ## Running locally
@@ -46,10 +46,10 @@ Start both the backend and frontend in separate terminals:
 
 ```sh
 # Terminal 1 — API server (https://127.0.0.1:5001)
-cd src/Jukevox.Server && dotnet run
+cd src/JukeVox.Server && dotnet run
 
 # Terminal 2 — Dev server (http://localhost:5173)
-cd src/Jukevox.Client && npm run dev
+cd src/JukeVox.Client && npm run dev
 ```
 
 Open http://localhost:5173 in your browser. The Vite dev server proxies `/api` and `/hubs` requests to the backend.
@@ -57,20 +57,28 @@ Open http://localhost:5173 in your browser. The Vite dev server proxies `/api` a
 ## Running tests
 
 ```sh
-dotnet test Jukevox.slnx
+dotnet test JukeVox.slnx
 ```
 
 ## Architecture
 
 ```
 src/
-  Jukevox.Server/     ASP.NET Core Web API + SignalR hub
-  Jukevox.Client/     React + TypeScript (Vite)
+  JukeVox.Server/     ASP.NET Core Web API + SignalR hub
+  JukeVox.Client/     React + TypeScript (Vite)
 tests/
-  Jukevox.Server.Tests/
+  JukeVox.Server.Tests/
 ```
 
 - **Queue management** — App-managed queue (not Spotify's) so users can reorder and remove tracks.
 - **Real-time updates** — SignalR pushes queue and playback state changes to all connected clients.
 - **Playback monitoring** — A background service polls Spotify every 2 seconds and auto-advances the queue when a track ends.
 - **Sessions** — Cookie-based, no user accounts required.
+
+## To-do
+
+- Redesign the UI
+- Build out host functionalities - e.g. guest management (credits etc.)
+- Build pretty playback interface
+- Authenticate the host portal
+- Dockerise

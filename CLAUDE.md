@@ -6,34 +6,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```sh
 # Build
-dotnet build Jukevox.slnx
+dotnet build JukeVox.slnx
 
 # Run tests
-dotnet test Jukevox.slnx
+dotnet test JukeVox.slnx
 
 # Run backend (https://127.0.0.1:5001)
-cd src/Jukevox.Server && dotnet run
+cd src/JukeVox.Server && dotnet run
 
 # Run frontend dev server (http://localhost:5173)
-cd src/Jukevox.Client && npm run dev
+cd src/JukeVox.Client && npm run dev
 
 # Lint frontend
-cd src/Jukevox.Client && npm run lint
+cd src/JukeVox.Client && npm run lint
 ```
 
 Spotify credentials are provided via environment variables (`SPOTIFY__ClientId`, `SPOTIFY__ClientSecret`, `SPOTIFY__RedirectUri`). See `.env.example`.
 
 ## Architecture
 
-Jukevox is a collaborative Spotify queue app. A host creates a party, connects their Spotify account, and guests join via invite code to add songs.
+JukeVox is a collaborative Spotify queue app. A host creates a party, connects their Spotify account, and guests join via invite code to add songs.
 
-**Backend:** .NET 10 ASP.NET Core Web API + SignalR (`src/Jukevox.Server/`)
-**Frontend:** React 19 + TypeScript + Vite (`src/Jukevox.Client/`)
-**Tests:** xUnit (`tests/Jukevox.Server.Tests/`)
+**Backend:** .NET 10 ASP.NET Core Web API + SignalR (`src/JukeVox.Server/`)
+**Frontend:** React 19 + TypeScript + Vite (`src/JukeVox.Client/`)
+**Tests:** xUnit (`tests/JukeVox.Server.Tests/`)
 
 ### Backend request flow
 
-1. `PartySessionMiddleware` extracts/creates a session ID from the `Jukevox.SessionId` cookie, stores it in `HttpContext.Items["SessionId"]`
+1. `PartySessionMiddleware` extracts/creates a session ID from the `JukeVox.SessionId` cookie, stores it in `HttpContext.Items["SessionId"]`
 2. Controllers access it via `HttpContext.GetSessionId()` extension method
 3. Controllers delegate to singleton services (`PartyService`, `QueueService`) for state mutations
 4. After mutations, controllers broadcast updates to clients via `IHubContext<PartyHub, IPartyClient>`

@@ -1,8 +1,8 @@
-namespace Jukevox.Server.Middleware;
+namespace JukeVox.Server.Middleware;
 
 public class PartySessionMiddleware
 {
-    private const string SessionCookieName = "Jukevox.SessionId";
+    private const string SessionCookieName = "JukeVox.SessionId";
     private readonly RequestDelegate _next;
 
     public PartySessionMiddleware(RequestDelegate next)

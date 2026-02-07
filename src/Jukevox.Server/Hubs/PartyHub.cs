@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
-using Jukevox.Server.Services;
+using JukeVox.Server.Services;
 
-namespace Jukevox.Server.Hubs;
+namespace JukeVox.Server.Hubs;
 
 public class PartyHub : Hub<IPartyClient>
 {

@@ -1,11 +1,11 @@
-using Jukevox.Server.Configuration;
-using Jukevox.Server.Services;
+using JukeVox.Server.Configuration;
+using JukeVox.Server.Services;
 
-namespace Jukevox.Server.Extensions;
+namespace JukeVox.Server.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddJukevoxServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddJukeVoxServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<SpotifyOptions>()
             .Bind(configuration.GetSection(SpotifyOptions.SectionName))

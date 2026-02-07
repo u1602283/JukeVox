@@ -1,4 +1,4 @@
-namespace Jukevox.Server.Models.Dto;
+namespace JukeVox.Server.Models.Dto;
 
 public class PlaybackStateDto
 {

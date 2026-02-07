@@ -1,4 +1,4 @@
-﻿namespace Jukevox.Server.Tests;
+﻿namespace JukeVox.Server.Tests;
 
 public class UnitTest1
 {

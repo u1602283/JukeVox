@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Jukevox.Server.Models;
+using JukeVox.Server.Models;
 
-namespace Jukevox.Server.Services;
+namespace JukeVox.Server.Services;
 
 public class PartyService
 {

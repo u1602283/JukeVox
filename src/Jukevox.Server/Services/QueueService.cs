@@ -1,7 +1,7 @@
-using Jukevox.Server.Models;
-using Jukevox.Server.Models.Dto;
+using JukeVox.Server.Models;
+using JukeVox.Server.Models.Dto;
 
-namespace Jukevox.Server.Services;
+namespace JukeVox.Server.Services;
 
 public class QueueService
 {

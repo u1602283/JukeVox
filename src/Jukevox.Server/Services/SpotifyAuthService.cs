@@ -1,11 +1,11 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
-using Jukevox.Server.Configuration;
-using Jukevox.Server.Models;
-using Jukevox.Server.Models.Spotify;
+using JukeVox.Server.Configuration;
+using JukeVox.Server.Models;
+using JukeVox.Server.Models.Spotify;
 
-namespace Jukevox.Server.Services;
+namespace JukeVox.Server.Services;
 
 public class SpotifyAuthService
 {

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Jukevox.Server.Models.Spotify;
+namespace JukeVox.Server.Models.Spotify;
 
 public class SpotifyPlaybackState
 {

@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Jukevox.Server\Jukevox.Server.csproj" />
+    <ProjectReference Include="..\..\src\JukeVox.Server\JukeVox.Server.csproj" />
   </ItemGroup>
 
 </Project>

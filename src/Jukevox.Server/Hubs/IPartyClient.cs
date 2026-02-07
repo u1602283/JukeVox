@@ -1,6 +1,6 @@
-using Jukevox.Server.Models.Dto;
+using JukeVox.Server.Models.Dto;
 
-namespace Jukevox.Server.Hubs;
+namespace JukeVox.Server.Hubs;
 
 public interface IPartyClient
 {

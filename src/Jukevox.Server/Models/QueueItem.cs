@@ -1,4 +1,4 @@
-namespace Jukevox.Server.Models;
+namespace JukeVox.Server.Models;
 
 public class QueueItem
 {

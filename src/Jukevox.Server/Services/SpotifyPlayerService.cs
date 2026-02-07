@@ -2,10 +2,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Jukevox.Server.Models.Dto;
-using Jukevox.Server.Models.Spotify;
+using JukeVox.Server.Models.Dto;
+using JukeVox.Server.Models.Spotify;
 
-namespace Jukevox.Server.Services;
+namespace JukeVox.Server.Services;
 
 public class SpotifyPlayerService
 {

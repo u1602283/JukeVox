@@ -1,6 +1,6 @@
-@Jukevox.Server_HostAddress = http://localhost:5205
+@JukeVox.Server_HostAddress = http://localhost:5205
 
-GET {{Jukevox.Server_HostAddress}}/weatherforecast/
+GET {{JukeVox.Server_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###

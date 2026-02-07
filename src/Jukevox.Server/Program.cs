@@ -1,12 +1,12 @@
-using Jukevox.Server.Extensions;
-using Jukevox.Server.Hubs;
-using Jukevox.Server.Middleware;
+using JukeVox.Server.Extensions;
+using JukeVox.Server.Hubs;
+using JukeVox.Server.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
-builder.Services.AddJukevoxServices(builder.Configuration);
+builder.Services.AddJukeVoxServices(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {

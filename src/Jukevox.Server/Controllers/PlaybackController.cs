@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Jukevox.Server.Hubs;
-using Jukevox.Server.Middleware;
-using Jukevox.Server.Models.Dto;
-using Jukevox.Server.Services;
+using JukeVox.Server.Hubs;
+using JukeVox.Server.Middleware;
+using JukeVox.Server.Models.Dto;
+using JukeVox.Server.Services;
 
-namespace Jukevox.Server.Controllers;
+namespace JukeVox.Server.Controllers;
 
 [ApiController]
 [Route("api/playback")]

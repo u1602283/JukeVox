@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.SignalR;
-using Jukevox.Server.Hubs;
-using Jukevox.Server.Models.Dto;
+using JukeVox.Server.Hubs;
+using JukeVox.Server.Models.Dto;
 
-namespace Jukevox.Server.Services;
+namespace JukeVox.Server.Services;
 
 public class PlaybackMonitorService : BackgroundService
 {
