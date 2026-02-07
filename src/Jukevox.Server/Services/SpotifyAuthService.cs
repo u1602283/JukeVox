@@ -19,7 +19,8 @@ public class SpotifyAuthService
         "user-read-playback-state",
         "user-modify-playback-state",
         "user-read-currently-playing",
-        "streaming"
+        "streaming",
+        "playlist-read-private"
     ];
 
     public SpotifyAuthService(

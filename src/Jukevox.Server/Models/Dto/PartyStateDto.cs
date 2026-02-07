@@ -11,4 +11,6 @@ public class PartyStateDto
     public int DefaultCredits { get; set; }
     public List<QueueItemDto> Queue { get; set; } = [];
     public PlaybackStateDto? NowPlaying { get; set; }
+    public string? BasePlaylistId { get; set; }
+    public string? BasePlaylistName { get; set; }
 }

@@ -8,6 +8,8 @@ export interface PartyState {
   defaultCredits: number;
   queue: QueueItem[];
   nowPlaying?: PlaybackState;
+  basePlaylistId?: string;
+  basePlaylistName?: string;
 }
 
 export interface QueueItem {
@@ -20,6 +22,7 @@ export interface QueueItem {
   durationMs: number;
   addedByName: string;
   addedAt: string;
+  isFromBasePlaylist: boolean;
 }
 
 export interface PlaybackState {
@@ -68,6 +71,13 @@ export interface SavedPartySummary {
   queueCount: number;
   guestCount: number;
   createdAt?: string;
+}
+
+export interface SpotifyPlaylist {
+  id: string;
+  name: string;
+  imageUrl?: string;
+  trackCount: number;
 }
 
 export interface AddToQueueRequest {

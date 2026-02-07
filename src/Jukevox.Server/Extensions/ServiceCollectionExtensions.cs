@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<SpotifyAuthService>();
         services.AddHttpClient<SpotifySearchService>();
         services.AddHttpClient<SpotifyPlayerService>();
+        services.AddHttpClient<SpotifyPlaylistService>();
 
         services.AddSingleton<PlaybackMonitorService>();
         services.AddHostedService<PlaybackMonitorService>(sp => sp.GetRequiredService<PlaybackMonitorService>());

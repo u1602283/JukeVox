@@ -47,7 +47,13 @@ public class QueueService
                 AddedByName = addedByName
             };
 
-            party.Queue.Add(item);
+            // Insert before base playlist items so manual requests take priority
+            var insertIndex = party.Queue.FindIndex(q => q.IsFromBasePlaylist);
+            if (insertIndex >= 0)
+                party.Queue.Insert(insertIndex, item);
+            else
+                party.Queue.Add(item);
+
             _partyService.PersistState();
             return (item, null);
         }
@@ -104,8 +110,50 @@ public class QueueService
 
             var next = party.Queue[0];
             party.Queue.RemoveAt(0);
+
+            // Auto-refill when queue is empty and a base playlist is configured
+            if (party.Queue.Count == 0 && party.BasePlaylistTracks.Count > 0)
+            {
+                RefillFromBasePlaylist(party);
+            }
+
             _partyService.PersistState();
             return next;
+        }
+    }
+
+    public void SetBasePlaylist(List<BasePlaylistTrack> tracks, string playlistId, string playlistName)
+    {
+        lock (_lock)
+        {
+            var party = _partyService.GetCurrentParty();
+            if (party == null) return;
+
+            // Remove existing base playlist items from queue
+            party.Queue.RemoveAll(q => q.IsFromBasePlaylist);
+
+            party.BasePlaylistId = playlistId;
+            party.BasePlaylistName = playlistName;
+            party.BasePlaylistTracks = tracks;
+
+            RefillFromBasePlaylist(party);
+            _partyService.PersistState();
+        }
+    }
+
+    public void ClearBasePlaylist()
+    {
+        lock (_lock)
+        {
+            var party = _partyService.GetCurrentParty();
+            if (party == null) return;
+
+            party.Queue.RemoveAll(q => q.IsFromBasePlaylist);
+            party.BasePlaylistId = null;
+            party.BasePlaylistName = null;
+            party.BasePlaylistTracks = [];
+
+            _partyService.PersistState();
         }
     }
 
@@ -126,8 +174,31 @@ public class QueueService
                 AlbumImageUrl = q.AlbumImageUrl,
                 DurationMs = q.DurationMs,
                 AddedByName = q.AddedByName,
-                AddedAt = q.AddedAt
+                AddedAt = q.AddedAt,
+                IsFromBasePlaylist = q.IsFromBasePlaylist
             }).ToList();
+        }
+    }
+
+    private static void RefillFromBasePlaylist(Party party)
+    {
+        var shuffled = party.BasePlaylistTracks.ToArray();
+        Random.Shared.Shuffle(shuffled);
+
+        foreach (var track in shuffled)
+        {
+            party.Queue.Add(new QueueItem
+            {
+                TrackUri = track.TrackUri,
+                TrackName = track.TrackName,
+                ArtistName = track.ArtistName,
+                AlbumName = track.AlbumName,
+                AlbumImageUrl = track.AlbumImageUrl,
+                DurationMs = track.DurationMs,
+                AddedBySessionId = party.HostSessionId,
+                AddedByName = "Base Playlist",
+                IsFromBasePlaylist = true
+            });
         }
     }
 }

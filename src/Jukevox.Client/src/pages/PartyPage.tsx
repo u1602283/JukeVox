@@ -6,6 +6,7 @@ import { SearchBar } from '../components/SearchBar';
 import { SearchResults } from '../components/SearchResults';
 import { HostControls } from '../components/HostControls';
 import { DeviceSelector } from '../components/DeviceSelector';
+import { BasePlaylistSelector } from '../components/BasePlaylistSelector';
 import { CreditsBadge } from '../components/CreditsBadge';
 
 export function PartyPage() {
@@ -17,7 +18,7 @@ export function PartyPage() {
   return (
     <div className="party-page">
       <header className="party-header">
-        <h1>Party Queue</h1>
+        <h1>JukeVox</h1>
         <div className="party-info">
           <span className="invite-code">Code: <strong>{party.inviteCode}</strong></span>
           {party.isHost && !party.spotifyConnected && (
@@ -39,6 +40,7 @@ export function PartyPage() {
         <div className="host-section">
           <HostControls />
           <DeviceSelector />
+          <BasePlaylistSelector />
         </div>
       )}
 

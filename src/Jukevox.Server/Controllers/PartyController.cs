@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
@@ -12,15 +14,24 @@ public class PartyController : ControllerBase
     private readonly PartyService _partyService;
     private readonly QueueService _queueService;
     private readonly SpotifyPlayerService _playerService;
+    private readonly SpotifyPlaylistService _playlistService;
+    private readonly PlaybackMonitorService _monitorService;
+    private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
 
     public PartyController(
         PartyService partyService,
         QueueService queueService,
-        SpotifyPlayerService playerService)
+        SpotifyPlayerService playerService,
+        SpotifyPlaylistService playlistService,
+        PlaybackMonitorService monitorService,
+        IHubContext<PartyHub, IPartyClient> hubContext)
     {
         _partyService = partyService;
         _queueService = queueService;
         _playerService = playerService;
+        _playlistService = playlistService;
+        _monitorService = monitorService;
+        _hubContext = hubContext;
     }
 
     [HttpPost]
@@ -59,7 +70,9 @@ public class PartyController : ControllerBase
             CreditsRemaining = guest.CreditsRemaining,
             DisplayName = guest.DisplayName,
             DefaultCredits = party.DefaultCredits,
-            Queue = _queueService.GetQueue()
+            Queue = _queueService.GetQueue(),
+            BasePlaylistId = party.BasePlaylistId,
+            BasePlaylistName = party.BasePlaylistName
         });
     }
 
@@ -93,7 +106,9 @@ public class PartyController : ControllerBase
             DisplayName = guest?.DisplayName,
             DefaultCredits = party.DefaultCredits,
             Queue = _queueService.GetQueue(),
-            NowPlaying = nowPlaying
+            NowPlaying = nowPlaying,
+            BasePlaylistId = party.BasePlaylistId,
+            BasePlaylistName = party.BasePlaylistName
         });
     }
 
@@ -106,6 +121,72 @@ public class PartyController : ControllerBase
 
         _partyService.UpdateSettings(request.InviteCode, request.DefaultCredits);
         return Ok();
+    }
+
+    [HttpGet("playlists")]
+    public async Task<IActionResult> GetPlaylists([FromQuery] int limit = 50, [FromQuery] int offset = 0)
+    {
+        var sessionId = HttpContext.GetSessionId();
+        if (!_partyService.IsHost(sessionId))
+            return Forbid();
+
+        var playlists = await _playlistService.GetUserPlaylistsAsync(limit, offset);
+        return Ok(playlists);
+    }
+
+    [HttpPut("base-playlist")]
+    public async Task<IActionResult> SetBasePlaylist([FromBody] SetBasePlaylistRequest request)
+    {
+        var sessionId = HttpContext.GetSessionId();
+        if (!_partyService.IsHost(sessionId))
+            return Forbid();
+
+        var tracks = await _playlistService.GetAllPlaylistTracksAsync(request.PlaylistId);
+        if (tracks.Count == 0)
+            return BadRequest(new { error = "Playlist has no playable tracks" });
+
+        // Fetch playlist name from the user's playlists
+        var playlists = await _playlistService.GetUserPlaylistsAsync(50, 0);
+        var playlist = playlists.FirstOrDefault(p => p.Id == request.PlaylistId);
+        var playlistName = playlist?.Name ?? "Base Playlist";
+
+        _queueService.SetBasePlaylist(tracks, request.PlaylistId, playlistName);
+
+        var party = _partyService.GetCurrentParty()!;
+        var queue = _queueService.GetQueue();
+        await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
+
+        // Auto-play if nothing is currently playing
+        var playback = await _playerService.GetPlaybackStateAsync();
+        if (playback == null || !playback.IsPlaying)
+        {
+            var next = _queueService.Dequeue();
+            if (next != null)
+            {
+                await _playerService.PlayTrackAsync(next.TrackUri);
+                _monitorService.NotifyTrackStarted(next.TrackUri);
+                queue = _queueService.GetQueue();
+                await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
+            }
+        }
+
+        return Ok(new { queue, basePlaylistId = request.PlaylistId, basePlaylistName = playlistName });
+    }
+
+    [HttpDelete("base-playlist")]
+    public async Task<IActionResult> ClearBasePlaylist()
+    {
+        var sessionId = HttpContext.GetSessionId();
+        if (!_partyService.IsHost(sessionId))
+            return Forbid();
+
+        _queueService.ClearBasePlaylist();
+
+        var party = _partyService.GetCurrentParty()!;
+        var queue = _queueService.GetQueue();
+        await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
+
+        return Ok(new { queue });
     }
 
     [HttpGet("saved")]
@@ -141,7 +222,9 @@ public class PartyController : ControllerBase
             IsHost = true,
             SpotifyConnected = party.SpotifyTokens != null,
             DefaultCredits = party.DefaultCredits,
-            Queue = _queueService.GetQueue()
+            Queue = _queueService.GetQueue(),
+            BasePlaylistId = party.BasePlaylistId,
+            BasePlaylistName = party.BasePlaylistName
         });
     }
 

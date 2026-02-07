@@ -53,7 +53,7 @@ export function LandingPage() {
 
   return (
     <div className="landing-page">
-      <h1>Party Queue</h1>
+      <h1>JukeVox</h1>
       <p className="subtitle">Collaborative music for your party</p>
 
       {savedParty && !dismissed && (

@@ -1,15 +1,11 @@
-namespace JukeVox.Server.Models.Dto;
+namespace JukeVox.Server.Models;
 
-public class QueueItemDto
+public class BasePlaylistTrack
 {
-    public required string Id { get; set; }
     public required string TrackUri { get; set; }
     public required string TrackName { get; set; }
     public required string ArtistName { get; set; }
     public required string AlbumName { get; set; }
     public string? AlbumImageUrl { get; set; }
     public int DurationMs { get; set; }
-    public required string AddedByName { get; set; }
-    public DateTime AddedAt { get; set; }
-    public bool IsFromBasePlaylist { get; set; }
 }

@@ -109,18 +109,26 @@ export function QueueList() {
     displayQueue.splice(overIndex, 0, moved);
   }
 
+  // Find the boundary between manual and base playlist items
+  const firstBaseIndex = displayQueue.findIndex(item => item.isFromBasePlaylist);
+  const manualCount = firstBaseIndex >= 0 ? firstBaseIndex : queue.length;
+
   return (
     <div className="queue-list" ref={listRef}>
-      <h3>Up Next ({queue.length})</h3>
+      <h3>Up Next ({manualCount > 0 ? `${manualCount} requested` : `${queue.length} from playlist`})</h3>
       {displayQueue.map((item, index) => {
         const originalIndex = queue.indexOf(item);
         const isDragging = originalIndex === dragIndex;
+        const showDivider = index === firstBaseIndex && firstBaseIndex > 0;
 
         return (
-          <div
-            key={item.id}
-            className={`queue-item ${isDragging ? 'queue-item-dragging' : ''}`}
-          >
+          <div key={item.id}>
+            {showDivider && (
+              <div className="queue-divider">From base playlist</div>
+            )}
+            <div
+              className={`queue-item ${isDragging ? 'queue-item-dragging' : ''} ${item.isFromBasePlaylist ? 'queue-item-base-playlist' : ''}`}
+            >
             {isHost && (
               <div
                 className="drag-handle"
@@ -150,6 +158,7 @@ export function QueueList() {
                 &times;
               </button>
             )}
+            </div>
           </div>
         );
       })}

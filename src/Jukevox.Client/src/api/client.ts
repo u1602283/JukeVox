@@ -6,6 +6,7 @@ import type {
   QueueItem,
   AddToQueueRequest,
   SpotifyDevice,
+  SpotifyPlaylist,
   PlaybackState,
   SavedPartySummary,
 } from '../types';
@@ -55,6 +56,18 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+
+  getPlaylists: (limit = 50, offset = 0) =>
+    request<SpotifyPlaylist[]>(`${BASE}/party/playlists?limit=${limit}&offset=${offset}`),
+
+  setBasePlaylist: (playlistId: string) =>
+    request<{ queue: QueueItem[]; basePlaylistId: string; basePlaylistName: string }>(
+      `${BASE}/party/base-playlist`,
+      { method: 'PUT', body: JSON.stringify({ playlistId }) },
+    ),
+
+  clearBasePlaylist: () =>
+    request<{ queue: QueueItem[] }>(`${BASE}/party/base-playlist`, { method: 'DELETE' }),
 
   // Auth
   getAuthStatus: () =>

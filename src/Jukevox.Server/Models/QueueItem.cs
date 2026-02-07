@@ -12,4 +12,5 @@ public class QueueItem
     public string AddedBySessionId { get; set; } = string.Empty;
     public string AddedByName { get; set; } = "Host";
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
+    public bool IsFromBasePlaylist { get; set; }
 }

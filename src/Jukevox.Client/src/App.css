@@ -850,3 +850,147 @@ button:disabled {
 .remove-btn:hover {
   color: var(--danger);
 }
+
+.queue-item-base-playlist {
+  opacity: 0.6;
+}
+
+.queue-divider {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 12px 12px 4px;
+}
+
+/* Base Playlist Selector */
+.base-playlist-selector {
+  width: 100%;
+}
+
+.base-playlist-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.base-playlist-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.base-playlist-change,
+.base-playlist-clear {
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  text-decoration: underline;
+}
+
+.base-playlist-change:hover {
+  color: var(--text-secondary);
+}
+
+.base-playlist-clear:hover {
+  color: var(--danger);
+}
+
+.base-playlist-set {
+  background: var(--surface);
+  color: var(--text-secondary);
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 10px;
+}
+
+.base-playlist-set:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.picker-header h4 {
+  font-size: 0.95rem;
+}
+
+.picker-close {
+  background: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  padding: 4px 8px;
+}
+
+.picker-close:hover {
+  color: var(--text);
+}
+
+.picker-loading {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 16px;
+}
+
+.playlist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  text-align: left;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.playlist-item:hover {
+  background: var(--surface-hover);
+}
+
+.playlist-item-active {
+  border: 1px solid var(--primary);
+}
+
+.playlist-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.playlist-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.playlist-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
