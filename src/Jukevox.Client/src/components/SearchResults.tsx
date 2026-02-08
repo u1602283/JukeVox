@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { Plus, Check, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
-import { useParty } from '../context/PartyContext';
+import { useParty } from '../hooks/useParty';
 import type { SearchResult } from '../types';
+import styles from './SearchResults.module.css';
 
 function formatDuration(ms: number): string {
   const mins = Math.floor(ms / 60000);
@@ -16,6 +18,7 @@ interface SearchResultsProps {
 export function SearchResults({ results }: SearchResultsProps) {
   const { party, setQueue, setCredits, credits } = useParty();
   const [addingUri, setAddingUri] = useState<string | null>(null);
+  const [addedUri, setAddedUri] = useState<string | null>(null);
 
   if (results.length === 0) return null;
 
@@ -36,7 +39,10 @@ export function SearchResults({ results }: SearchResultsProps) {
       if (result.creditsRemaining !== undefined) {
         setCredits(result.creditsRemaining);
       }
-    } catch (err: any) {
+      // Brief checkmark
+      setAddedUri(track.trackUri);
+      setTimeout(() => setAddedUri(null), 1500);
+    } catch (err: unknown) {
       console.error('Failed to add track:', err);
     } finally {
       setAddingUri(null);
@@ -44,25 +50,35 @@ export function SearchResults({ results }: SearchResultsProps) {
   };
 
   return (
-    <div className="search-results">
-      {results.map((track) => (
-        <div key={track.trackUri} className="search-result-item">
+    <div className={styles.container}>
+      {results.map((track, index) => (
+        <div
+          key={track.trackUri}
+          className={styles.item}
+          style={{ animationDelay: `${index * 50}ms` }}
+        >
           {track.albumImageUrl && (
-            <img src={track.albumImageUrl} alt="" className="track-thumb" />
+            <img src={track.albumImageUrl} alt="" className={styles.thumb} />
           )}
-          <div className="track-info">
-            <span className="track-name">{track.trackName}</span>
-            <span className="track-artist">{track.artistName}</span>
-            <span className="track-meta">
+          <div className={styles.trackInfo}>
+            <span className={styles.trackName}>{track.trackName}</span>
+            <span className={styles.trackArtist}>{track.artistName}</span>
+            <span className={styles.trackMeta}>
               {track.albumName} &middot; {formatDuration(track.durationMs)}
             </span>
           </div>
           <button
-            className="add-btn"
+            className={styles.addBtn}
             onClick={() => handleAdd(track)}
-            disabled={!canAdd || addingUri === track.trackUri}
+            disabled={!canAdd || addingUri === track.trackUri || addedUri === track.trackUri}
           >
-            {addingUri === track.trackUri ? '...' : '+'}
+            {addingUri === track.trackUri ? (
+              <Loader2 size={18} className={styles.addedCheck} />
+            ) : addedUri === track.trackUri ? (
+              <Check size={18} className={styles.addedCheck} />
+            ) : (
+              <Plus size={18} />
+            )}
           </button>
         </div>
       ))}

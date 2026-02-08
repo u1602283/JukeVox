@@ -1,18 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { api } from '../api/client';
-import { useParty } from '../context/PartyContext';
+import { useParty } from '../hooks/useParty';
 import { useSearch } from '../hooks/useSearch';
 import { NowPlaying } from '../components/NowPlaying';
 import { QueueList } from '../components/QueueList';
-import { SearchBar } from '../components/SearchBar';
-import { SearchResults } from '../components/SearchResults';
+import { SearchOverlay } from '../components/SearchOverlay';
 import { HostControls } from '../components/HostControls';
 import { DeviceSelector } from '../components/DeviceSelector';
 import { BasePlaylistSelector } from '../components/BasePlaylistSelector';
 import type { HostStatus, SavedPartySummary } from '../types';
+import styles from './HostPortalPage.module.css';
+import partyStyles from './PartyPage.module.css';
 
 export function HostPortalPage() {
   const { party, setParty } = useParty();
@@ -31,16 +33,33 @@ export function HostPortalPage() {
   const [savedParty, setSavedParty] = useState<SavedPartySummary | null>(null);
   const [resuming, setResuming] = useState(false);
 
+  // Active party UI state
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'playing' | 'queue'>('playing');
+
+  // Sticky header scroll detection
+  const [scrolled, setScrolled] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setScrolled(!entry.isIntersecting),
+      { threshold: 1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [party]);
+
   const checkStatus = useCallback(async () => {
     try {
       const s = await api.hostStatus();
       setStatus(s);
       if (s.authenticated) {
-        // Load party state if authenticated
         const state = await api.getPartyState();
         if ('hasParty' in state && !state.hasParty) {
           setParty(null);
-          // Check for saved party to resume
           try {
             const saved = await api.getSavedParty();
             if (saved.exists) setSavedParty(saved);
@@ -121,46 +140,46 @@ export function HostPortalPage() {
   // Not authenticated - show login or setup link
   if (!status?.authenticated) {
     return (
-      <div className="landing-page">
-        <h1>JukeVox</h1>
-        <p className="subtitle">Host Portal</p>
+      <div className={styles.landing}>
+        <h1 className={styles.title}>JukeVox</h1>
+        <p className={styles.subtitle}>Host Portal</p>
 
         {status?.hasCredential ? (
-          <div className="panel">
-            <h2>Host Login</h2>
-            <p className="setup-info">
+          <div className={styles.panel}>
+            <h2 className={styles.panelTitle}>Host Login</h2>
+            <p className={styles.panelText}>
               Authenticate with your passkey to access the host portal.
             </p>
             <button
-              className="login-btn"
+              className={styles.primaryBtn}
               onClick={handleLogin}
               disabled={authenticating}
             >
               {authenticating ? 'Authenticating...' : 'Login with Passkey'}
             </button>
-            {authError && <p className="error">{authError}</p>}
+            {authError && <p className={styles.error}>{authError}</p>}
           </div>
         ) : status?.setupAvailable ? (
-          <div className="panel">
-            <h2>Welcome</h2>
-            <p className="setup-info">
+          <div className={styles.panel}>
+            <h2 className={styles.panelTitle}>Welcome</h2>
+            <p className={styles.panelText}>
               No host credential found. Set up your passkey to get started.
             </p>
-            <Link to="/host/setup" className="setup-link-btn">
+            <Link to="/host/setup" className={styles.setupLinkBtn}>
               Set Up Host Passkey
             </Link>
           </div>
         ) : (
-          <div className="panel">
-            <h2>Host Unavailable</h2>
-            <p className="setup-info">
+          <div className={styles.panel}>
+            <h2 className={styles.panelTitle}>Host Unavailable</h2>
+            <p className={styles.panelText}>
               No host credential found and setup is not available. Set the{' '}
               <code>JUKEVOX_SETUP_TOKEN</code> environment variable to enable setup.
             </p>
           </div>
         )}
 
-        <Link to="/" className="host-login-link">
+        <Link to="/" className={styles.bottomLink}>
           Back to Guest View
         </Link>
       </div>
@@ -170,52 +189,54 @@ export function HostPortalPage() {
   // Authenticated but no active party
   if (!party) {
     return (
-      <div className="landing-page">
-        <h1>JukeVox</h1>
-        <p className="subtitle">Host Portal</p>
+      <div className={styles.landing}>
+        <h1 className={styles.title}>JukeVox</h1>
+        <p className={styles.subtitle}>Host Portal</p>
 
         {savedParty && (
-          <div className="resume-card">
-            <h2>You have an existing party</h2>
-            <div className="resume-details">
+          <div className={styles.resumeCard}>
+            <h2 className={styles.resumeTitle}>You have an existing party</h2>
+            <div className={styles.resumeDetails}>
               <span>Code: <strong>{savedParty.inviteCode}</strong></span>
               <span>{savedParty.queueCount} song{savedParty.queueCount !== 1 ? 's' : ''} in queue</span>
               <span>{savedParty.guestCount} guest{savedParty.guestCount !== 1 ? 's' : ''}</span>
             </div>
-            <button className="resume-btn" onClick={handleResume} disabled={resuming}>
+            <button className={styles.resumeBtn} onClick={handleResume} disabled={resuming}>
               {resuming ? 'Resuming...' : 'Resume Party'}
             </button>
           </div>
         )}
 
-        <div className="panel">
-          <form onSubmit={handleCreate} className="create-form">
-            <h2>Create a Party</h2>
+        <div className={styles.panel}>
+          <form onSubmit={handleCreate}>
+            <h2 className={styles.panelTitle}>Create a Party</h2>
             <input
               type="text"
               placeholder="Invite Code (optional, auto-generated)"
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
               maxLength={10}
+              className={styles.input}
             />
-            <div className="credits-input">
-              <label>Credits per guest</label>
+            <div className={styles.creditsRow}>
+              <label className={styles.creditsLabel}>Credits per guest</label>
               <input
                 type="number"
                 min={1}
                 max={100}
                 value={defaultCredits}
                 onChange={(e) => setDefaultCredits(parseInt(e.target.value, 10) || 5)}
+                className={`${styles.input} ${styles.creditsInput}`}
               />
             </div>
-            <button type="submit" disabled={creating}>
+            <button type="submit" disabled={creating} className={styles.primaryBtn}>
               {creating ? 'Creating...' : 'Create Party'}
             </button>
-            {createError && <p className="error">{createError}</p>}
+            {createError && <p className={styles.error}>{createError}</p>}
           </form>
         </div>
 
-        <button className="host-login-link" onClick={handleLogout}>
+        <button className={styles.bottomLink} onClick={handleLogout}>
           Logout
         </button>
       </div>
@@ -223,43 +244,78 @@ export function HostPortalPage() {
   }
 
   // Authenticated with active party - full host interface
+  const handleCloseSearch = () => {
+    setSearchOpen(false);
+    setQuery('');
+  };
+
   return (
-    <div className="party-page">
-      <header className="party-header">
-        <h1>JukeVox</h1>
-        <div className="party-info">
-          <span className="invite-code">Code: <strong>{party.inviteCode}</strong></span>
+    <div className={partyStyles.page}>
+      <div ref={sentinelRef} style={{ height: 1 }} />
+      <header className={`${partyStyles.header} ${scrolled ? partyStyles.headerScrolled : ''}`}>
+        <h1 className={partyStyles.headerTitle}>JukeVox</h1>
+        <div className={partyStyles.headerRight}>
+          <span className={partyStyles.inviteCode}>
+            <span className={partyStyles.inviteCodeValue}>{party.inviteCode}</span>
+          </span>
           {!party.spotifyConnected && (
-            <a href="/api/auth/login" className="connect-btn">
+            <a href="/api/auth/login" className={partyStyles.connectBtn}>
               Connect Spotify
             </a>
           )}
           {party.spotifyConnected && (
-            <span className="spotify-status connected">Spotify Connected</span>
+            <span className={partyStyles.spotifyStatus}>Spotify Connected</span>
           )}
+          <DeviceSelector />
+          <button
+            className={partyStyles.searchToggle}
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search for a song"
+          >
+            <Search size={20} />
+          </button>
+          <button className={partyStyles.logoutBtn} onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </header>
 
-      <NowPlaying />
-
-      <div className="host-section">
-        <HostControls />
-        <DeviceSelector />
-        <BasePlaylistSelector />
+      <div className={partyStyles.contentGrid}>
+        <div className={`${partyStyles.heroColumn} ${mobileView !== 'playing' ? partyStyles.mobileHidden : ''}`}>
+          <NowPlaying>
+            <HostControls />
+          </NowPlaying>
+        </div>
+        <div className={mobileView !== 'queue' ? partyStyles.mobileHidden : ''}>
+          <QueueList />
+          <BasePlaylistSelector />
+        </div>
       </div>
 
-      <div className="search-section">
-        <SearchBar query={query} onQueryChange={setQuery} loading={searchLoading} />
-        <SearchResults results={results} />
-      </div>
+      <SearchOverlay
+        open={searchOpen}
+        onClose={handleCloseSearch}
+        query={query}
+        onQueryChange={setQuery}
+        results={results}
+        loading={searchLoading}
+      />
 
-      <QueueList />
-
-      <div className="host-portal-footer">
-        <button className="host-login-link" onClick={handleLogout}>
-          Logout
+      <nav className={partyStyles.mobileNav}>
+        <button
+          className={`${partyStyles.mobileNavBtn} ${mobileView === 'playing' ? partyStyles.mobileNavBtnActive : ''}`}
+          onClick={() => setMobileView('playing')}
+        >
+          Now Playing
         </button>
-      </div>
+        <button
+          className={`${partyStyles.mobileNavBtn} ${mobileView === 'queue' ? partyStyles.mobileNavBtnActive : ''}`}
+          onClick={() => setMobileView('queue')}
+        >
+          Queue
+        </button>
+      </nav>
+
     </div>
   );
 }

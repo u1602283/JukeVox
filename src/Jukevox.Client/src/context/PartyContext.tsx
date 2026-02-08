@@ -1,10 +1,10 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { createContext, useState, useCallback, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { PartyState, PlaybackState, QueueItem } from '../types';
 import { api } from '../api/client';
 import { createPartyConnection, startConnection, stopConnection } from '../signalr/partyConnection';
 
-interface PartyContextValue {
+export interface PartyContextValue {
   party: PartyState | null;
   setParty: (party: PartyState | null) => void;
   nowPlaying: PlaybackState | null;
@@ -17,7 +17,8 @@ interface PartyContextValue {
   loading: boolean;
 }
 
-const PartyCtx = createContext<PartyContextValue | null>(null);
+// eslint-disable-next-line react-refresh/only-export-components
+export const PartyCtx = createContext<PartyContextValue | null>(null);
 
 export function PartyProvider({ children }: { children: ReactNode }) {
   const [party, setPartyRaw] = useState<PartyState | null>(null);
@@ -75,7 +76,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
       connectedRef.current = false;
       stopConnection();
     };
-  }, [party]);
+  }, [party, setParty]);
 
   const value: PartyContextValue = {
     party,
@@ -91,10 +92,4 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   };
 
   return <PartyCtx.Provider value={value}>{children}</PartyCtx.Provider>;
-}
-
-export function useParty(): PartyContextValue {
-  const ctx = useContext(PartyCtx);
-  if (!ctx) throw new Error('useParty must be used within PartyProvider');
-  return ctx;
 }

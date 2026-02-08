@@ -27,6 +27,7 @@ export interface QueueItem {
 
 export interface PlaybackState {
   isPlaying: boolean;
+  trackUri?: string;
   trackName?: string;
   artistName?: string;
   albumName?: string;
@@ -34,6 +35,7 @@ export interface PlaybackState {
   progressMs: number;
   durationMs: number;
   volumePercent: number;
+  supportsVolume: boolean;
   deviceId?: string;
   deviceName?: string;
 }
@@ -53,6 +55,7 @@ export interface SpotifyDevice {
   type: string;
   isActive: boolean;
   volumePercent: number;
+  supportsVolume: boolean;
 }
 
 export interface CreatePartyRequest {

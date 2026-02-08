@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api/client';
-import { useParty } from '../context/PartyContext';
+import { useParty } from '../hooks/useParty';
+import styles from './JoinForm.module.css';
 
 export function JoinForm() {
   const { setParty, setQueue, setCredits } = useParty();
@@ -26,16 +27,16 @@ export function JoinForm() {
       if (state.creditsRemaining !== undefined) {
         setCredits(state.creditsRemaining);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to join party');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to join party');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleJoin} className="join-form">
-      <h2>Join a Party</h2>
+    <form onSubmit={handleJoin} className={styles.form}>
+      <h2 className={styles.title}>Join a Party</h2>
       <input
         type="text"
         placeholder="Invite Code"
@@ -43,6 +44,7 @@ export function JoinForm() {
         onChange={(e) => setInviteCode(e.target.value)}
         maxLength={10}
         required
+        className={styles.input}
       />
       <input
         type="text"
@@ -51,11 +53,12 @@ export function JoinForm() {
         onChange={(e) => setDisplayName(e.target.value)}
         maxLength={30}
         required
+        className={styles.input}
       />
-      <button type="submit" disabled={loading}>
+      <button type="submit" disabled={loading} className={styles.submitBtn}>
         {loading ? 'Joining...' : 'Join Party'}
       </button>
-      {error && <p className="error">{error}</p>}
+      {error && <p className={styles.error}>{error}</p>}
     </form>
   );
 }

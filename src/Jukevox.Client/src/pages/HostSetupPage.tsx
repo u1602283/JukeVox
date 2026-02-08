@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { startRegistration } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { api } from '../api/client';
+import styles from './HostSetupPage.module.css';
 
 export function HostSetupPage() {
   const navigate = useNavigate();
@@ -49,20 +50,20 @@ export function HostSetupPage() {
 
   if (dnsRecord) {
     return (
-      <div className="landing-page">
-        <h1>JukeVox</h1>
-        <p className="subtitle">Host Setup Complete</p>
+      <div className={styles.page}>
+        <h1 className={styles.title}>JukeVox</h1>
+        <p className={styles.subtitle}>Host Setup Complete</p>
 
-        <div className="panel setup-success">
-          <h2>Passkey Registered</h2>
-          <p className="setup-info">
+        <div className={`${styles.panel} ${styles.successPanel}`}>
+          <h2 className={styles.panelTitle}>Passkey Registered</h2>
+          <p className={styles.panelText}>
             Your host passkey has been saved. To persist across redeployments,
             add this DNS TXT record:
           </p>
-          <div className="dns-record">
+          <div className={styles.dnsRecord}>
             <code>{`_jukevox-auth.yourdomain.com TXT "${dnsRecord}"`}</code>
           </div>
-          <Link to="/host" className="setup-continue-btn">
+          <Link to="/host" className={styles.continueBtn}>
             Continue to Host Portal
           </Link>
         </div>
@@ -71,14 +72,14 @@ export function HostSetupPage() {
   }
 
   return (
-    <div className="landing-page">
-      <h1>JukeVox</h1>
-      <p className="subtitle">Host Setup</p>
+    <div className={styles.page}>
+      <h1 className={styles.title}>JukeVox</h1>
+      <p className={styles.subtitle}>Host Setup</p>
 
-      <div className="panel">
-        <form onSubmit={handleRegister} className="setup-form">
-          <h2>Register Host Passkey</h2>
-          <p className="setup-info">
+      <div className={styles.panel}>
+        <form onSubmit={handleRegister}>
+          <h2 className={styles.panelTitle}>Register Host Passkey</h2>
+          <p className={styles.panelText}>
             Enter the setup token to register your passkey. This is a one-time
             process.
           </p>
@@ -88,15 +89,20 @@ export function HostSetupPage() {
             value={token}
             onChange={(e) => setToken(e.target.value)}
             autoComplete="off"
+            className={styles.input}
           />
-          <button type="submit" disabled={registering || !token.trim()}>
+          <button
+            type="submit"
+            disabled={registering || !token.trim()}
+            className={styles.primaryBtn}
+          >
             {registering ? 'Registering...' : 'Register Passkey'}
           </button>
-          {error && <p className="error">{error}</p>}
+          {error && <p className={styles.error}>{error}</p>}
         </form>
       </div>
 
-      <Link to="/host" className="host-login-link">
+      <Link to="/host" className={styles.bottomLink}>
         Already registered? Login
       </Link>
     </div>

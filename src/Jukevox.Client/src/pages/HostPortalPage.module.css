@@ -1,0 +1,207 @@
+/* Landing states (login, create party) */
+.landing {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 80px var(--content-padding) 48px;
+  text-align: center;
+  animation: fadeIn var(--duration-slow) var(--ease-out);
+}
+
+.title {
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-bottom: 40px;
+}
+
+.panel {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.panelTitle {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.panelText {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.panelText code {
+  background: var(--bg-recessed);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82em;
+  color: var(--accent);
+}
+
+/* Form inputs */
+.input {
+  width: 100%;
+  padding: 14px 18px;
+  background: var(--bg-recessed);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  height: 48px;
+  outline: none;
+  margin-bottom: 12px;
+  transition: border-color var(--duration-fast),
+    box-shadow var(--duration-fast);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-subtle);
+}
+
+.creditsRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.creditsLabel {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.creditsInput {
+  width: 80px;
+  text-align: center;
+  margin-bottom: 0;
+  border-radius: var(--radius-md);
+  padding: 10px;
+}
+
+.primaryBtn {
+  width: 100%;
+  height: 52px;
+  background: var(--accent);
+  color: #000;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  transition: background var(--duration-fast),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.primaryBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* Resume Card */
+.resumeCard {
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  margin-bottom: 20px;
+  text-align: center;
+  box-shadow: 0 0 0 4px var(--accent-subtle), var(--shadow-md);
+}
+
+.resumeTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.resumeDetails {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.resumeDetails strong {
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+.resumeBtn {
+  width: 100%;
+  height: 48px;
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  transition: background var(--duration-fast);
+}
+
+.resumeBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+/* Bottom link */
+.bottomLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  margin-top: 28px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+
+.bottomLink:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Setup-specific */
+.setupLinkBtn {
+  display: block;
+  width: 100%;
+  height: 52px;
+  line-height: 52px;
+  background: var(--accent);
+  color: #000;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  text-align: center;
+  transition: background var(--duration-fast);
+}
+
+.setupLinkBtn:hover {
+  background: var(--accent-hover);
+}

@@ -138,7 +138,8 @@ export const api = {
   // Playback
   pause: () => request<void>(`${BASE}/playback/pause`, { method: 'POST' }),
   resume: () => request<void>(`${BASE}/playback/resume`, { method: 'POST' }),
-  previous: () => request<void>(`${BASE}/playback/previous`, { method: 'POST' }),
+  previous: (progressMs: number) =>
+    request<void>(`${BASE}/playback/previous?progressMs=${progressMs}`, { method: 'POST' }),
   skip: () => request<void>(`${BASE}/playback/skip`, { method: 'POST' }),
   seek: (positionMs: number) =>
     request<void>(`${BASE}/playback/seek?positionMs=${positionMs}`, { method: 'PUT' }),

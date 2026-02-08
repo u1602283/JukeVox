@@ -1,0 +1,70 @@
+.container {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.input {
+  width: 100%;
+  padding: 14px 48px 14px 48px;
+  background: var(--bg-recessed);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  height: 48px;
+  outline: none;
+  transition: border-color var(--duration-fast),
+    box-shadow var(--duration-fast);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-subtle);
+}
+
+.searchIcon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.spinner {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  animation: spin 1s linear infinite;
+  display: flex;
+  align-items: center;
+}
+
+.clearBtn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.clearBtn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--text-primary);
+}

@@ -1,18 +1,21 @@
 import { Link } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import { JoinForm } from '../components/JoinForm';
+import styles from './GuestLandingPage.module.css';
 
 export function GuestLandingPage() {
   return (
-    <div className="landing-page">
-      <h1>JukeVox</h1>
-      <p className="subtitle">Collaborative music for your party</p>
+    <div className={styles.page}>
+      <h1 className={styles.title}>JukeVox</h1>
+      <p className={styles.subtitle}>Collaborative music for your party</p>
 
-      <div className="panel">
+      <div className={styles.panel}>
         <JoinForm />
       </div>
 
-      <Link to="/host" className="host-login-link">
+      <Link to="/host" className={styles.hostLink}>
         Host Login
+        <ArrowRight size={14} className={styles.hostLinkArrow} />
       </Link>
     </div>
   );

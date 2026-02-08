@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { useParty } from '../context/PartyContext';
+import { X } from 'lucide-react';
+import { useParty } from '../hooks/useParty';
 import { api } from '../api/client';
 import type { SpotifyPlaylist } from '../types';
+import styles from './BasePlaylistSelector.module.css';
 
 export function BasePlaylistSelector() {
-  const { party, setParty, setQueue } = useParty();
+  const { party, setParty } = useParty();
   const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
   const [showPicker, setShowPicker] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,8 +30,7 @@ export function BasePlaylistSelector() {
     setLoading(true);
     try {
       const result = await api.setBasePlaylist(playlistId);
-      setQueue(result.queue);
-      setParty({ ...party, basePlaylistId: result.basePlaylistId, basePlaylistName: result.basePlaylistName });
+      setParty({ ...party, basePlaylistId: result.basePlaylistId, basePlaylistName: result.basePlaylistName, queue: result.queue });
       setShowPicker(false);
     } catch (err) {
       console.error('Failed to set base playlist:', err);
@@ -41,8 +42,7 @@ export function BasePlaylistSelector() {
   const handleClear = async () => {
     try {
       const result = await api.clearBasePlaylist();
-      setQueue(result.queue);
-      setParty({ ...party, basePlaylistId: undefined, basePlaylistName: undefined });
+      setParty({ ...party, basePlaylistId: undefined, basePlaylistName: undefined, queue: result.queue });
     } catch (err) {
       console.error('Failed to clear base playlist:', err);
     }
@@ -50,25 +50,27 @@ export function BasePlaylistSelector() {
 
   if (showPicker) {
     return (
-      <div className="base-playlist-selector">
-        <div className="picker-header">
-          <h4>Choose a base playlist</h4>
-          <button className="picker-close" onClick={() => setShowPicker(false)}>&times;</button>
+      <div className={styles.container}>
+        <div className={styles.pickerHeader}>
+          <h4 className={styles.pickerTitle}>Choose a base playlist</h4>
+          <button className={styles.pickerClose} onClick={() => setShowPicker(false)}>
+            <X size={18} />
+          </button>
         </div>
         {loading ? (
-          <p className="picker-loading">Loading playlists...</p>
+          <p className={styles.pickerLoading}>Loading playlists...</p>
         ) : (
-          <div className="playlist-list">
+          <div className={styles.list}>
             {playlists.map((pl) => (
               <button
                 key={pl.id}
-                className={`playlist-item ${pl.id === party.basePlaylistId ? 'playlist-item-active' : ''}`}
+                className={`${styles.playlistItem} ${pl.id === party.basePlaylistId ? styles.playlistItemActive : ''}`}
                 onClick={() => handleSelect(pl.id)}
               >
-                {pl.imageUrl && <img src={pl.imageUrl} alt="" className="playlist-thumb" />}
-                <div className="playlist-info">
-                  <span className="playlist-name">{pl.name}</span>
-                  <span className="playlist-count">{pl.trackCount} tracks</span>
+                {pl.imageUrl && <img src={pl.imageUrl} alt="" className={styles.playlistThumb} />}
+                <div className={styles.playlistInfo}>
+                  <span className={styles.playlistName}>{pl.name}</span>
+                  <span className={styles.playlistCount}>{pl.trackCount} tracks</span>
                 </div>
               </button>
             ))}
@@ -79,17 +81,17 @@ export function BasePlaylistSelector() {
   }
 
   return (
-    <div className="base-playlist-selector">
+    <div className={styles.container}>
       {party.basePlaylistName ? (
-        <div className="base-playlist-current">
-          <span className="base-playlist-label">
+        <div className={styles.current}>
+          <span className={styles.label}>
             Base playlist: <strong>{party.basePlaylistName}</strong>
           </span>
-          <button className="base-playlist-change" onClick={handleOpenPicker}>Change</button>
-          <button className="base-playlist-clear" onClick={handleClear}>Clear</button>
+          <button className={styles.changeBtn} onClick={handleOpenPicker}>Change</button>
+          <button className={styles.clearBtn} onClick={handleClear}>Clear</button>
         </div>
       ) : (
-        <button className="base-playlist-set" onClick={handleOpenPicker}>
+        <button className={styles.setBtn} onClick={handleOpenPicker}>
           Set Base Playlist
         </button>
       )}

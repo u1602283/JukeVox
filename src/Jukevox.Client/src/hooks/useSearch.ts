@@ -5,33 +5,29 @@ import type { SearchResult } from '../types';
 
 export function useSearch() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [resultState, setResultState] = useState<{ query: string; results: SearchResult[] }>({ query: '', results: [] });
   const debouncedQuery = useDebounce(query, 300);
 
   useEffect(() => {
-    if (!debouncedQuery.trim()) {
-      setResults([]);
-      return;
-    }
+    if (!debouncedQuery.trim()) return;
 
     let cancelled = false;
-    setLoading(true);
 
     api.search(debouncedQuery).then((data) => {
       if (!cancelled) {
-        setResults(data);
-        setLoading(false);
+        setResultState({ query: debouncedQuery, results: data });
       }
     }).catch(() => {
       if (!cancelled) {
-        setResults([]);
-        setLoading(false);
+        setResultState({ query: debouncedQuery, results: [] });
       }
     });
 
     return () => { cancelled = true; };
   }, [debouncedQuery]);
 
+  const trimmed = debouncedQuery.trim();
+  const loading = trimmed !== '' && resultState.query !== debouncedQuery;
+  const results = trimmed ? resultState.results : [];
   return { query, setQuery, results, loading };
 }

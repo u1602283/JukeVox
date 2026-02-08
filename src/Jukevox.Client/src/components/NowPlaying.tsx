@@ -1,6 +1,9 @@
+import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
+import { Music } from 'lucide-react';
 import { api } from '../api/client';
-import { useParty } from '../context/PartyContext';
+import { useParty } from '../hooks/useParty';
+import styles from './NowPlaying.module.css';
 
 function formatTime(ms: number): string {
   const mins = Math.floor(ms / 60000);
@@ -8,7 +11,7 @@ function formatTime(ms: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function NowPlaying() {
+export function NowPlaying({ children }: { children?: ReactNode }) {
   const { nowPlaying, party } = useParty();
   const isHost = party?.isHost && party.spotifyConnected;
 
@@ -18,7 +21,7 @@ export function NowPlaying() {
 
   // Interpolation baseline
   const serverProgressRef = useRef(0);
-  const lastServerTimeRef = useRef(performance.now());
+  const lastServerTimeRef = useRef(0);
   const pendingSeekRef = useRef<number | null>(null);
 
   // DOM refs for direct manipulation (bypasses React re-renders)
@@ -39,7 +42,7 @@ export function NowPlaying() {
 
     serverProgressRef.current = nowPlaying.progressMs;
     lastServerTimeRef.current = performance.now();
-  }, [nowPlaying?.progressMs, nowPlaying?.isPlaying, nowPlaying?.trackUri]);
+  }, [nowPlaying]);
 
   // requestAnimationFrame loop — 60fps, zero React re-renders
   useEffect(() => {
@@ -86,8 +89,13 @@ export function NowPlaying() {
 
   if (!nowPlaying || !nowPlaying.trackName) {
     return (
-      <div className="now-playing empty">
-        <p>Nothing playing</p>
+      <div className={styles.container}>
+        <div className={`${styles.content} ${styles.empty}`}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <Music size={40} className={styles.emptyIcon} />
+            <p className={styles.emptyText}>Nothing playing</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -118,50 +126,57 @@ export function NowPlaying() {
     ? Math.min(nowPlaying.progressMs / nowPlaying.durationMs, 1)
     : 0;
 
+  const albumArtStyle = nowPlaying.albumImageUrl
+    ? { '--album-art-url': `url(${nowPlaying.albumImageUrl})` } as React.CSSProperties
+    : undefined;
+
   return (
-    <div className="now-playing">
-      {nowPlaying.albumImageUrl && (
-        <img
-          src={nowPlaying.albumImageUrl}
-          alt={nowPlaying.albumName || ''}
-          className="now-playing-art"
-        />
-      )}
-      <div className="now-playing-info">
-        <div className="now-playing-track">{nowPlaying.trackName}</div>
-        <div className="now-playing-artist">{nowPlaying.artistName}</div>
-
-        {isHost ? (
-          <div
-            className="seek-slider"
-            ref={sliderWrapRef}
-            style={{ '--seek-pct': `${initFrac * 100}%` } as React.CSSProperties}
-          >
-            <input
-              ref={sliderRef}
-              type="range"
-              min={0}
-              max={nowPlaying.durationMs || 1}
-              defaultValue={Math.round(nowPlaying.progressMs)}
-              onPointerDown={handleSeekStart}
-              onChange={handleSeekMove}
-              onPointerUp={handleSeekEnd}
-            />
-          </div>
-        ) : (
-          <div className="progress-bar">
-            <div
-              ref={progressFillRef}
-              className="progress-fill"
-              style={{ width: `${initFrac * 100}%` }}
-            />
-          </div>
+    <div className={styles.container} style={albumArtStyle}>
+      <div className={styles.content}>
+        {nowPlaying.albumImageUrl && (
+          <img
+            src={nowPlaying.albumImageUrl}
+            alt={nowPlaying.albumName || ''}
+            className={styles.art}
+          />
         )}
-
-        <div className="progress-times">
-          <span ref={elapsedRef}>{formatTime(nowPlaying.progressMs)}</span>
-          <span>{formatTime(nowPlaying.durationMs)}</span>
+        <div className={styles.progress}>
+          {isHost ? (
+            <div
+              className={styles.seekSlider}
+              ref={sliderWrapRef}
+              style={{ '--seek-pct': `${initFrac * 100}%` } as React.CSSProperties}
+            >
+              <input
+                ref={sliderRef}
+                type="range"
+                min={0}
+                max={nowPlaying.durationMs || 1}
+                defaultValue={Math.round(nowPlaying.progressMs)}
+                onPointerDown={handleSeekStart}
+                onChange={handleSeekMove}
+                onPointerUp={handleSeekEnd}
+              />
+            </div>
+          ) : (
+            <div className={styles.progressBar}>
+              <div
+                ref={progressFillRef}
+                className={styles.progressFill}
+                style={{ width: `${initFrac * 100}%` }}
+              />
+            </div>
+          )}
+          <div className={styles.times}>
+            <span ref={elapsedRef}>{formatTime(nowPlaying.progressMs)}</span>
+            <span>{formatTime(nowPlaying.durationMs)}</span>
+          </div>
         </div>
+        <div className={styles.info}>
+          <div className={styles.track}>{nowPlaying.trackName}</div>
+          <div className={styles.artist}>{nowPlaying.artistName}</div>
+        </div>
+        {children}
       </div>
     </div>
   );

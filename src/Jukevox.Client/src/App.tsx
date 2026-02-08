@@ -1,10 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { PartyProvider, useParty } from './context/PartyContext';
+import { PartyProvider } from './context/PartyContext';
+import { useParty } from './hooks/useParty';
 import { GuestLandingPage } from './pages/GuestLandingPage';
 import { PartyPage } from './pages/PartyPage';
 import { HostSetupPage } from './pages/HostSetupPage';
 import { HostPortalPage } from './pages/HostPortalPage';
-import './App.css';
 
 function GuestRoute() {
   const { party, loading } = useParty();

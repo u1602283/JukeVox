@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import { useParty } from '../context/PartyContext';
+import { GripVertical, X } from 'lucide-react';
+import { useParty } from '../hooks/useParty';
 import { api } from '../api/client';
-
+import styles from './QueueList.module.css';
 
 function formatDuration(ms: number): string {
   const mins = Math.floor(ms / 60000);
@@ -17,8 +18,6 @@ export function QueueList() {
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const dragItemRef = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const startY = useRef(0);
-  const currentY = useRef(0);
   const itemRects = useRef<DOMRect[]>([]);
 
   const handleRemove = async (id: string) => {
@@ -32,37 +31,36 @@ export function QueueList() {
 
   const captureRects = () => {
     if (!listRef.current) return;
-    const items = listRef.current.querySelectorAll('.queue-item');
+    const items = listRef.current.querySelectorAll('[data-queue-item]');
     itemRects.current = Array.from(items).map(el => el.getBoundingClientRect());
   };
 
-  const getTargetIndex = (clientY: number): number => {
+  const getInsertIndex = (clientY: number, dragFrom: number): number => {
     const rects = itemRects.current;
+    let insertAt = 0;
     for (let i = 0; i < rects.length; i++) {
+      if (i === dragFrom) continue;
       const mid = rects[i].top + rects[i].height / 2;
-      if (clientY < mid) return i;
+      if (clientY > mid) insertAt++;
     }
-    return rects.length - 1;
+    return insertAt;
   };
 
   const onPointerDown = (e: React.PointerEvent, index: number) => {
-    // Only allow host to drag, and only from the handle
     if (!isHost) return;
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
     dragItemRef.current = index;
-    startY.current = e.clientY;
-    currentY.current = e.clientY;
     captureRects();
     setDragIndex(index);
     setOverIndex(index);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (dragItemRef.current === null) return;
-    currentY.current = e.clientY;
-    const target = getTargetIndex(e.clientY);
+    const dragFrom = dragItemRef.current;
+    if (dragFrom === null) return;
+    const target = getInsertIndex(e.clientY, dragFrom);
     setOverIndex(target);
   };
 
@@ -96,7 +94,7 @@ export function QueueList() {
 
   if (queue.length === 0) {
     return (
-      <div className="queue-empty">
+      <div className={styles.empty}>
         <p>Queue is empty. Search for songs to add!</p>
       </div>
     );
@@ -114,8 +112,13 @@ export function QueueList() {
   const manualCount = firstBaseIndex >= 0 ? firstBaseIndex : queue.length;
 
   return (
-    <div className="queue-list" ref={listRef}>
-      <h3>Up Next ({manualCount > 0 ? `${manualCount} requested` : `${queue.length} from playlist`})</h3>
+    <div className={styles.container} ref={listRef}>
+      <div className={styles.header}>
+        <h3 className={styles.title}>Up Next</h3>
+        <span className={styles.badge}>
+          {manualCount > 0 ? `${manualCount} requested` : `${queue.length} from playlist`}
+        </span>
+      </div>
       {displayQueue.map((item, index) => {
         const originalIndex = queue.indexOf(item);
         const isDragging = originalIndex === dragIndex;
@@ -124,40 +127,43 @@ export function QueueList() {
         return (
           <div key={item.id}>
             {showDivider && (
-              <div className="queue-divider">From base playlist</div>
+              <div className={styles.divider}>From base playlist</div>
             )}
             <div
-              className={`queue-item ${isDragging ? 'queue-item-dragging' : ''} ${item.isFromBasePlaylist ? 'queue-item-base-playlist' : ''}`}
+              data-queue-item
+              className={[
+                styles.item,
+                isDragging ? styles.itemDragging : '',
+                item.isFromBasePlaylist ? styles.itemBase : styles.itemRequested,
+              ].join(' ')}
             >
-            {isHost && (
-              <div
-                className="drag-handle"
-                onPointerDown={(e) => onPointerDown(e, originalIndex)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerCancel}
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                  <path d="M9 5h2v2H9zm4 0h2v2h-2zM9 9h2v2H9zm4 0h2v2h-2zm-4 4h2v2H9zm4 0h2v2h-2zm-4 4h2v2H9zm4 0h2v2h-2z" />
-                </svg>
+              {isHost && (
+                <div
+                  className={styles.dragHandle}
+                  onPointerDown={(e) => onPointerDown(e, originalIndex)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerCancel}
+                >
+                  <GripVertical size={20} />
+                </div>
+              )}
+              <span className={styles.index}>{index + 1}</span>
+              {item.albumImageUrl && (
+                <img src={item.albumImageUrl} alt="" className={styles.thumb} />
+              )}
+              <div className={styles.trackInfo}>
+                <span className={styles.trackName}>{item.trackName}</span>
+                <span className={styles.trackArtist}>{item.artistName}</span>
+                <span className={styles.trackMeta}>
+                  {formatDuration(item.durationMs)} &middot; Added by {item.addedByName}
+                </span>
               </div>
-            )}
-            <span className="queue-index">{index + 1}</span>
-            {item.albumImageUrl && (
-              <img src={item.albumImageUrl} alt="" className="track-thumb" />
-            )}
-            <div className="track-info">
-              <span className="track-name">{item.trackName}</span>
-              <span className="track-artist">{item.artistName}</span>
-              <span className="track-meta">
-                {formatDuration(item.durationMs)} &middot; Added by {item.addedByName}
-              </span>
-            </div>
-            {isHost && (
-              <button className="remove-btn" onClick={() => handleRemove(item.id)}>
-                &times;
-              </button>
-            )}
+              {isHost && (
+                <button className={styles.removeBtn} onClick={() => handleRemove(item.id)}>
+                  <X size={18} />
+                </button>
+              )}
             </div>
           </div>
         );

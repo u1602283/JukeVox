@@ -1,0 +1,137 @@
+.container {
+  width: 100%;
+  max-width: 400px;
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.controlBtn {
+  background: none;
+  color: var(--text-secondary);
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.controlBtn:hover {
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.controlBtn:active {
+  transform: scale(0.92);
+}
+
+.mainBtn {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.mainBtn:hover {
+  transform: scale(1.06);
+  box-shadow: var(--shadow-lg);
+}
+
+.mainBtn:active {
+  transform: scale(0.92);
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+}
+
+.volumeIcon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.volumeSlider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  transition: height var(--duration-fast) var(--ease-out);
+  cursor: pointer;
+}
+
+.volumeSlider:hover {
+  height: 5px;
+}
+
+.volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.volumeSlider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  border: none;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.volumeSlider::-moz-range-progress {
+  background: var(--accent);
+  height: 3px;
+  border-radius: 2px;
+}
+
+.volumeSlider::-webkit-slider-runnable-track {
+  height: inherit;
+  border-radius: inherit;
+}
+
+.volumeValue {
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 640px) {
+  .buttons {
+    gap: 20px;
+  }
+
+  .mainBtn {
+    width: 52px;
+    height: 52px;
+  }
+}
