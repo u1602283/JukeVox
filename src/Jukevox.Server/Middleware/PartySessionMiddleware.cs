@@ -20,7 +20,7 @@ public class PartySessionMiddleware
             {
                 HttpOnly = true,
                 SameSite = SameSiteMode.Lax,
-                Secure = false, // MVP: local network
+                Secure = context.Request.IsHttps,
                 MaxAge = TimeSpan.FromHours(24)
             });
         }

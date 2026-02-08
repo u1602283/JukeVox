@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.HttpOverrides;
 using JukeVox.Server.Extensions;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
@@ -8,6 +9,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddJukeVoxServices(builder.Configuration);
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var frontendUrl = builder.Configuration["FrontendUrl"] ?? "http://localhost:5173";
 builder.Services.AddCors(options =>
@@ -35,10 +43,12 @@ if (File.Exists(certPath) && File.Exists(keyPath))
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 app.UseCors();
 app.UseMiddleware<PartySessionMiddleware>();
 
+app.UseStaticFiles();
 app.MapControllers();
 app.MapHub<PartyHub>("/hubs/party");
 

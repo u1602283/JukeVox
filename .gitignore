@@ -28,6 +28,9 @@ Thumbs.db
 ## Claude
 .claude/
 
+## Built frontend (output of npm run build)
+src/JukeVox.Server/wwwroot/
+
 ## State file
 party-state.json
 
