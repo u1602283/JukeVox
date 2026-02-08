@@ -11,7 +11,7 @@ const hasCerts = fs.existsSync(certPath) && fs.existsSync(keyPath)
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: '../JukeVox.Server/wwwroot',
+    outDir: '../Jukevox.Server/wwwroot',
   },
   server: {
     host: '0.0.0.0',
