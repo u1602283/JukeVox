@@ -13,4 +13,6 @@ public class Party
     public string? BasePlaylistId { get; set; }
     public string? BasePlaylistName { get; set; }
     public List<BasePlaylistTrack> BasePlaylistTracks { get; set; } = [];
+    public QueueItem? CurrentTrack { get; set; }
+    public List<QueueItem> PlaybackHistory { get; set; } = [];
 }

@@ -19,6 +19,7 @@ public class PlaybackMonitorService : BackgroundService
     private bool _spotifyQueueHasForeignItems;
     private int _pollCount;
     private string? _seededTrackUri;
+    private DateTime _trackStartedAt = DateTime.MinValue;
 
     public PlaybackMonitorService(
         IServiceProvider serviceProvider,
@@ -40,6 +41,7 @@ public class PlaybackMonitorService : BackgroundService
         _wasPlaying = true;
         _seededTrackUri = null;
         _spotifyQueueHasForeignItems = false;
+        _trackStartedAt = DateTime.UtcNow;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -143,8 +145,13 @@ public class PlaybackMonitorService : BackgroundService
                 }
             }
 
+            // Grace period: after a controller-initiated track change, Spotify may
+            // briefly report the old track. Skip foreign-track detection during this window.
+            var inGracePeriod = (DateTime.UtcNow - _trackStartedAt).TotalSeconds < 5;
+
             // Detect Spotify moved to a different track (skip, auto-advance, etc.)
-            if (!shouldAdvance && (_weStartedCurrentTrack || _idleWatching) && _lastTrackUri != null &&
+            if (!shouldAdvance && !inGracePeriod &&
+                (_weStartedCurrentTrack || _idleWatching) && _lastTrackUri != null &&
                 state.TrackUri != null && state.TrackUri != _lastTrackUri &&
                 state.IsPlaying)
             {
@@ -196,16 +203,26 @@ public class PlaybackMonitorService : BackgroundService
             }
 
             // Only broadcast state when we're NOT about to advance —
-            // otherwise clients briefly see the old track reset to 0
+            // otherwise clients briefly see the old track reset to 0.
+            // Also skip broadcasting during grace period if Spotify still reports
+            // the old track — the controller already sent the correct state.
             if (!shouldAdvance)
             {
-                if (state!.TrackUri != _lastTrackUri)
+                bool staleDuringGrace = inGracePeriod && state!.TrackUri != _lastTrackUri;
+                if (!staleDuringGrace)
                 {
-                    await hubContext.Clients.Group(party.Id).NowPlayingChanged(state);
-                }
+                    if (state!.TrackUri != _lastTrackUri)
+                    {
+                        await hubContext.Clients.Group(party.Id).NowPlayingChanged(state);
+                    }
 
-                await hubContext.Clients.Group(party.Id).PlaybackStateUpdated(state);
+                    await hubContext.Clients.Group(party.Id).PlaybackStateUpdated(state);
+                }
             }
+
+            // Clear grace period once Spotify reports the expected track
+            if (inGracePeriod && state!.TrackUri == _lastTrackUri)
+                _trackStartedAt = DateTime.MinValue;
 
             _wasPlaying = state!.IsPlaying;
             _lastProgressMs = state.ProgressMs;

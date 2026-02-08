@@ -111,6 +111,10 @@ public class QueueService
             var next = party.Queue[0];
             party.Queue.RemoveAt(0);
 
+            if (party.CurrentTrack != null)
+                party.PlaybackHistory.Add(party.CurrentTrack);
+            party.CurrentTrack = next;
+
             // Auto-refill when queue is empty and a base playlist is configured
             if (party.Queue.Count == 0 && party.BasePlaylistTracks.Count > 0)
             {
@@ -119,6 +123,33 @@ public class QueueService
 
             _partyService.PersistState();
             return next;
+        }
+    }
+
+    /// <summary>
+    /// Returns the previously played track and requeues the currently playing track
+    /// at the front of the queue. Returns null if there is no history.
+    /// </summary>
+    public QueueItem? SkipToPrevious()
+    {
+        lock (_lock)
+        {
+            var party = _partyService.GetCurrentParty();
+            if (party == null || party.PlaybackHistory.Count == 0) return null;
+
+            // Put the current track back at the front of the queue
+            if (party.CurrentTrack != null)
+            {
+                party.CurrentTrack.Id = Guid.NewGuid().ToString("N")[..8];
+                party.Queue.Insert(0, party.CurrentTrack);
+            }
+
+            var prev = party.PlaybackHistory[^1];
+            party.PlaybackHistory.RemoveAt(party.PlaybackHistory.Count - 1);
+            party.CurrentTrack = prev;
+
+            _partyService.PersistState();
+            return prev;
         }
     }
 

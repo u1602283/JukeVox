@@ -49,6 +49,7 @@ public class SpotifyPlayerService
             ProgressMs = state.ProgressMs ?? 0,
             DurationMs = state.Item?.DurationMs ?? 0,
             VolumePercent = state.Device?.VolumePercent ?? 0,
+            SupportsVolume = state.Device?.SupportsVolume ?? true,
             DeviceId = state.Device?.Id,
             DeviceName = state.Device?.Name
         };
@@ -114,7 +115,8 @@ public class SpotifyPlayerService
             Name = d.Name,
             Type = d.Type,
             IsActive = d.IsActive,
-            VolumePercent = d.VolumePercent ?? 0
+            VolumePercent = d.VolumePercent ?? 0,
+            SupportsVolume = d.SupportsVolume
         }).ToList();
     }
 
@@ -161,6 +163,13 @@ public class SpotifyPlayerService
                 _logger.LogWarning("Spotify rate limited. Retry after: {RetryAfter}", retryAfter);
                 await Task.Delay(retryAfter);
                 return await SendAsync(method, url, jsonBody);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Spotify API error: {Method} {Url} → {Status} {Body}",
+                    method, url, (int)response.StatusCode, body);
             }
 
             return response;

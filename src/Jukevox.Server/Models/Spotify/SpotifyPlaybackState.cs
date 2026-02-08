@@ -33,6 +33,9 @@ public class SpotifyDevice
 
     [JsonPropertyName("volume_percent")]
     public int? VolumePercent { get; set; }
+
+    [JsonPropertyName("supports_volume")]
+    public bool SupportsVolume { get; set; } = true;
 }
 
 public class SpotifyDevicesResponse

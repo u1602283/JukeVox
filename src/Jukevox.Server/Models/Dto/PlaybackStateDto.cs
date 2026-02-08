@@ -11,6 +11,7 @@ public class PlaybackStateDto
     public int ProgressMs { get; set; }
     public int DurationMs { get; set; }
     public int VolumePercent { get; set; }
+    public bool SupportsVolume { get; set; } = true;
     public string? DeviceId { get; set; }
     public string? DeviceName { get; set; }
 }

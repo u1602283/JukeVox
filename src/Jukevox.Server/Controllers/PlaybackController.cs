@@ -52,13 +52,35 @@ public class PlaybackController : ControllerBase
     }
 
     [HttpPost("previous")]
-    public async Task<IActionResult> Previous()
+    public async Task<IActionResult> Previous([FromQuery] int progressMs = 0)
     {
         if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
-        var success = await _playerService.SkipPreviousAsync();
-        return success ? Ok() : StatusCode(502, new { error = "Spotify API failed" });
+        // Standard previous-button behavior: restart if >5s in, otherwise go to previous track
+        if (progressMs > 5000)
+        {
+            var success = await _playerService.SeekAsync(0);
+            return success ? Ok() : StatusCode(502, new { error = "Spotify API failed" });
+        }
+
+        var prev = _queueService.SkipToPrevious();
+        if (prev != null)
+        {
+            var party = _partyService.GetCurrentParty()!;
+            await _playerService.PlayTrackAsync(prev.TrackUri);
+            _monitorService.NotifyTrackStarted(prev.TrackUri);
+
+            await BroadcastNowPlaying(party.Id, prev);
+
+            var queue = _queueService.GetQueue();
+            await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
+            return Ok();
+        }
+
+        // No previous track — restart current track
+        var success2 = await _playerService.SeekAsync(0);
+        return success2 ? Ok() : StatusCode(502, new { error = "Spotify API failed" });
     }
 
     [HttpPost("skip")]
@@ -74,6 +96,8 @@ public class PlaybackController : ControllerBase
         {
             await _playerService.PlayTrackAsync(next.TrackUri);
             _monitorService.NotifyTrackStarted(next.TrackUri);
+
+            await BroadcastNowPlaying(party.Id, next);
 
             var upcoming = _queueService.GetQueue();
             if (upcoming.Count > 0)
@@ -117,6 +141,27 @@ public class PlaybackController : ControllerBase
 
         var devices = await _playerService.GetDevicesAsync();
         return Ok(devices);
+    }
+
+    private async Task BroadcastNowPlaying(string partyId, Models.QueueItem track)
+    {
+        var state = await _playerService.GetPlaybackStateAsync();
+        var dto = new PlaybackStateDto
+        {
+            IsPlaying = true,
+            TrackUri = track.TrackUri,
+            TrackName = track.TrackName,
+            ArtistName = track.ArtistName,
+            AlbumName = track.AlbumName,
+            AlbumImageUrl = track.AlbumImageUrl,
+            ProgressMs = 0,
+            DurationMs = track.DurationMs,
+            VolumePercent = state?.VolumePercent ?? 0,
+            SupportsVolume = state?.SupportsVolume ?? true,
+            DeviceId = state?.DeviceId,
+            DeviceName = state?.DeviceName
+        };
+        await _hubContext.Clients.Group(partyId).NowPlayingChanged(dto);
     }
 
     [HttpPut("device")]
