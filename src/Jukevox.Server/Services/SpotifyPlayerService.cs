@@ -7,17 +7,17 @@ using JukeVox.Server.Models.Spotify;
 
 namespace JukeVox.Server.Services;
 
-public class SpotifyPlayerService
+public class SpotifyPlayerService : ISpotifyPlayerService
 {
     private readonly HttpClient _httpClient;
-    private readonly SpotifyAuthService _authService;
+    private readonly ISpotifyAuthService _authService;
     private readonly ILogger<SpotifyPlayerService> _logger;
 
     private const string BaseUrl = "https://api.spotify.com/v1/me/player";
 
     public SpotifyPlayerService(
         HttpClient httpClient,
-        SpotifyAuthService authService,
+        ISpotifyAuthService authService,
         ILogger<SpotifyPlayerService> logger)
     {
         _httpClient = httpClient;

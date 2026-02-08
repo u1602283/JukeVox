@@ -8,11 +8,11 @@ namespace JukeVox.Server.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly SpotifyAuthService _authService;
-    private readonly PartyService _partyService;
+    private readonly ISpotifyAuthService _authService;
+    private readonly IPartyService _partyService;
     private readonly string _frontendUrl;
 
-    public AuthController(SpotifyAuthService authService, PartyService partyService, IConfiguration configuration)
+    public AuthController(ISpotifyAuthService authService, IPartyService partyService, IConfiguration configuration)
     {
         _authService = authService;
         _partyService = partyService;

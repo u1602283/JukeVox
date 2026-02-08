@@ -6,15 +6,15 @@ using JukeVox.Server.Models.Spotify;
 
 namespace JukeVox.Server.Services;
 
-public class SpotifyPlaylistService
+public class SpotifyPlaylistService : ISpotifyPlaylistService
 {
     private readonly HttpClient _httpClient;
-    private readonly SpotifyAuthService _authService;
+    private readonly ISpotifyAuthService _authService;
     private readonly ILogger<SpotifyPlaylistService> _logger;
 
     public SpotifyPlaylistService(
         HttpClient httpClient,
-        SpotifyAuthService authService,
+        ISpotifyAuthService authService,
         ILogger<SpotifyPlaylistService> logger)
     {
         _httpClient = httpClient;

@@ -3,7 +3,7 @@ using JukeVox.Server.Models;
 
 namespace JukeVox.Server.Services;
 
-public class PartyService
+public class PartyService : IPartyService
 {
     private readonly Lock _lock = new();
     private readonly string _stateFilePath;

@@ -4,15 +4,15 @@ using JukeVox.Server.Models.Spotify;
 
 namespace JukeVox.Server.Services;
 
-public class SpotifySearchService
+public class SpotifySearchService : ISpotifySearchService
 {
     private readonly HttpClient _httpClient;
-    private readonly SpotifyAuthService _authService;
+    private readonly ISpotifyAuthService _authService;
     private readonly ILogger<SpotifySearchService> _logger;
 
     public SpotifySearchService(
         HttpClient httpClient,
-        SpotifyAuthService authService,
+        ISpotifyAuthService authService,
         ILogger<SpotifySearchService> logger)
     {
         _httpClient = httpClient;

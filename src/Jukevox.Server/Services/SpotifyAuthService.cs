@@ -7,11 +7,11 @@ using JukeVox.Server.Models.Spotify;
 
 namespace JukeVox.Server.Services;
 
-public class SpotifyAuthService
+public class SpotifyAuthService : ISpotifyAuthService
 {
     private readonly SpotifyOptions _options;
     private readonly HttpClient _httpClient;
-    private readonly PartyService _partyService;
+    private readonly IPartyService _partyService;
     private readonly ILogger<SpotifyAuthService> _logger;
 
     private static readonly string[] Scopes =
@@ -26,7 +26,7 @@ public class SpotifyAuthService
     public SpotifyAuthService(
         IOptions<SpotifyOptions> options,
         HttpClient httpClient,
-        PartyService partyService,
+        IPartyService partyService,
         ILogger<SpotifyAuthService> logger)
     {
         _options = options.Value;

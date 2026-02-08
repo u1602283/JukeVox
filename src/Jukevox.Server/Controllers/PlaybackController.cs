@@ -11,17 +11,17 @@ namespace JukeVox.Server.Controllers;
 [Route("api/playback")]
 public class PlaybackController : ControllerBase
 {
-    private readonly SpotifyPlayerService _playerService;
-    private readonly PartyService _partyService;
-    private readonly QueueService _queueService;
-    private readonly PlaybackMonitorService _monitorService;
+    private readonly ISpotifyPlayerService _playerService;
+    private readonly IPartyService _partyService;
+    private readonly IQueueService _queueService;
+    private readonly IPlaybackMonitorService _monitorService;
     private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
 
     public PlaybackController(
-        SpotifyPlayerService playerService,
-        PartyService partyService,
-        QueueService queueService,
-        PlaybackMonitorService monitorService,
+        ISpotifyPlayerService playerService,
+        IPartyService partyService,
+        IQueueService queueService,
+        IPlaybackMonitorService monitorService,
         IHubContext<PartyHub, IPartyClient> hubContext)
     {
         _playerService = playerService;

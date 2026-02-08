@@ -10,14 +10,14 @@ namespace JukeVox.Server.Controllers;
 [Route("api/party")]
 public class PartyController : ControllerBase
 {
-    private readonly PartyService _partyService;
-    private readonly QueueService _queueService;
-    private readonly SpotifyPlayerService _playerService;
+    private readonly IPartyService _partyService;
+    private readonly IQueueService _queueService;
+    private readonly ISpotifyPlayerService _playerService;
 
     public PartyController(
-        PartyService partyService,
-        QueueService queueService,
-        SpotifyPlayerService playerService)
+        IPartyService partyService,
+        IQueueService queueService,
+        ISpotifyPlayerService playerService)
     {
         _partyService = partyService;
         _queueService = queueService;

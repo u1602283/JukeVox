@@ -3,12 +3,12 @@ using JukeVox.Server.Models.Dto;
 
 namespace JukeVox.Server.Services;
 
-public class QueueService
+public class QueueService : IQueueService
 {
-    private readonly PartyService _partyService;
+    private readonly IPartyService _partyService;
     private readonly Lock _lock = new();
 
-    public QueueService(PartyService partyService)
+    public QueueService(IPartyService partyService)
     {
         _partyService = partyService;
     }

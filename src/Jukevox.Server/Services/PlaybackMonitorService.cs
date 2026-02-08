@@ -4,7 +4,7 @@ using JukeVox.Server.Models.Dto;
 
 namespace JukeVox.Server.Services;
 
-public class PlaybackMonitorService : BackgroundService
+public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PlaybackMonitorService> _logger;
@@ -66,9 +66,9 @@ public class PlaybackMonitorService : BackgroundService
     private async Task PollPlaybackAsync(CancellationToken ct)
     {
         using var scope = _serviceProvider.CreateScope();
-        var partyService = scope.ServiceProvider.GetRequiredService<PartyService>();
-        var playerService = scope.ServiceProvider.GetRequiredService<SpotifyPlayerService>();
-        var queueService = scope.ServiceProvider.GetRequiredService<QueueService>();
+        var partyService = scope.ServiceProvider.GetRequiredService<IPartyService>();
+        var playerService = scope.ServiceProvider.GetRequiredService<ISpotifyPlayerService>();
+        var queueService = scope.ServiceProvider.GetRequiredService<IQueueService>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<PartyHub, IPartyClient>>();
 
         var party = partyService.GetCurrentParty();
@@ -287,7 +287,7 @@ public class PlaybackMonitorService : BackgroundService
     /// Seeds the next track from our app queue into Spotify's native queue,
     /// so that hardware/app skips land on our track instead of Spotify autoplay.
     /// </summary>
-    private async Task SeedNextTrack(SpotifyPlayerService playerService, QueueService queueService)
+    private async Task SeedNextTrack(ISpotifyPlayerService playerService, IQueueService queueService)
     {
         var appQueue = queueService.GetQueue();
         if (appQueue.Count > 0)
@@ -316,7 +316,7 @@ public class PlaybackMonitorService : BackgroundService
     /// If that fails (device went inactive), fetches the device list and retries
     /// on the first available device.
     /// </summary>
-    private async Task<bool> PlayWithDeviceFallback(SpotifyPlayerService playerService, string trackUri)
+    private async Task<bool> PlayWithDeviceFallback(ISpotifyPlayerService playerService, string trackUri)
     {
         // First attempt: target the last known device
         if (await playerService.PlayTrackAsync(trackUri, _lastDeviceId))

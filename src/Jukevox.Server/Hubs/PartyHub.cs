@@ -5,9 +5,9 @@ namespace JukeVox.Server.Hubs;
 
 public class PartyHub : Hub<IPartyClient>
 {
-    private readonly PartyService _partyService;
+    private readonly IPartyService _partyService;
 
-    public PartyHub(PartyService partyService)
+    public PartyHub(IPartyService partyService)
     {
         _partyService = partyService;
     }

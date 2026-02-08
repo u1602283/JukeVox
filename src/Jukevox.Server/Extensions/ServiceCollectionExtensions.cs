@@ -14,15 +14,16 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddSingleton<PartyService>();
-        services.AddSingleton<QueueService>();
+        services.AddSingleton<IPartyService, PartyService>();
+        services.AddSingleton<IQueueService, QueueService>();
 
-        services.AddHttpClient<SpotifyAuthService>();
-        services.AddHttpClient<SpotifySearchService>();
-        services.AddHttpClient<SpotifyPlayerService>();
-        services.AddHttpClient<SpotifyPlaylistService>();
+        services.AddHttpClient<ISpotifyAuthService, SpotifyAuthService>();
+        services.AddHttpClient<ISpotifySearchService, SpotifySearchService>();
+        services.AddHttpClient<ISpotifyPlayerService, SpotifyPlayerService>();
+        services.AddHttpClient<ISpotifyPlaylistService, SpotifyPlaylistService>();
 
         services.AddSingleton<PlaybackMonitorService>();
+        services.AddSingleton<IPlaybackMonitorService>(sp => sp.GetRequiredService<PlaybackMonitorService>());
         services.AddHostedService<PlaybackMonitorService>(sp => sp.GetRequiredService<PlaybackMonitorService>());
 
         // Host authentication (Fido2 config must be registered before HostCredentialService)

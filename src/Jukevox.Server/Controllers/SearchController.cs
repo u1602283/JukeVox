@@ -8,10 +8,10 @@ namespace JukeVox.Server.Controllers;
 [Route("api/search")]
 public class SearchController : ControllerBase
 {
-    private readonly SpotifySearchService _searchService;
-    private readonly PartyService _partyService;
+    private readonly ISpotifySearchService _searchService;
+    private readonly IPartyService _partyService;
 
-    public SearchController(SpotifySearchService searchService, PartyService partyService)
+    public SearchController(ISpotifySearchService searchService, IPartyService partyService)
     {
         _searchService = searchService;
         _partyService = partyService;
