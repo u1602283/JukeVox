@@ -305,7 +305,7 @@ export function HostPortalPage() {
           <BasePlaylistSelector />
         </div>
         <div className={`${partyStyles.desktopHidden} ${mobileView !== 'manage' ? partyStyles.mobileHidden : ''}`}>
-          <ManagePanel mode="inline" onPartyEnded={handlePartyEnded} />
+          <ManagePanel mode="inline" visible={mobileView === 'manage'} onPartyEnded={handlePartyEnded} />
         </div>
       </div>
 

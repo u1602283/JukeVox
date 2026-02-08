@@ -6,6 +6,7 @@ import styles from './ManagePanel.module.css';
 
 interface ManagePanelProps {
   mode: 'overlay' | 'inline';
+  visible?: boolean;
   onClose?: () => void;
   onPartyEnded?: () => void;
 }
@@ -19,7 +20,7 @@ function timeAgo(dateStr: string): string {
   return `${hrs}h ${mins % 60}m ago`;
 }
 
-export function ManagePanel({ mode, onClose, onPartyEnded }: ManagePanelProps) {
+export function ManagePanel({ mode, visible = true, onClose, onPartyEnded }: ManagePanelProps) {
   const [guests, setGuests] = useState<GuestInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -38,8 +39,8 @@ export function ManagePanel({ mode, onClose, onPartyEnded }: ManagePanelProps) {
   }, []);
 
   useEffect(() => {
-    fetchGuests();
-  }, [fetchGuests]);
+    if (visible) fetchGuests();
+  }, [visible, fetchGuests]);
 
   const handleSetCredits = async (sessionId: string, credits: number) => {
     const prev = guests;
