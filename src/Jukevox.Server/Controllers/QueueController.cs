@@ -76,10 +76,6 @@ public class QueueController : ControllerBase
                     await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
                 }
             }
-            else
-            {
-                await _playerService.AddToQueueAsync(queue[0].TrackUri);
-            }
         }
 
         // Send credits update to the guest who added the song

@@ -16,9 +16,6 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
     private int _lastDurationMs;
     private bool _weStartedCurrentTrack;
     private bool _idleWatching;
-    private bool _spotifyQueueHasForeignItems;
-    private int _pollCount;
-    private string? _seededTrackUri;
     private DateTime _trackStartedAt = DateTime.MinValue;
 
     public PlaybackMonitorService(
@@ -39,8 +36,6 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         _weStartedCurrentTrack = true;
         _idleWatching = false;
         _wasPlaying = true;
-        _seededTrackUri = null;
-        _spotifyQueueHasForeignItems = false;
         _trackStartedAt = DateTime.UtcNow;
     }
 
@@ -76,8 +71,6 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 
         var state = await playerService.GetPlaybackStateAsync();
 
-        _pollCount++;
-
         bool shouldAdvance = false;
 
         if (state == null || state.TrackName == null)
@@ -95,37 +88,6 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
             // Remember the last active device so we can target it later
             if (state.DeviceId != null)
                 _lastDeviceId = state.DeviceId;
-
-            // Periodically check Spotify's native queue for foreign items (~every 10s)
-            if (_pollCount % 5 == 0 && _weStartedCurrentTrack && state.IsPlaying)
-            {
-                var appQueue = queueService.GetQueue();
-                if (appQueue.Count > 0)
-                {
-                    var spotifyQueue = await playerService.GetSpotifyQueueAsync();
-                    var nextAppTrackUri = appQueue[0].TrackUri;
-                    // Foreign items = anything in Spotify's queue ahead of our next track
-                    _spotifyQueueHasForeignItems = spotifyQueue.Count > 0 &&
-                                                    spotifyQueue[0] != nextAppTrackUri;
-                    if (_spotifyQueueHasForeignItems)
-                        _logger.LogInformation("Spotify queue has foreign items (next: {SpotifyNext}, expected: {AppNext})",
-                            spotifyQueue[0], nextAppTrackUri);
-                }
-                else
-                {
-                    _spotifyQueueHasForeignItems = false;
-                }
-            }
-
-            // Preemptive advance: if we're near the end of the track and Spotify's
-            // queue has foreign items, play our next track now to cut them off
-            if (_weStartedCurrentTrack && state.IsPlaying && _spotifyQueueHasForeignItems &&
-                state.DurationMs > 0 && state.ProgressMs >= state.DurationMs - 3000)
-            {
-                _logger.LogInformation("Track near end with foreign Spotify queue — preemptively advancing");
-                shouldAdvance = true;
-                _spotifyQueueHasForeignItems = false;
-            }
 
             // Detect track ended: was playing, now stopped on the same track.
             // Spotify resets progress to 0 when a track finishes, so we check
@@ -155,39 +117,16 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                 state.TrackUri != null && state.TrackUri != _lastTrackUri &&
                 state.IsPlaying)
             {
-                // Check if Spotify landed on our seeded track (e.g. user hit skip)
-                if (_seededTrackUri != null && state.TrackUri == _seededTrackUri)
+                // Foreign track — take over if we have queue items
+                var peekQueue = queueService.GetQueue();
+                if (peekQueue.Count > 0)
                 {
-                    _logger.LogInformation("Skip detected — Spotify playing our seeded track");
-                    // Dequeue the seeded track from our app queue (it's now playing)
-                    var skippedTo = queueService.Dequeue();
-                    _weStartedCurrentTrack = true;
-                    _lastTrackUri = state.TrackUri;
-                    _seededTrackUri = null;
-                    _spotifyQueueHasForeignItems = false;
-
-                    // Notify clients of the new now-playing and updated queue
-                    await hubContext.Clients.Group(party.Id).NowPlayingChanged(state);
-                    var updatedQueue = queueService.GetQueue();
-                    await hubContext.Clients.Group(party.Id).QueueUpdated(updatedQueue);
-
-                    // Seed the next track from our queue
-                    await SeedNextTrack(playerService, queueService);
+                    _logger.LogInformation("Spotify auto-advanced to foreign track, taking over");
+                    shouldAdvance = true;
                 }
                 else
                 {
-                    // Foreign track — take over if we have queue items
-                    var peekQueue = queueService.GetQueue();
-                    if (peekQueue.Count > 0)
-                    {
-                        _logger.LogInformation("Spotify auto-advanced to foreign track, taking over");
-                        shouldAdvance = true;
-                    }
-                    else
-                    {
-                        _weStartedCurrentTrack = false;
-                        _seededTrackUri = null;
-                    }
+                    _weStartedCurrentTrack = false;
                 }
             }
 
@@ -263,8 +202,6 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                     };
                     await hubContext.Clients.Group(party.Id).NowPlayingChanged(nowPlayingDto);
 
-                    // Seed next track into Spotify's native queue for skip resilience
-                    await SeedNextTrack(playerService, queueService);
                 }
                 else
                 {
@@ -280,34 +217,6 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                 _idleWatching = true;
                 _logger.LogInformation("Queue empty, entering idle watching mode");
             }
-        }
-    }
-
-    /// <summary>
-    /// Seeds the next track from our app queue into Spotify's native queue,
-    /// so that hardware/app skips land on our track instead of Spotify autoplay.
-    /// </summary>
-    private async Task SeedNextTrack(ISpotifyPlayerService playerService, IQueueService queueService)
-    {
-        var appQueue = queueService.GetQueue();
-        if (appQueue.Count > 0)
-        {
-            var nextUri = appQueue[0].TrackUri;
-            var seeded = await playerService.AddToQueueAsync(nextUri);
-            if (seeded)
-            {
-                _seededTrackUri = nextUri;
-                _logger.LogInformation("Seeded next track into Spotify queue: {Uri}", nextUri);
-            }
-            else
-            {
-                _seededTrackUri = null;
-                _logger.LogWarning("Failed to seed next track into Spotify queue");
-            }
-        }
-        else
-        {
-            _seededTrackUri = null;
         }
     }
 

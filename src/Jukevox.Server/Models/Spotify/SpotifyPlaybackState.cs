@@ -44,11 +44,3 @@ public class SpotifyDevicesResponse
     public List<SpotifyDevice> Devices { get; set; } = [];
 }
 
-public class SpotifyQueueResponse
-{
-    [JsonPropertyName("currently_playing")]
-    public SpotifyTrack? CurrentlyPlaying { get; set; }
-
-    [JsonPropertyName("queue")]
-    public List<SpotifyTrack> Queue { get; set; } = [];
-}

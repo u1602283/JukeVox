@@ -305,61 +305,6 @@ public class SpotifyPlayerServiceTests
         (await _service.GetDevicesAsync()).Should().BeEmpty();
     }
 
-    // --- AddToQueueAsync ---
-
-    [Test]
-    public async Task AddToQueueAsync_EncodesTrackUri()
-    {
-        _handler.EnqueueSuccess("{}");
-
-        await _service.AddToQueueAsync("spotify:track:abc123");
-
-        RequestUri().AbsolutePath.Should().EndWith("/queue");
-        var query = QueryHelpers.ParseQuery(RequestUri().Query);
-        query["uri"].ToString().Should().Be("spotify:track:abc123");
-    }
-
-    // --- GetSpotifyQueueAsync ---
-
-    [Test]
-    public async Task GetSpotifyQueueAsync_Success_ReturnsTrackUris()
-    {
-        _handler.EnqueueSuccess("""
-        {
-            "currently_playing": { "uri": "spotify:track:current", "name": "Current", "duration_ms": 200000, "artists": [] },
-            "queue": [
-                { "uri": "spotify:track:next1", "name": "Next 1", "duration_ms": 180000, "artists": [] },
-                { "uri": "spotify:track:next2", "name": "Next 2", "duration_ms": 190000, "artists": [] }
-            ]
-        }
-        """);
-
-        var uris = await _service.GetSpotifyQueueAsync();
-
-        uris.Should().Equal("spotify:track:next1", "spotify:track:next2");
-    }
-
-    [Test]
-    public async Task GetSpotifyQueueAsync_EmptyQueue_ReturnsEmpty()
-    {
-        _handler.EnqueueSuccess("""
-        {
-            "currently_playing": null,
-            "queue": []
-        }
-        """);
-
-        (await _service.GetSpotifyQueueAsync()).Should().BeEmpty();
-    }
-
-    [Test]
-    public async Task GetSpotifyQueueAsync_Error_ReturnsEmpty()
-    {
-        _handler.EnqueueError();
-
-        (await _service.GetSpotifyQueueAsync()).Should().BeEmpty();
-    }
-
     // --- TransferPlaybackAsync ---
 
     [Test]

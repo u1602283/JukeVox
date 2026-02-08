@@ -120,21 +120,6 @@ public class SpotifyPlayerService : ISpotifyPlayerService
         }).ToList();
     }
 
-    public async Task<bool> AddToQueueAsync(string trackUri)
-    {
-        var response = await SendAsync(HttpMethod.Post, $"{BaseUrl}/queue?uri={Uri.EscapeDataString(trackUri)}");
-        return response?.IsSuccessStatusCode ?? false;
-    }
-
-    public async Task<List<string>> GetSpotifyQueueAsync()
-    {
-        var response = await SendAsync(HttpMethod.Get, BaseUrl + "/queue");
-        if (response == null || !response.IsSuccessStatusCode) return [];
-
-        var result = await response.Content.ReadFromJsonAsync<SpotifyQueueResponse>();
-        return result?.Queue.Select(t => t.Uri).ToList() ?? [];
-    }
-
     public async Task<bool> TransferPlaybackAsync(string deviceId)
     {
         var body = JsonSerializer.Serialize(new { device_ids = new[] { deviceId } });

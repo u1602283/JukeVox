@@ -13,7 +13,5 @@ public interface ISpotifyPlayerService
     Task<bool> SeekAsync(int positionMs);
     Task<bool> SetVolumeAsync(int percent);
     Task<List<SpotifyDeviceDto>> GetDevicesAsync();
-    Task<bool> AddToQueueAsync(string trackUri);
-    Task<List<string>> GetSpotifyQueueAsync();
     Task<bool> TransferPlaybackAsync(string deviceId);
 }

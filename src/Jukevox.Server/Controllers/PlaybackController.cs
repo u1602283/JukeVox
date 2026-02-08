@@ -100,9 +100,6 @@ public class PlaybackController : ControllerBase
             await BroadcastNowPlaying(party.Id, next);
 
             var upcoming = _queueService.GetQueue();
-            if (upcoming.Count > 0)
-                await _playerService.AddToQueueAsync(upcoming[0].TrackUri);
-
             await _hubContext.Clients.Group(party.Id).QueueUpdated(upcoming);
         }
         else
