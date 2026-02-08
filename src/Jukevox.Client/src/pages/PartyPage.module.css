@@ -111,6 +111,16 @@
   color: var(--text-primary);
 }
 
+.desktopOnly {
+  display: none;
+}
+
+@media (min-width: 1025px) {
+  .desktopOnly {
+    display: flex;
+  }
+}
+
 /* Two-column layout for desktop */
 .contentGrid {
   display: grid;
@@ -172,14 +182,21 @@
   font-weight: 600;
 }
 
-/* Hide inactive view on mobile */
-.mobileHidden {
-  display: none;
+/* Hide inactive view on mobile — !important needed to override .heroColumn's display: flex */
+@media (max-width: 1024px) {
+  .mobileHidden {
+    display: none !important;
+  }
+}
+
+/* Desktop-only hidden (for mobile-only panels like manage) */
+.desktopHidden {
+  display: block;
 }
 
 @media (min-width: 1025px) {
-  .mobileHidden {
-    display: block;
+  .desktopHidden {
+    display: none !important;
   }
 }
 

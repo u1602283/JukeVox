@@ -61,11 +61,20 @@ export function PartyProvider({ children }: { children: ReactNode }) {
       onPlaybackStateUpdated: (state) => setNowPlaying(state),
       onQueueUpdated: (q) => setQueue(q),
       onCreditsUpdated: (c) => setCredits(c),
+      onPartyEnded: () => {
+        setPartyRaw(null);
+        setNowPlaying(null);
+        setQueue([]);
+        setCredits(null);
+        // Navigate guests to landing page
+        if (!party.isHost && window.location.pathname !== '/host') {
+          window.location.href = '/';
+        }
+      },
     });
 
     conn.onclose(() => {
       connectedRef.current = false;
-      setParty(null);
     });
 
     startConnection()

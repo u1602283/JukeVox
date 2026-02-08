@@ -177,4 +177,102 @@ public class PartyServiceTests
         party!.InviteCode.Should().Be("1234");
         party.Guests.Should().ContainKey("guest-1");
     }
+
+    [Test]
+    public void GetAllGuests_ReturnsAllJoinedGuests()
+    {
+        _service.CreateParty("host-1", "1234", 5);
+        _service.JoinParty("guest-1", "1234", "Alice");
+        _service.JoinParty("guest-2", "1234", "Bob");
+
+        var guests = _service.GetAllGuests();
+
+        guests.Should().HaveCount(2);
+        guests.Select(g => g.DisplayName).Should().BeEquivalentTo(["Alice", "Bob"]);
+    }
+
+    [Test]
+    public void GetAllGuests_NoParty_ReturnsEmpty()
+    {
+        _service.GetAllGuests().Should().BeEmpty();
+    }
+
+    [Test]
+    public void SetGuestCredits_SetsAbsoluteValue()
+    {
+        _service.CreateParty("host-1", "1234", 5);
+        _service.JoinParty("guest-1", "1234", "Alice");
+
+        var guest = _service.SetGuestCredits("guest-1", 10);
+
+        guest.Should().NotBeNull();
+        guest!.CreditsRemaining.Should().Be(10);
+    }
+
+    [Test]
+    public void SetGuestCredits_ClampsToZero()
+    {
+        _service.CreateParty("host-1", "1234", 5);
+        _service.JoinParty("guest-1", "1234", "Alice");
+
+        var guest = _service.SetGuestCredits("guest-1", -3);
+
+        guest!.CreditsRemaining.Should().Be(0);
+    }
+
+    [Test]
+    public void SetGuestCredits_UnknownGuest_ReturnsNull()
+    {
+        _service.CreateParty("host-1", "1234", 5);
+
+        _service.SetGuestCredits("nobody", 10).Should().BeNull();
+    }
+
+    [Test]
+    public void AdjustAllCredits_AddsDelta()
+    {
+        _service.CreateParty("host-1", "1234", 5);
+        _service.JoinParty("guest-1", "1234", "Alice");
+        _service.JoinParty("guest-2", "1234", "Bob");
+
+        var guests = _service.AdjustAllCredits(3);
+
+        guests.Should().HaveCount(2);
+        guests.Should().AllSatisfy(g => g.CreditsRemaining.Should().Be(8));
+    }
+
+    [Test]
+    public void AdjustAllCredits_NegativeDelta_ClampsToZero()
+    {
+        _service.CreateParty("host-1", "1234", 5);
+        _service.JoinParty("guest-1", "1234", "Alice");
+
+        var guests = _service.AdjustAllCredits(-10);
+
+        guests.Should().HaveCount(1);
+        guests[0].CreditsRemaining.Should().Be(0);
+    }
+
+    [Test]
+    public void EndParty_ClearsCurrentParty()
+    {
+        _service.CreateParty("host-1", "1234", 5);
+        _service.JoinParty("guest-1", "1234", "Alice");
+
+        _service.EndParty();
+
+        _service.GetCurrentParty().Should().BeNull();
+        _service.HasSavedParty().Should().BeFalse();
+    }
+
+    [Test]
+    public void EndParty_DeletesStateFile()
+    {
+        _service.CreateParty("host-1", "1234", 5);
+
+        _service.EndParty();
+
+        var newService = CreateService(_tempDir);
+        newService.GetCurrentParty().Should().BeNull();
+    }
 }

@@ -8,4 +8,5 @@ public interface IPartyClient
     Task PlaybackStateUpdated(PlaybackStateDto playbackState);
     Task QueueUpdated(List<QueueItemDto> queue);
     Task CreditsUpdated(int credits);
+    Task PartyEnded();
 }

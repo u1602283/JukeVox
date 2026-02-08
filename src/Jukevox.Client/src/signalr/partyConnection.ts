@@ -6,6 +6,7 @@ export type PartyCallbacks = {
   onPlaybackStateUpdated: (state: PlaybackState) => void;
   onQueueUpdated: (queue: QueueItem[]) => void;
   onCreditsUpdated: (credits: number) => void;
+  onPartyEnded: () => void;
 };
 
 let connection: signalR.HubConnection | null = null;
@@ -24,6 +25,7 @@ export function createPartyConnection(partyId: string, callbacks: PartyCallbacks
   connection.on('PlaybackStateUpdated', callbacks.onPlaybackStateUpdated);
   connection.on('QueueUpdated', callbacks.onQueueUpdated);
   connection.on('CreditsUpdated', callbacks.onCreditsUpdated);
+  connection.on('PartyEnded', callbacks.onPartyEnded);
 
   return connection;
 }

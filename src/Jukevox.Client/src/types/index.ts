@@ -83,6 +83,13 @@ export interface SpotifyPlaylist {
   trackCount: number;
 }
 
+export interface GuestInfo {
+  sessionId: string;
+  displayName: string;
+  creditsRemaining: number;
+  joinedAt: string;
+}
+
 export interface AddToQueueRequest {
   trackUri: string;
   trackName: string;

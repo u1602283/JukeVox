@@ -18,6 +18,7 @@ public class HostPartyController : ControllerBase
     private readonly ISpotifyPlaylistService _playlistService;
     private readonly IPlaybackMonitorService _monitorService;
     private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
+    private readonly ConnectionMapping _connectionMapping;
 
     public HostPartyController(
         IPartyService partyService,
@@ -25,7 +26,8 @@ public class HostPartyController : ControllerBase
         ISpotifyPlayerService playerService,
         ISpotifyPlaylistService playlistService,
         IPlaybackMonitorService monitorService,
-        IHubContext<PartyHub, IPartyClient> hubContext)
+        IHubContext<PartyHub, IPartyClient> hubContext,
+        ConnectionMapping connectionMapping)
     {
         _partyService = partyService;
         _queueService = queueService;
@@ -33,6 +35,7 @@ public class HostPartyController : ControllerBase
         _playlistService = playlistService;
         _monitorService = monitorService;
         _hubContext = hubContext;
+        _connectionMapping = connectionMapping;
     }
 
     [HttpPost]
@@ -171,6 +174,108 @@ public class HostPartyController : ControllerBase
         await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
 
         return Ok(new { queue });
+    }
+
+    [HttpGet("guests")]
+    public IActionResult GetGuests()
+    {
+        if (!HttpContext.IsHostAuthenticated())
+            return Unauthorized(new { error = "Host authentication required" });
+
+        var guests = _partyService.GetAllGuests();
+        var dtos = guests.Select(g => new GuestDto
+        {
+            SessionId = g.SessionId,
+            DisplayName = g.DisplayName,
+            CreditsRemaining = g.CreditsRemaining,
+            JoinedAt = g.JoinedAt
+        }).ToList();
+
+        return Ok(dtos);
+    }
+
+    [HttpPut("guests/{sessionId}/credits")]
+    public async Task<IActionResult> SetGuestCredits(string sessionId, [FromBody] AdjustCreditsRequest request)
+    {
+        if (!HttpContext.IsHostAuthenticated())
+            return Unauthorized(new { error = "Host authentication required" });
+
+        var guest = _partyService.SetGuestCredits(sessionId, request.Credits);
+        if (guest == null)
+            return NotFound(new { error = "Guest not found" });
+
+        // Broadcast updated credits to the specific guest via their SignalR connection
+        var connectionId = _connectionMapping.GetConnectionId(sessionId);
+        if (connectionId != null)
+        {
+            await _hubContext.Clients.Client(connectionId).CreditsUpdated(guest.CreditsRemaining);
+        }
+
+        return Ok(new GuestDto
+        {
+            SessionId = guest.SessionId,
+            DisplayName = guest.DisplayName,
+            CreditsRemaining = guest.CreditsRemaining,
+            JoinedAt = guest.JoinedAt
+        });
+    }
+
+    [HttpPost("guests/credits")]
+    public async Task<IActionResult> AdjustAllCredits([FromBody] BulkAdjustCreditsRequest request)
+    {
+        if (!HttpContext.IsHostAuthenticated())
+            return Unauthorized(new { error = "Host authentication required" });
+
+        var guests = _partyService.AdjustAllCredits(request.Credits);
+
+        // Broadcast updated credits to each guest via their SignalR connection
+        foreach (var guest in guests)
+        {
+            var connectionId = _connectionMapping.GetConnectionId(guest.SessionId);
+            if (connectionId != null)
+            {
+                await _hubContext.Clients.Client(connectionId).CreditsUpdated(guest.CreditsRemaining);
+            }
+        }
+
+        var dtos = guests.Select(g => new GuestDto
+        {
+            SessionId = g.SessionId,
+            DisplayName = g.DisplayName,
+            CreditsRemaining = g.CreditsRemaining,
+            JoinedAt = g.JoinedAt
+        }).ToList();
+
+        return Ok(dtos);
+    }
+
+    [HttpPost("end")]
+    public async Task<IActionResult> EndParty()
+    {
+        if (!HttpContext.IsHostAuthenticated())
+            return Unauthorized(new { error = "Host authentication required" });
+
+        var party = _partyService.GetCurrentParty();
+        if (party == null)
+            return BadRequest(new { error = "No active party" });
+
+        // Pause Spotify playback
+        try
+        {
+            await _playerService.PauseAsync();
+        }
+        catch
+        {
+            // Best effort — Spotify may already be paused or disconnected
+        }
+
+        // Broadcast PartyEnded to all clients in the group
+        await _hubContext.Clients.Group(party.Id).PartyEnded();
+
+        // Clear party state
+        _partyService.EndParty();
+
+        return Ok(new { ended = true });
     }
 
     private static string GenerateInviteCode()

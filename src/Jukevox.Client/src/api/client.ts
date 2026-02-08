@@ -9,6 +9,7 @@ import type {
   SpotifyPlaylist,
   SavedPartySummary,
   HostStatus,
+  GuestInfo,
 } from '../types';
 
 const BASE = '/api';
@@ -98,6 +99,24 @@ export const api = {
 
   clearBasePlaylist: () =>
     request<{ queue: QueueItem[] }>(`${BASE}/host/party/base-playlist`, { method: 'DELETE' }),
+
+  getGuests: () =>
+    request<GuestInfo[]>(`${BASE}/host/party/guests`),
+
+  setGuestCredits: (sessionId: string, credits: number) =>
+    request<GuestInfo>(`${BASE}/host/party/guests/${encodeURIComponent(sessionId)}/credits`, {
+      method: 'PUT',
+      body: JSON.stringify({ credits }),
+    }),
+
+  addCreditsToAll: (credits: number) =>
+    request<GuestInfo[]>(`${BASE}/host/party/guests/credits`, {
+      method: 'POST',
+      body: JSON.stringify({ credits }),
+    }),
+
+  endParty: () =>
+    request<{ ended: boolean }>(`${BASE}/host/party/end`, { method: 'POST' }),
 
   // Guest party
   joinParty: (data: JoinPartyRequest) =>

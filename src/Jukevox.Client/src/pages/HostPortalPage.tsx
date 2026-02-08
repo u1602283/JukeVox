@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, Settings } from 'lucide-react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { api } from '../api/client';
@@ -12,6 +12,7 @@ import { SearchOverlay } from '../components/SearchOverlay';
 import { HostControls } from '../components/HostControls';
 import { DeviceSelector } from '../components/DeviceSelector';
 import { BasePlaylistSelector } from '../components/BasePlaylistSelector';
+import { ManagePanel } from '../components/ManagePanel';
 import type { HostStatus, SavedPartySummary } from '../types';
 import styles from './HostPortalPage.module.css';
 import partyStyles from './PartyPage.module.css';
@@ -35,7 +36,8 @@ export function HostPortalPage() {
 
   // Active party UI state
   const [searchOpen, setSearchOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<'playing' | 'queue'>('playing');
+  const [manageOpen, setManageOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'playing' | 'queue' | 'manage'>('playing');
 
   // Sticky header scroll detection
   const [scrolled, setScrolled] = useState(false);
@@ -249,6 +251,11 @@ export function HostPortalPage() {
     setQuery('');
   };
 
+  const handlePartyEnded = () => {
+    setManageOpen(false);
+    setParty(null);
+  };
+
   return (
     <div className={partyStyles.page}>
       <div ref={sentinelRef} style={{ height: 1 }} />
@@ -274,6 +281,13 @@ export function HostPortalPage() {
           >
             <Search size={20} />
           </button>
+          <button
+            className={`${partyStyles.searchToggle} ${partyStyles.desktopOnly}`}
+            onClick={() => setManageOpen(true)}
+            aria-label="Manage party"
+          >
+            <Settings size={20} />
+          </button>
           <button className={partyStyles.logoutBtn} onClick={handleLogout}>
             Logout
           </button>
@@ -290,6 +304,9 @@ export function HostPortalPage() {
           <QueueList />
           <BasePlaylistSelector />
         </div>
+        <div className={`${partyStyles.desktopHidden} ${mobileView !== 'manage' ? partyStyles.mobileHidden : ''}`}>
+          <ManagePanel mode="inline" onPartyEnded={handlePartyEnded} />
+        </div>
       </div>
 
       <SearchOverlay
@@ -300,6 +317,14 @@ export function HostPortalPage() {
         results={results}
         loading={searchLoading}
       />
+
+      {manageOpen && (
+        <ManagePanel
+          mode="overlay"
+          onClose={() => setManageOpen(false)}
+          onPartyEnded={handlePartyEnded}
+        />
+      )}
 
       <nav className={partyStyles.mobileNav}>
         <button
@@ -313,6 +338,12 @@ export function HostPortalPage() {
           onClick={() => setMobileView('queue')}
         >
           Queue
+        </button>
+        <button
+          className={`${partyStyles.mobileNavBtn} ${mobileView === 'manage' ? partyStyles.mobileNavBtnActive : ''}`}
+          onClick={() => setMobileView('manage')}
+        >
+          Manage
         </button>
       </nav>
 

@@ -156,6 +156,50 @@ public class PartyService : IPartyService
         }
     }
 
+    public List<GuestSession> GetAllGuests()
+    {
+        lock (_lock)
+        {
+            if (_currentParty == null) return [];
+            return _currentParty.Guests.Values.ToList();
+        }
+    }
+
+    public GuestSession? SetGuestCredits(string sessionId, int credits)
+    {
+        lock (_lock)
+        {
+            if (_currentParty == null) return null;
+            if (!_currentParty.Guests.TryGetValue(sessionId, out var guest)) return null;
+            guest.CreditsRemaining = Math.Max(0, credits);
+            PersistStateInternal();
+            return guest;
+        }
+    }
+
+    public List<GuestSession> AdjustAllCredits(int delta)
+    {
+        lock (_lock)
+        {
+            if (_currentParty == null) return [];
+            foreach (var guest in _currentParty.Guests.Values)
+            {
+                guest.CreditsRemaining = Math.Max(0, guest.CreditsRemaining + delta);
+            }
+            PersistStateInternal();
+            return _currentParty.Guests.Values.ToList();
+        }
+    }
+
+    public void EndParty()
+    {
+        lock (_lock)
+        {
+            _currentParty = null;
+            PersistStateInternal();
+        }
+    }
+
     /// <summary>
     /// Persist current party state to disk. Called by other services after mutations.
     /// </summary>

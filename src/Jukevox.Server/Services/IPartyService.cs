@@ -17,4 +17,8 @@ public interface IPartyService
     (string InviteCode, int QueueCount, int GuestCount, DateTime CreatedAt)? GetSavedPartySummary();
     Party? ResumeAsHost(string newHostSessionId);
     void PersistState();
+    List<GuestSession> GetAllGuests();
+    GuestSession? SetGuestCredits(string sessionId, int credits);
+    List<GuestSession> AdjustAllCredits(int delta);
+    void EndParty();
 }
