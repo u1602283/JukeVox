@@ -12,7 +12,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: '../JukeVox.Server/wwwroot',
-    emptyOutDir: true,
   },
   server: {
     host: '0.0.0.0',
