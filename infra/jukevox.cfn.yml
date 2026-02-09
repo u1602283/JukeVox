@@ -180,9 +180,8 @@ Resources:
             systemctl enable --now docker
 
             # ── Install cloudflared ──
-            curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.rpm" -o /tmp/cloudflared.rpm
-            dnf install -y /tmp/cloudflared.rpm
-            rm /tmp/cloudflared.rpm
+            dnf config-manager --add-repo https://pkg.cloudflare.com/cloudflared.repo
+            dnf install cloudflared -y
 
             # ── Prepare directories ──
             mkdir -p /opt/jukevox/data
@@ -232,21 +231,7 @@ Resources:
             docker pull "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrRepositoryName}:${ImageTag}"
 
             # ── cloudflared systemd service ──
-            cat > /etc/systemd/system/cloudflared.service <<EOF
-            [Unit]
-            Description=Cloudflare Tunnel
-            After=network-online.target
-            Wants=network-online.target
-
-            [Service]
-            Type=simple
-            ExecStart=/usr/bin/cloudflared tunnel run --token ${!CF_TUNNEL_TOKEN}
-            Restart=always
-            RestartSec=5
-
-            [Install]
-            WantedBy=multi-user.target
-            EOF
+            cloudflared service install ${!CF_TUNNEL_TOKEN}
 
             # ── jukevox systemd service ──
             cat > /etc/systemd/system/jukevox.service <<EOF
