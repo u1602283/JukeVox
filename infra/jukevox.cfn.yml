@@ -349,7 +349,7 @@ Resources:
             DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
             FrontendUrl=${FrontendUrl}
             HostAuth__ServerDomain=${HostAuthServerDomain}
-            HostAuth__Origins__0=${HostAuthOrigins}
+            HostAuth__Origins=${HostAuthOrigins}
             EOF
 
             # ── Pre-create persistent data files ──
@@ -431,7 +431,7 @@ Resources:
             DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
             FrontendUrl=$FRONTEND_URL
             HostAuth__ServerDomain=$HOSTAUTH_SERVER_DOMAIN
-            HostAuth__Origins__0=$HOSTAUTH_ORIGINS
+            HostAuth__Origins=$HOSTAUTH_ORIGINS
             ENVEOF
 
             # Update cloudflared token if changed
