@@ -43,6 +43,8 @@ jobs:
             --parameter-overrides \
               VpcId="${{ vars.VPC_ID }}" \
               InternetGatewayId="${{ vars.IGW_ID }}" \
+              PublicSubnetCidr="${{ vars.PUBLIC_SUBNET_CIDR }}" \
+              PrivateSubnetCidr="${{ vars.PRIVATE_SUBNET_CIDR }}" \
               AvailabilityZone="${{ vars.AVAILABILITY_ZONE }}" \
               EcrRepositoryName="${{ vars.ECR_REPOSITORY }}" \
               ImageTag="${{ inputs.image_tag }}" \

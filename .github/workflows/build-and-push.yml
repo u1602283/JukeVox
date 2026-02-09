@@ -48,6 +48,7 @@ jobs:
         with:
           context: .
           platforms: linux/arm64
+          provenance: false
           push: true
           tags: |
             ${{ steps.ecr-login.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ steps.version.outputs.tag }}
