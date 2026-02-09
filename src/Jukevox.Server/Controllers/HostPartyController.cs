@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using JukeVox.Server.Extensions;
@@ -280,6 +281,13 @@ public class HostPartyController : ControllerBase
 
     private static string GenerateInviteCode()
     {
-        return Random.Shared.Next(1000, 9999).ToString();
+        const string chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        return string.Create(6, chars, static (span, chars) =>
+        {
+            Span<byte> bytes = stackalloc byte[6];
+            RandomNumberGenerator.Fill(bytes);
+            for (var i = 0; i < span.Length; i++)
+                span[i] = chars[bytes[i] % chars.Length];
+        });
     }
 }

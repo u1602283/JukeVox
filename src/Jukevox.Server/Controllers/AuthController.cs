@@ -19,6 +19,8 @@ public class AuthController : ControllerBase
         _frontendUrl = configuration["FrontendUrl"] ?? "http://localhost:5173";
     }
 
+    private const string OAuthStateCookie = "JukeVox.OAuthState";
+
     [HttpGet("login")]
     public IActionResult Login()
     {
@@ -26,6 +28,15 @@ public class AuthController : ControllerBase
             return Forbid();
 
         var state = Guid.NewGuid().ToString("N");
+        Response.Cookies.Append(OAuthStateCookie, state, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Lax,
+            MaxAge = TimeSpan.FromMinutes(10),
+            Path = "/api/auth/callback"
+        });
+
         var url = _authService.GetAuthorizeUrl(state);
         return Redirect(url);
     }
@@ -33,6 +44,12 @@ public class AuthController : ControllerBase
     [HttpGet("callback")]
     public async Task<IActionResult> Callback([FromQuery] string code, [FromQuery] string state)
     {
+        var storedState = Request.Cookies[OAuthStateCookie];
+        Response.Cookies.Delete(OAuthStateCookie, new CookieOptions { Path = "/api/auth/callback" });
+
+        if (string.IsNullOrEmpty(storedState) || storedState != state)
+            return BadRequest("Invalid OAuth state");
+
         var tokens = await _authService.ExchangeCodeAsync(code);
         if (tokens == null)
             return BadRequest("Failed to exchange authorization code");

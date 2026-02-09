@@ -199,7 +199,8 @@ Resources:
             HOSTAUTH_ORIGINS=${HostAuthOrigins}
             EOF
 
-            # ── Fetch secrets and write env file ──
+            # ── Fetch secrets and write env file (suppress trace to avoid logging secrets) ──
+            set +x
             SECRETS_JSON=$(aws secretsmanager get-secret-value \
               --secret-id "${SecretsArn}" \
               --query SecretString --output text \
@@ -208,6 +209,7 @@ Resources:
             SPOTIFY_CLIENT_ID=$(echo "${!SECRETS_JSON}" | jq -r '.SPOTIFY__ClientId')
             SPOTIFY_CLIENT_SECRET=$(echo "${!SECRETS_JSON}" | jq -r '.SPOTIFY__ClientSecret')
             CF_TUNNEL_TOKEN=$(echo "${!SECRETS_JSON}" | jq -r '.CF_TUNNEL_TOKEN')
+            unset SECRETS_JSON
 
             cat > /opt/jukevox/app.env <<EOF
             SPOTIFY__ClientId=${!SPOTIFY_CLIENT_ID}
@@ -219,6 +221,8 @@ Resources:
             HostAuth__ServerDomain=${HostAuthServerDomain}
             HostAuth__Origins=${HostAuthOrigins}
             EOF
+            chmod 600 /opt/jukevox/app.env
+            set -x
 
             # ── Pre-create persistent data files ──
             echo 'null' > /opt/jukevox/data/party-state.json
@@ -226,12 +230,17 @@ Resources:
             chown 10000:10000 /opt/jukevox/data/party-state.json /opt/jukevox/data/host-credential.json
 
             # ── ECR login and pull ──
+            set +x
             aws ecr get-login-password --region "${AWS::Region}" | \
               docker login --username AWS --password-stdin "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+            set -x
             docker pull "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrRepositoryName}:${ImageTag}"
 
             # ── cloudflared systemd service ──
+            set +x
             cloudflared service install ${!CF_TUNNEL_TOKEN}
+            unset CF_TUNNEL_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET
+            set -x
 
             # ── jukevox systemd service ──
             cat > /etc/systemd/system/jukevox.service <<EOF
