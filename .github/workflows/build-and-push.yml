@@ -3,6 +3,9 @@ name: Build and Push to ECR
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "Dockerfile"
   workflow_dispatch:
 
 permissions:

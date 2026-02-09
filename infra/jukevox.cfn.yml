@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: JukeVox EC2 deployment - app instance in private subnet with NAT instance and Cloudflare tunnel
+Description: JukeVox EC2 deployment - single instance with Cloudflare tunnel
 
 Parameters:
   VpcId:
@@ -10,19 +10,13 @@ Parameters:
     Type: String
     Description: Existing Internet Gateway ID attached to the VPC
 
-  PublicSubnetCidr:
+  SubnetCidr:
     Type: String
-    Default: "10.0.100.0/28"
-    Description: CIDR block for the public subnet (NAT instance)
-
-  PrivateSubnetCidr:
-    Type: String
-    Default: "10.0.101.0/28"
-    Description: CIDR block for the private subnet (app instance)
+    Description: CIDR block for the app subnet
 
   AvailabilityZone:
     Type: AWS::EC2::AvailabilityZone::Name
-    Description: Availability zone for both subnets
+    Description: Availability zone for the subnet
 
   EcrRepositoryName:
     Type: String
@@ -58,89 +52,41 @@ Resources:
   # Networking
   # ──────────────────────────────────────────────
 
-  PublicSubnet:
+  Subnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VpcId
-      CidrBlock: !Ref PublicSubnetCidr
+      CidrBlock: !Ref SubnetCidr
       AvailabilityZone: !Ref AvailabilityZone
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: jukevox-public
+          Value: jukevox-subnet
 
-  PrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcId
-      CidrBlock: !Ref PrivateSubnetCidr
-      AvailabilityZone: !Ref AvailabilityZone
-      Tags:
-        - Key: Name
-          Value: jukevox-private
-
-  PublicRouteTable:
+  RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VpcId
       Tags:
         - Key: Name
-          Value: jukevox-public-rt
+          Value: jukevox-rt
 
-  PublicRoute:
+  DefaultRoute:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref RouteTable
       DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref InternetGatewayId
 
-  PublicSubnetRouteTableAssociation:
+  SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref PublicRouteTable
-
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VpcId
-      Tags:
-        - Key: Name
-          Value: jukevox-private-rt
-
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: "0.0.0.0/0"
-      InstanceId: !Ref NatInstance
-
-  PrivateSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet
-      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref Subnet
+      RouteTableId: !Ref RouteTable
 
   # ──────────────────────────────────────────────
-  # Security Groups
+  # Security Group
   # ──────────────────────────────────────────────
-
-  NatSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: NAT instance - allows traffic from private subnet
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: "-1"
-          CidrIp: !Ref PrivateSubnetCidr
-          Description: All traffic from private subnet
-      SecurityGroupEgress:
-        - IpProtocol: "-1"
-          CidrIp: "0.0.0.0/0"
-          Description: All outbound traffic
-      Tags:
-        - Key: Name
-          Value: jukevox-nat-sg
 
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -156,33 +102,7 @@ Resources:
           Value: jukevox-app-sg
 
   # ──────────────────────────────────────────────
-  # IAM - NAT Instance
-  # ──────────────────────────────────────────────
-
-  NatInstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      Tags:
-        - Key: Name
-          Value: jukevox-nat-role
-
-  NatInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref NatInstanceRole
-
-  # ──────────────────────────────────────────────
-  # IAM - App Instance
+  # IAM
   # ──────────────────────────────────────────────
 
   AppInstanceRole:
@@ -231,53 +151,15 @@ Resources:
         - !Ref AppInstanceRole
 
   # ──────────────────────────────────────────────
-  # NAT Instance
-  # ──────────────────────────────────────────────
-
-  NatInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t4g.nano
-      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-default-arm64}}"
-      SubnetId: !Ref PublicSubnet
-      SecurityGroupIds:
-        - !Ref NatSecurityGroup
-      IamInstanceProfile: !Ref NatInstanceProfile
-      SourceDestCheck: false
-      UserData:
-        Fn::Base64:
-          Fn::Sub: |
-            #!/bin/bash -xe
-            dnf install -y iptables-services
-            systemctl enable iptables
-
-            # Enable IP forwarding
-            echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/90-nat.conf
-            sysctl -p /etc/sysctl.d/90-nat.conf
-
-            # Configure NAT masquerade
-            iptables -t nat -A POSTROUTING -s ${PrivateSubnetCidr} -o ens5 -j MASQUERADE
-            iptables -A FORWARD -s ${PrivateSubnetCidr} -j ACCEPT
-            iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
-
-            # Save rules
-            service iptables save
-      Tags:
-        - Key: Name
-          Value: jukevox-nat
-
-  # ──────────────────────────────────────────────
   # App Instance
   # ──────────────────────────────────────────────
 
   AppInstance:
     Type: AWS::EC2::Instance
-    DependsOn:
-      - PrivateRoute
     Properties:
       InstanceType: t4g.micro
       ImageId: !Sub "{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id}}"
-      SubnetId: !Ref PrivateSubnet
+      SubnetId: !Ref Subnet
       SecurityGroupIds:
         - !Ref AppSecurityGroup
       IamInstanceProfile: !Ref AppInstanceProfile
@@ -482,10 +364,6 @@ Outputs:
   AppInstanceId:
     Description: App instance ID (for SSM)
     Value: !Ref AppInstance
-
-  NatInstanceId:
-    Description: NAT instance ID
-    Value: !Ref NatInstance
 
   SsmConnectCommand:
     Description: SSM command to connect to the app instance
