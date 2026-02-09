@@ -289,9 +289,8 @@ Resources:
             ENVEOF
 
             # Update cloudflared token if changed
-            sed -i "s|--token .*|--token $CF_TUNNEL_TOKEN|" /etc/systemd/system/cloudflared.service
-            systemctl daemon-reload
-            systemctl restart cloudflared
+            cloudflared service uninstall || true
+            cloudflared service install "$CF_TUNNEL_TOKEN"
 
             # Update jukevox service with new image
             sed -i "s|dkr.ecr.*.amazonaws.com/.*|dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$TAG|" /etc/systemd/system/jukevox.service
@@ -324,7 +323,6 @@ Resources:
 
             # ── Start services ──
             systemctl daemon-reload
-            systemctl enable --now cloudflared
             systemctl enable --now jukevox
 
             echo "=== User data complete ==="
