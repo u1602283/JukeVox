@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: JukeVox EC2 deployment - single instance with Cloudflare tunnel
+Description: JukeVox EC2 deployment - AL2023 instance with Cloudflare tunnel
 
 Parameters:
   VpcId:
@@ -158,15 +158,15 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t4g.micro
-      ImageId: !Sub "{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id}}"
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-default-arm64}}"
       SubnetId: !Ref Subnet
       SecurityGroupIds:
         - !Ref AppSecurityGroup
       IamInstanceProfile: !Ref AppInstanceProfile
       BlockDeviceMappings:
-        - DeviceName: /dev/sda1
+        - DeviceName: /dev/xvda
           Ebs:
-            VolumeSize: 20
+            VolumeSize: 8
             VolumeType: gp3
       UserData:
         Fn::Base64:
@@ -174,28 +174,14 @@ Resources:
             #!/bin/bash -xe
             exec > >(tee /var/log/user-data.log) 2>&1
 
-            export DEBIAN_FRONTEND=noninteractive
-
-            # ── Install Docker ──
-            apt-get update
-            apt-get install -y ca-certificates curl gnupg jq unzip
-            install -m 0755 -d /etc/apt/keyrings
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-            chmod a+r /etc/apt/keyrings/docker.asc
-            echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
-            apt-get update
-            apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
-
-            # ── Install AWS CLI v2 ──
-            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o /tmp/awscliv2.zip
-            unzip -q /tmp/awscliv2.zip -d /tmp
-            /tmp/aws/install
-            rm -rf /tmp/aws /tmp/awscliv2.zip
+            # ── Install Docker and tools ──
+            dnf install -y docker jq
+            systemctl enable --now docker
 
             # ── Install cloudflared ──
-            curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb" -o /tmp/cloudflared.deb
-            dpkg -i /tmp/cloudflared.deb
-            rm /tmp/cloudflared.deb
+            curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.rpm" -o /tmp/cloudflared.rpm
+            dnf install -y /tmp/cloudflared.rpm
+            rm /tmp/cloudflared.rpm
 
             # ── Prepare directories ──
             mkdir -p /opt/jukevox/data
@@ -214,7 +200,7 @@ Resources:
             EOF
 
             # ── Fetch secrets and write env file ──
-            SECRETS_JSON=$(/usr/local/bin/aws secretsmanager get-secret-value \
+            SECRETS_JSON=$(aws secretsmanager get-secret-value \
               --secret-id "${SecretsArn}" \
               --query SecretString --output text \
               --region "${AWS::Region}")
@@ -240,7 +226,7 @@ Resources:
             chown 10000:10000 /opt/jukevox/data/party-state.json /opt/jukevox/data/host-credential.json
 
             # ── ECR login and pull ──
-            /usr/local/bin/aws ecr get-login-password --region "${AWS::Region}" | \
+            aws ecr get-login-password --region "${AWS::Region}" | \
               docker login --username AWS --password-stdin "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
             docker pull "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrRepositoryName}:${ImageTag}"
 
