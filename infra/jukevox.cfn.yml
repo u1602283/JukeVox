@@ -353,8 +353,8 @@ Resources:
             EOF
 
             # ── Pre-create persistent data files ──
-            touch /opt/jukevox/data/party-state.json
-            touch /opt/jukevox/data/host-credential.json
+            echo 'null' > /opt/jukevox/data/party-state.json
+            echo 'null' > /opt/jukevox/data/host-credential.json
 
             # ── ECR login and pull ──
             /usr/local/bin/aws ecr get-login-password --region "${AWS::Region}" | \
