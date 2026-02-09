@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: JukeVox EC2 deployment — app instance in private subnet with NAT instance and Cloudflare tunnel
+Description: JukeVox EC2 deployment - app instance in private subnet with NAT instance and Cloudflare tunnel
 
 Parameters:
   VpcId:
@@ -128,7 +128,7 @@ Resources:
   NatSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: NAT instance — allows traffic from private subnet
+      GroupDescription: NAT instance - allows traffic from private subnet
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: "-1"
@@ -145,7 +145,7 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: App instance — no inbound, all outbound
+      GroupDescription: App instance - no inbound, all outbound
       VpcId: !Ref VpcId
       SecurityGroupEgress:
         - IpProtocol: "-1"
@@ -156,7 +156,7 @@ Resources:
           Value: jukevox-app-sg
 
   # ──────────────────────────────────────────────
-  # IAM — NAT Instance
+  # IAM - NAT Instance
   # ──────────────────────────────────────────────
 
   NatInstanceRole:
@@ -182,7 +182,7 @@ Resources:
         - !Ref NatInstanceRole
 
   # ──────────────────────────────────────────────
-  # IAM — App Instance
+  # IAM - App Instance
   # ──────────────────────────────────────────────
 
   AppInstanceRole:
@@ -397,7 +397,7 @@ Resources:
             WantedBy=multi-user.target
             EOF
 
-            # ── Deploy script (single-quoted heredoc — no Fn::Sub expansion) ──
+            # ── Deploy script (single-quoted heredoc - no Fn::Sub expansion) ──
             cat > /opt/jukevox/deploy.sh <<'DEPLOYEOF'
             #!/bin/bash
             set -euo pipefail

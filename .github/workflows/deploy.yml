@@ -87,7 +87,7 @@ jobs:
               echo "SSM agent is online"
               exit 0
             fi
-            echo "  Attempt $i/30 — status: $STATUS"
+            echo "  Attempt $i/30 - status: $STATUS"
             sleep 10
           done
           echo "SSM agent did not come online after 5 minutes"
