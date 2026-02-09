@@ -56,7 +56,7 @@ jobs:
 
   deploy-app:
     needs: deploy-infra
-    if: ${{ always() && (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped') }}
+    if: ${{ always() && needs.deploy-infra.result == 'skipped' }}
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
