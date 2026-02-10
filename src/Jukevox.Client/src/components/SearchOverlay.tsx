@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { SearchBar } from './SearchBar';
 import { SearchResults } from './SearchResults';
@@ -15,9 +15,6 @@ interface SearchOverlayProps {
 }
 
 export function SearchOverlay({ open, onClose, query, onQueryChange, results, loading }: SearchOverlayProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
   }, [onClose]);
@@ -25,14 +22,6 @@ export function SearchOverlay({ open, onClose, query, onQueryChange, results, lo
   useEffect(() => {
     if (!open) return;
     document.addEventListener('keydown', handleKeyDown);
-    // Auto-focus the search input
-    requestAnimationFrame(() => {
-      const input = panelRef.current?.querySelector<HTMLInputElement>('input[type="text"]');
-      if (input) {
-        inputRef.current = input;
-        input.focus();
-      }
-    });
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, handleKeyDown]);
 
@@ -41,7 +30,7 @@ export function SearchOverlay({ open, onClose, query, onQueryChange, results, lo
   return (
     <>
       <div className={styles.scrim} onClick={onClose} />
-      <div className={styles.panel} ref={panelRef}>
+      <div className={styles.panel}>
         <div className={styles.panelHeader}>
           <SearchBar query={query} onQueryChange={onQueryChange} loading={loading} />
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close search">

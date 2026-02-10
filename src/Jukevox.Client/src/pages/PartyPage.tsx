@@ -38,7 +38,9 @@ export function PartyPage() {
     <div className={styles.page}>
       <div ref={sentinelRef} style={{ height: 1 }} />
       <header className={`${styles.header} ${scrolled ? styles.headerScrolled : ''}`}>
-        <h1 className={styles.headerTitle}>JukeVox</h1>
+        <h1 className={styles.headerTitle}>
+          {party.displayName ? `Hi, ${party.displayName}!` : 'JukeVox'}
+        </h1>
         <div className={styles.headerRight}>
           <CreditsBadge />
           <span className={styles.inviteCode}>

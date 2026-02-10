@@ -199,7 +199,7 @@ export function HostPortalPage() {
           <div className={styles.resumeCard}>
             <h2 className={styles.resumeTitle}>You have an existing party</h2>
             <div className={styles.resumeDetails}>
-              <span>Code: <strong>{savedParty.inviteCode}</strong></span>
+              <span>Party ID: <strong>{savedParty.inviteCode}</strong></span>
               <span>{savedParty.queueCount} song{savedParty.queueCount !== 1 ? 's' : ''} in queue</span>
               <span>{savedParty.guestCount} guest{savedParty.guestCount !== 1 ? 's' : ''}</span>
             </div>
@@ -214,7 +214,7 @@ export function HostPortalPage() {
             <h2 className={styles.panelTitle}>Create a Party</h2>
             <input
               type="text"
-              placeholder="Invite Code (optional, auto-generated)"
+              placeholder="Party ID (optional, auto-generated)"
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
               maxLength={10}

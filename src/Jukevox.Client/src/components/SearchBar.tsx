@@ -19,6 +19,7 @@ export function SearchBar({ query, onQueryChange, loading }: SearchBarProps) {
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         className={styles.input}
+        autoFocus
       />
       {loading && (
         <span className={styles.spinner}>

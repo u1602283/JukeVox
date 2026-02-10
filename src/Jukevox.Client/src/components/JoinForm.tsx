@@ -39,7 +39,7 @@ export function JoinForm() {
       <h2 className={styles.title}>Join a Party</h2>
       <input
         type="text"
-        placeholder="Invite Code"
+        placeholder="Party ID"
         value={inviteCode}
         onChange={(e) => setInviteCode(e.target.value)}
         maxLength={10}
