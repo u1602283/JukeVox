@@ -256,4 +256,281 @@ public class QueueServiceTests
         queue[0].TrackName.Should().Be("Song 1");
         queue[1].TrackName.Should().Be("Song 2");
     }
+
+    [Test]
+    public void GetQueue_ReturnsDtosWithScore()
+    {
+        var item = TestData.CreateQueueItem("Song");
+        item.Votes["voter-1"] = 1;
+        _party.Queue.Add(item);
+
+        var queue = _service.GetQueue();
+
+        queue[0].Score.Should().Be(1);
+    }
+
+    [Test]
+    public void Vote_Upvote_IncrementsScore()
+    {
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var item = TestData.CreateQueueItem("Song");
+        _party.Queue.Add(item);
+
+        var (success, error) = _service.Vote(_party.HostSessionId, item.Id, 1);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        item.Score.Should().Be(1);
+    }
+
+    [Test]
+    public void Vote_Downvote_DecrementsScore()
+    {
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var item = TestData.CreateQueueItem("Song");
+        _party.Queue.Add(item);
+
+        var (success, error) = _service.Vote(_party.HostSessionId, item.Id, -1);
+
+        success.Should().BeTrue();
+        item.Score.Should().Be(-1);
+    }
+
+    [Test]
+    public void Vote_RemoveVote_ClearsEntry()
+    {
+        _partyServiceMock.Setup(p => p.GetCurrentParty()).Returns(_party).Verifiable(Times.Exactly(2));
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Exactly(2));
+        var item = TestData.CreateQueueItem("Song");
+        _party.Queue.Add(item);
+
+        _service.Vote(_party.HostSessionId, item.Id, 1);
+        _service.Vote(_party.HostSessionId, item.Id, 0);
+
+        item.Score.Should().Be(0);
+        item.Votes.Should().NotContainKey(_party.HostSessionId);
+    }
+
+    [Test]
+    public void Vote_InvalidValue_ReturnsError()
+    {
+        var item = TestData.CreateQueueItem("Song");
+        _party.Queue.Add(item);
+
+        var (success, error) = _service.Vote(_party.HostSessionId, item.Id, 5);
+
+        success.Should().BeFalse();
+        error.Should().Be("Vote must be -1, 0, or 1");
+    }
+
+    [Test]
+    public void Vote_BasePlaylistItem_Succeeds()
+    {
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var item = TestData.CreateQueueItem("Base Song", isFromBasePlaylist: true);
+        _party.Queue.Add(item);
+
+        var (success, error) = _service.Vote(_party.HostSessionId, item.Id, 1);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        item.Score.Should().Be(1);
+    }
+
+    [Test]
+    public void Vote_NonParticipant_ReturnsError()
+    {
+        var item = TestData.CreateQueueItem("Song");
+        _party.Queue.Add(item);
+
+        var (success, error) = _service.Vote("stranger", item.Id, 1);
+
+        success.Should().BeFalse();
+        error.Should().Be("Not a party participant");
+    }
+
+    [Test]
+    public void Vote_ItemNotFound_ReturnsError()
+    {
+        var (success, error) = _service.Vote(_party.HostSessionId, "nonexistent", 1);
+
+        success.Should().BeFalse();
+        error.Should().Be("Item not found");
+    }
+
+    [Test]
+    public void Vote_AutoRemovesAtNegativeThree()
+    {
+        _partyServiceMock.Setup(p => p.GetCurrentParty()).Returns(_party).Verifiable(Times.Exactly(3));
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Exactly(3));
+        var item = TestData.CreateQueueItem("Hated Song");
+        _party.Queue.Add(item);
+
+        var guest1 = TestData.CreateGuestSession("g1", "G1", 5);
+        var guest2 = TestData.CreateGuestSession("g2", "G2", 5);
+        var guest3 = TestData.CreateGuestSession("g3", "G3", 5);
+        _party.Guests["g1"] = guest1;
+        _party.Guests["g2"] = guest2;
+        _party.Guests["g3"] = guest3;
+
+        _service.Vote("g1", item.Id, -1);
+        _service.Vote("g2", item.Id, -1);
+        _service.Vote("g3", item.Id, -1);
+
+        _party.Queue.Should().BeEmpty();
+    }
+
+    [Test]
+    public void Vote_SortsByPositionOffset()
+    {
+        _partyServiceMock.Setup(p => p.GetCurrentParty()).Returns(_party).Verifiable(Times.Exactly(2));
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Exactly(2));
+
+        var item1 = TestData.CreateQueueItem("Song 1");
+        item1.InsertionOrder = 0;
+        var item2 = TestData.CreateQueueItem("Song 2");
+        item2.InsertionOrder = 1;
+        var item3 = TestData.CreateQueueItem("Song 3");
+        item3.InsertionOrder = 2;
+        _party.Queue.AddRange([item1, item2, item3]);
+
+        var guest = TestData.CreateGuestSession("g1", "G1", 5);
+        _party.Guests["g1"] = guest;
+
+        // Upvote Song 3 twice (from two users) to move it up by 2 positions
+        _service.Vote(_party.HostSessionId, item3.Id, 1);
+        _service.Vote("g1", item3.Id, 1);
+
+        // Song 3 (insertionOrder=2, score=2, key=0) should now be at position 0
+        // Song 1 (insertionOrder=0, score=0, key=0) should be at position 1 (tiebreak: higher score wins, so Song 3 first)
+        // Song 2 (insertionOrder=1, score=0, key=1) should be at position 2
+        _party.Queue[0].TrackName.Should().Be("Song 3");
+        _party.Queue[1].TrackName.Should().Be("Song 1");
+        _party.Queue[2].TrackName.Should().Be("Song 2");
+    }
+
+    [Test]
+    public void Vote_SingleUpvoteMovesByOnePosition()
+    {
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var item1 = TestData.CreateQueueItem("Song 1");
+        item1.InsertionOrder = 0;
+        var item2 = TestData.CreateQueueItem("Song 2");
+        item2.InsertionOrder = 1;
+        var item3 = TestData.CreateQueueItem("Song 3");
+        item3.InsertionOrder = 2;
+        _party.Queue.AddRange([item1, item2, item3]);
+
+        // One upvote on Song 3: key goes from 2 to 1
+        _service.Vote(_party.HostSessionId, item3.Id, 1);
+
+        // Song 1 (key=0), Song 3 (key=1, but higher score wins tiebreak with Song 2), Song 2 (key=1)
+        _party.Queue[0].TrackName.Should().Be("Song 1");
+        _party.Queue[1].TrackName.Should().Be("Song 3");
+        _party.Queue[2].TrackName.Should().Be("Song 2");
+    }
+
+    [Test]
+    public void Vote_DownvoteDoesNotMoveItemDown()
+    {
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var item1 = TestData.CreateQueueItem("Song 1");
+        item1.InsertionOrder = 0;
+        var item2 = TestData.CreateQueueItem("Song 2");
+        item2.InsertionOrder = 1;
+        var item3 = TestData.CreateQueueItem("Song 3");
+        item3.InsertionOrder = 2;
+        _party.Queue.AddRange([item1, item2, item3]);
+
+        // Downvote Song 1 — it should stay in place
+        _service.Vote(_party.HostSessionId, item1.Id, -1);
+
+        _party.Queue[0].TrackName.Should().Be("Song 1");
+        _party.Queue[1].TrackName.Should().Be("Song 2");
+        _party.Queue[2].TrackName.Should().Be("Song 3");
+    }
+
+    [Test]
+    public void GetUserVotes_ReturnsVotesForSession()
+    {
+        _partyServiceMock.Setup(p => p.GetCurrentParty()).Returns(_party).Verifiable(Times.Exactly(2));
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var item = TestData.CreateQueueItem("Song");
+        _party.Queue.Add(item);
+
+        _service.Vote(_party.HostSessionId, item.Id, 1);
+
+        var votes = _service.GetUserVotes(_party.HostSessionId);
+        votes.Should().ContainKey(item.Id);
+        votes[item.Id].Should().Be(1);
+    }
+
+    [Test]
+    public void GetUserVotes_EmptyWhenNoVotes()
+    {
+        _party.Queue.Add(TestData.CreateQueueItem("Song"));
+
+        var votes = _service.GetUserVotes("guest-1");
+        votes.Should().BeEmpty();
+    }
+
+    [Test]
+    public void AddToQueue_AssignsInsertionOrder()
+    {
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var request = TestData.CreateAddToQueueRequest("Song");
+
+        var (item, _) = _service.AddToQueue(_party.HostSessionId, request);
+
+        item!.InsertionOrder.Should().Be(0);
+        _party.NextInsertionOrder.Should().Be(1);
+    }
+
+    [Test]
+    public void AddToQueue_IncrementsInsertionOrder()
+    {
+        _partyServiceMock.Setup(p => p.GetCurrentParty()).Returns(_party).Verifiable(Times.Exactly(2));
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Exactly(2));
+
+        var (item1, _) = _service.AddToQueue(_party.HostSessionId, TestData.CreateAddToQueueRequest("Song 1"));
+        var (item2, _) = _service.AddToQueue(_party.HostSessionId, TestData.CreateAddToQueueRequest("Song 2"));
+
+        item1!.InsertionOrder.Should().Be(0);
+        item2!.InsertionOrder.Should().Be(1);
+    }
+
+    [Test]
+    public void Reorder_ReassignsInsertionOrders()
+    {
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var item1 = TestData.CreateQueueItem("Song 1");
+        item1.InsertionOrder = 0;
+        var item2 = TestData.CreateQueueItem("Song 2");
+        item2.InsertionOrder = 1;
+        _party.Queue.AddRange([item1, item2]);
+
+        _service.Reorder([item2.Id, item1.Id]);
+
+        _party.Queue[0].TrackName.Should().Be("Song 2");
+        _party.Queue[0].InsertionOrder.Should().Be(0);
+        _party.Queue[1].TrackName.Should().Be("Song 1");
+        _party.Queue[1].InsertionOrder.Should().Be(1);
+        _party.NextInsertionOrder.Should().Be(2);
+    }
+
+    [Test]
+    public void Vote_AsGuest_Succeeds()
+    {
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        var guest = TestData.CreateGuestSession("guest-1", "Alice", 5);
+        _party.Guests["guest-1"] = guest;
+        var item = TestData.CreateQueueItem("Song");
+        _party.Queue.Add(item);
+
+        var (success, error) = _service.Vote("guest-1", item.Id, 1);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        item.Score.Should().Be(1);
+    }
 }

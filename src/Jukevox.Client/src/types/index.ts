@@ -10,6 +10,7 @@ export interface PartyState {
   nowPlaying?: PlaybackState;
   basePlaylistId?: string;
   basePlaylistName?: string;
+  userVotes?: Record<string, number>;
 }
 
 export interface QueueItem {
@@ -23,6 +24,7 @@ export interface QueueItem {
   addedByName: string;
   addedAt: string;
   isFromBasePlaylist: boolean;
+  score: number;
 }
 
 export interface PlaybackState {

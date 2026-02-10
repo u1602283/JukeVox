@@ -13,4 +13,5 @@ public class PartyStateDto
     public PlaybackStateDto? NowPlaying { get; set; }
     public string? BasePlaylistId { get; set; }
     public string? BasePlaylistName { get; set; }
+    public Dictionary<string, int>? UserVotes { get; set; }
 }

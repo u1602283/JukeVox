@@ -137,7 +137,13 @@ export const api = {
     request<SearchResult[]>(`${BASE}/search?q=${encodeURIComponent(q)}&limit=${limit}`),
 
   // Queue
-  getQueue: () => request<QueueItem[]>(`${BASE}/queue`),
+  getQueue: () => request<{ queue: QueueItem[]; userVotes: Record<string, number> }>(`${BASE}/queue`),
+
+  vote: (itemId: string, vote: number) =>
+    request<{ queue: QueueItem[]; userVote: number }>(`${BASE}/queue/${encodeURIComponent(itemId)}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ vote }),
+    }),
 
   addToQueue: (data: AddToQueueRequest) =>
     request<{ queue: QueueItem[]; creditsRemaining?: number }>(`${BASE}/queue`, {

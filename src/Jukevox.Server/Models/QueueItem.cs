@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace JukeVox.Server.Models;
 
 public class QueueItem
@@ -13,4 +15,9 @@ public class QueueItem
     public string AddedByName { get; set; } = "Host";
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
     public bool IsFromBasePlaylist { get; set; }
+    public int InsertionOrder { get; set; }
+    public Dictionary<string, int> Votes { get; set; } = new();
+
+    [JsonIgnore]
+    public int Score => Votes.Values.Sum();
 }

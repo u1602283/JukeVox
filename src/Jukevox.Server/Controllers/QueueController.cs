@@ -40,7 +40,11 @@ public class QueueController : ControllerBase
         if (!isHost && !_partyService.IsParticipant(sessionId))
             return Unauthorized();
 
-        return Ok(_queueService.GetQueue());
+        return Ok(new
+        {
+            queue = _queueService.GetQueue(),
+            userVotes = _queueService.GetUserVotes(sessionId)
+        });
     }
 
     [HttpPost]
@@ -121,5 +125,28 @@ public class QueueController : ControllerBase
         await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
 
         return Ok(queue);
+    }
+
+    [HttpPost("{id}/vote")]
+    public async Task<IActionResult> Vote(string id, [FromBody] VoteRequest request)
+    {
+        var sessionId = HttpContext.GetSessionId();
+        var isHost = HttpContext.IsHostAuthenticated();
+        if (!isHost && !_partyService.IsParticipant(sessionId))
+            return Unauthorized();
+
+        var (success, error) = _queueService.Vote(sessionId, id, request.Vote);
+        if (!success)
+            return BadRequest(new { error });
+
+        var party = _partyService.GetCurrentParty()!;
+        var queue = _queueService.GetQueue();
+        await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
+
+        // Return the user's vote for this item (0 if removed)
+        var userVotes = _queueService.GetUserVotes(sessionId);
+        userVotes.TryGetValue(id, out var userVote);
+
+        return Ok(new { queue, userVote });
     }
 }

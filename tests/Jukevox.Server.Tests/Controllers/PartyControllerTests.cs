@@ -62,6 +62,7 @@ public class PartyControllerTests
         _partyService.Setup(p => p.JoinParty("guest-1", "1234", "Alice")).Returns(guest).Verifiable(Times.Once);
         _partyService.Setup(p => p.GetCurrentParty()).Returns(party).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue()).Returns([]).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetUserVotes("guest-1")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
 
         var result = _controller.JoinParty(new JoinPartyRequest { InviteCode = "1234", DisplayName = "Alice" });
 
@@ -92,6 +93,7 @@ public class PartyControllerTests
         _partyService.Setup(p => p.GetCurrentParty()).Returns(party).Verifiable(Times.Once);
         _partyService.Setup(p => p.GetGuest("host-session")).Returns((GuestSession?)null).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue()).Returns([]).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetUserVotes("host-session")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
 
         var result = await _controller.GetState();
 

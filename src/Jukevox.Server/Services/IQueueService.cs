@@ -13,4 +13,6 @@ public interface IQueueService
     void SetBasePlaylist(List<BasePlaylistTrack> tracks, string playlistId, string playlistName);
     void ClearBasePlaylist();
     List<QueueItemDto> GetQueue();
+    (bool Success, string? Error) Vote(string sessionId, string itemId, int vote);
+    Dictionary<string, int> GetUserVotes(string sessionId);
 }

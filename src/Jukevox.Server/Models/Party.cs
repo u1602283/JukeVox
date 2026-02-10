@@ -15,4 +15,5 @@ public class Party
     public List<BasePlaylistTrack> BasePlaylistTracks { get; set; } = [];
     public QueueItem? CurrentTrack { get; set; }
     public List<QueueItem> PlaybackHistory { get; set; } = [];
+    public int NextInsertionOrder { get; set; }
 }

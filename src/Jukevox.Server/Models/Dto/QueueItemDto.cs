@@ -12,4 +12,5 @@ public class QueueItemDto
     public required string AddedByName { get; set; }
     public DateTime AddedAt { get; set; }
     public bool IsFromBasePlaylist { get; set; }
+    public int Score { get; set; }
 }

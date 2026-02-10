@@ -56,7 +56,8 @@ public class HostPartyController : ControllerBase
             IsHost = true,
             SpotifyConnected = false,
             DefaultCredits = party.DefaultCredits,
-            Queue = []
+            Queue = [],
+            UserVotes = new()
         });
     }
 
@@ -80,7 +81,8 @@ public class HostPartyController : ControllerBase
             DefaultCredits = party.DefaultCredits,
             Queue = _queueService.GetQueue(),
             BasePlaylistId = party.BasePlaylistId,
-            BasePlaylistName = party.BasePlaylistName
+            BasePlaylistName = party.BasePlaylistName,
+            UserVotes = _queueService.GetUserVotes(sessionId)
         });
     }
 

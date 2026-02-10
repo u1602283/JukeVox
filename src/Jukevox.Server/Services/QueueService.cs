@@ -44,7 +44,8 @@ public class QueueService : IQueueService
                 AlbumImageUrl = request.AlbumImageUrl,
                 DurationMs = request.DurationMs,
                 AddedBySessionId = sessionId,
-                AddedByName = addedByName
+                AddedByName = addedByName,
+                InsertionOrder = party.NextInsertionOrder++
             };
 
             // Insert before base playlist items so manual requests take priority
@@ -54,6 +55,7 @@ public class QueueService : IQueueService
             else
                 party.Queue.Add(item);
 
+            SortQueue(party);
             _partyService.PersistState();
             return (item, null);
         }
@@ -96,6 +98,13 @@ public class QueueService : IQueueService
 
             party.Queue.Clear();
             party.Queue.AddRange(reordered);
+
+            // Reassign insertion orders to match new positions so votes offset from new anchors
+            for (int i = 0; i < party.Queue.Count; i++)
+                party.Queue[i].InsertionOrder = i;
+            party.NextInsertionOrder = party.Queue.Count;
+
+            SortQueue(party);
             _partyService.PersistState();
             return true;
         }
@@ -195,6 +204,8 @@ public class QueueService : IQueueService
             var party = _partyService.GetCurrentParty();
             if (party == null) return [];
 
+            MigrateInsertionOrders(party);
+
             return party.Queue.Select(q => new QueueItemDto
             {
                 Id = q.Id,
@@ -206,9 +217,93 @@ public class QueueService : IQueueService
                 DurationMs = q.DurationMs,
                 AddedByName = q.AddedByName,
                 AddedAt = q.AddedAt,
-                IsFromBasePlaylist = q.IsFromBasePlaylist
+                IsFromBasePlaylist = q.IsFromBasePlaylist,
+                Score = q.Score
             }).ToList();
         }
+    }
+
+    public (bool Success, string? Error) Vote(string sessionId, string itemId, int vote)
+    {
+        lock (_lock)
+        {
+            var party = _partyService.GetCurrentParty();
+            if (party == null) return (false, "No active party");
+
+            if (vote is not (-1 or 0 or 1))
+                return (false, "Vote must be -1, 0, or 1");
+
+            bool isHost = party.HostSessionId == sessionId;
+            if (!isHost && !party.Guests.ContainsKey(sessionId))
+                return (false, "Not a party participant");
+
+            var item = party.Queue.Find(q => q.Id == itemId);
+            if (item == null) return (false, "Item not found");
+
+            if (vote == 0)
+                item.Votes.Remove(sessionId);
+            else
+                item.Votes[sessionId] = vote;
+
+            // Auto-remove items at -3 or below
+            if (item.Score <= -3)
+            {
+                party.Queue.Remove(item);
+            }
+            else
+            {
+                SortQueue(party);
+            }
+
+            _partyService.PersistState();
+            return (true, null);
+        }
+    }
+
+    public Dictionary<string, int> GetUserVotes(string sessionId)
+    {
+        lock (_lock)
+        {
+            var party = _partyService.GetCurrentParty();
+            if (party == null) return new();
+
+            var votes = new Dictionary<string, int>();
+            foreach (var item in party.Queue)
+            {
+                if (item.Votes.TryGetValue(sessionId, out var v))
+                    votes[item.Id] = v;
+            }
+            return votes;
+        }
+    }
+
+    private static void SortQueue(Party party)
+    {
+        var sorted = party.Queue.ToList();
+
+        sorted.Sort((a, b) =>
+        {
+            // Only upvotes (positive score) shift position; downvotes don't move items down
+            var aKey = a.InsertionOrder - Math.Max(a.Score, 0);
+            var bKey = b.InsertionOrder - Math.Max(b.Score, 0);
+            if (aKey != bKey) return aKey.CompareTo(bKey);
+            if (a.Score != b.Score) return b.Score.CompareTo(a.Score); // higher score wins
+            return a.InsertionOrder.CompareTo(b.InsertionOrder); // lower insertion order wins
+        });
+
+        party.Queue.Clear();
+        party.Queue.AddRange(sorted);
+    }
+
+    private static void MigrateInsertionOrders(Party party)
+    {
+        if (party.Queue.Count <= 1) return;
+        if (party.Queue.Any(q => q.InsertionOrder != 0)) return;
+
+        // All items have InsertionOrder == 0 — backfill from list position
+        for (int i = 0; i < party.Queue.Count; i++)
+            party.Queue[i].InsertionOrder = i;
+        party.NextInsertionOrder = party.Queue.Count;
     }
 
     private static void RefillFromBasePlaylist(Party party)
@@ -228,7 +323,8 @@ public class QueueService : IQueueService
                 DurationMs = track.DurationMs,
                 AddedBySessionId = party.HostSessionId,
                 AddedByName = "Base Playlist",
-                IsFromBasePlaylist = true
+                IsFromBasePlaylist = true,
+                InsertionOrder = party.NextInsertionOrder++
             });
         }
     }

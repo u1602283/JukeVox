@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { GripVertical, X } from 'lucide-react';
+import { GripVertical, X, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useParty } from '../hooks/useParty';
 import { api } from '../api/client';
 import styles from './QueueList.module.css';
@@ -11,7 +11,7 @@ function formatDuration(ms: number): string {
 }
 
 export function QueueList() {
-  const { queue, setQueue, party } = useParty();
+  const { queue, setQueue, party, userVotes, setUserVote } = useParty();
   const isHost = party?.isHost ?? false;
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -26,6 +26,31 @@ export function QueueList() {
       setQueue(updated);
     } catch (err) {
       console.error('Failed to remove from queue:', err);
+    }
+  };
+
+  const handleVote = async (itemId: string, direction: 1 | -1) => {
+    const currentVote = userVotes[itemId] ?? 0;
+    // Toggle: same direction again removes the vote
+    const newVote = currentVote === direction ? 0 : direction;
+
+    // Optimistic update
+    const prevVote = currentVote;
+    const scoreDelta = newVote - prevVote;
+    setUserVote(itemId, newVote);
+    setQueue(queue.map(item =>
+      item.id === itemId ? { ...item, score: item.score + scoreDelta } : item
+    ));
+
+    try {
+      await api.vote(itemId, newVote);
+    } catch (err) {
+      // Revert on failure
+      setUserVote(itemId, prevVote);
+      setQueue(queue.map(item =>
+        item.id === itemId ? { ...item, score: item.score - scoreDelta } : item
+      ));
+      console.error('Failed to vote:', err);
     }
   };
 
@@ -123,6 +148,7 @@ export function QueueList() {
         const originalIndex = queue.indexOf(item);
         const isDragging = originalIndex === dragIndex;
         const showDivider = index === firstBaseIndex && firstBaseIndex > 0;
+        const myVote = userVotes[item.id] ?? 0;
 
         return (
           <div key={item.id}>
@@ -159,6 +185,37 @@ export function QueueList() {
                   {formatDuration(item.durationMs)} &middot; Added by {item.addedByName}
                 </span>
               </div>
+              <div className={styles.voteControls}>
+                  <button
+                    className={[
+                      styles.voteBtn,
+                      myVote === 1 ? `${styles.voteBtnActive} ${styles.voteBtnUp}` : '',
+                    ].join(' ')}
+                    onClick={() => handleVote(item.id, 1)}
+                    aria-label="Upvote"
+                  >
+                    <ThumbsUp size={16} />
+                  </button>
+                  <span
+                    className={[
+                      styles.voteScore,
+                      item.score > 0 ? styles.voteScorePositive : '',
+                      item.score < 0 ? styles.voteScoreNegative : '',
+                    ].join(' ')}
+                  >
+                    {item.score}
+                  </span>
+                  <button
+                    className={[
+                      styles.voteBtn,
+                      myVote === -1 ? `${styles.voteBtnActive} ${styles.voteBtnDown}` : '',
+                    ].join(' ')}
+                    onClick={() => handleVote(item.id, -1)}
+                    aria-label="Downvote"
+                  >
+                    <ThumbsDown size={16} />
+                  </button>
+                </div>
               {isHost && (
                 <button className={styles.removeBtn} onClick={() => handleRemove(item.id)}>
                   <X size={18} />

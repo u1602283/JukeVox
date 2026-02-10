@@ -15,6 +15,8 @@ export interface PartyContextValue {
   error: string | null;
   setError: (error: string | null) => void;
   loading: boolean;
+  userVotes: Record<string, number>;
+  setUserVote: (itemId: string, vote: number) => void;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -27,6 +29,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   const [credits, setCredits] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userVotes, setUserVotes] = useState<Record<string, number>>({});
   const connectedRef = useRef(false);
 
   const setParty = useCallback((state: PartyState | null) => {
@@ -35,7 +38,19 @@ export function PartyProvider({ children }: { children: ReactNode }) {
       if (state.queue) setQueue(state.queue);
       if (state.nowPlaying !== undefined) setNowPlaying(state.nowPlaying || null);
       if (state.creditsRemaining !== undefined) setCredits(state.creditsRemaining);
+      if (state.userVotes) setUserVotes(state.userVotes);
     }
+  }, []);
+
+  const setUserVote = useCallback((itemId: string, vote: number) => {
+    setUserVotes(prev => {
+      if (vote === 0) {
+        const { [itemId]: _removed, ...rest } = prev;
+        void _removed;
+        return rest;
+      }
+      return { ...prev, [itemId]: vote };
+    });
   }, []);
 
   // On mount, check for existing party session
@@ -59,13 +74,25 @@ export function PartyProvider({ children }: { children: ReactNode }) {
     const conn = createPartyConnection(party.partyId, {
       onNowPlayingChanged: (state) => setNowPlaying(state),
       onPlaybackStateUpdated: (state) => setNowPlaying(state),
-      onQueueUpdated: (q) => setQueue(q),
+      onQueueUpdated: (q) => {
+        setQueue(q);
+        // Prune stale votes for items no longer in the queue
+        const queueIds = new Set(q.map(item => item.id));
+        setUserVotes(prev => {
+          const pruned: Record<string, number> = {};
+          for (const [id, vote] of Object.entries(prev)) {
+            if (queueIds.has(id)) pruned[id] = vote;
+          }
+          return pruned;
+        });
+      },
       onCreditsUpdated: (c) => setCredits(c),
       onPartyEnded: () => {
         setPartyRaw(null);
         setNowPlaying(null);
         setQueue([]);
         setCredits(null);
+        setUserVotes({});
         // Navigate guests to landing page
         if (!party.isHost && window.location.pathname !== '/host') {
           window.location.href = '/';
@@ -98,6 +125,8 @@ export function PartyProvider({ children }: { children: ReactNode }) {
     error,
     setError,
     loading,
+    userVotes,
+    setUserVote,
   };
 
   return <PartyCtx.Provider value={value}>{children}</PartyCtx.Provider>;

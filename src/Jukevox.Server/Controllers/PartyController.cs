@@ -44,7 +44,8 @@ public class PartyController : ControllerBase
             DefaultCredits = party.DefaultCredits,
             Queue = _queueService.GetQueue(),
             BasePlaylistId = party.BasePlaylistId,
-            BasePlaylistName = party.BasePlaylistName
+            BasePlaylistName = party.BasePlaylistName,
+            UserVotes = _queueService.GetUserVotes(sessionId)
         });
     }
 
@@ -82,7 +83,8 @@ public class PartyController : ControllerBase
             Queue = _queueService.GetQueue(),
             NowPlaying = nowPlaying,
             BasePlaylistId = party.BasePlaylistId,
-            BasePlaylistName = party.BasePlaylistName
+            BasePlaylistName = party.BasePlaylistName,
+            UserVotes = _queueService.GetUserVotes(sessionId)
         });
     }
 }

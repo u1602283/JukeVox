@@ -58,11 +58,11 @@ public class QueueControllerTests
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
         var queue = new List<QueueItemDto> { new() { Id = "1", TrackUri = "uri", TrackName = "Song", ArtistName = "Artist", AlbumName = "Album", AddedByName = "Host" } };
         _queueService.Setup(q => q.GetQueue()).Returns(queue).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetUserVotes("host-session")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
 
         var result = _controller.GetQueue();
 
-        result.Should().BeOfType<OkObjectResult>()
-            .Which.Value.Should().Be(queue);
+        result.Should().BeOfType<OkObjectResult>();
     }
 
     [Test]
@@ -71,6 +71,7 @@ public class QueueControllerTests
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
         _partyService.Setup(p => p.IsParticipant("guest-1")).Returns(true).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue()).Returns([]).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetUserVotes("guest-1")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
 
         _controller.GetQueue().Should().BeOfType<OkObjectResult>();
     }

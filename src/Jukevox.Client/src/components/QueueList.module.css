@@ -138,6 +138,60 @@
   text-overflow: ellipsis;
 }
 
+.voteControls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0;
+}
+
+.voteBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  min-width: 32px;
+  min-height: 32px;
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+
+.voteBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated-hover);
+}
+
+.voteBtnActive.voteBtnUp {
+  color: var(--accent);
+}
+
+.voteBtnActive.voteBtnDown {
+  color: var(--danger);
+}
+
+.voteScore {
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text-secondary);
+  min-width: 16px;
+  text-align: center;
+}
+
+.voteScorePositive {
+  color: var(--accent);
+}
+
+.voteScoreNegative {
+  color: var(--danger);
+}
+
 .removeBtn {
   color: var(--text-tertiary);
   flex-shrink: 0;
@@ -170,9 +224,29 @@
   font-weight: 500;
 }
 
-/* Mobile: always show remove button */
+/* Mobile: always show remove button, compact vote controls */
 @media (max-width: 640px) {
   .removeBtn {
     opacity: 1;
+  }
+
+  .item {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .voteBtn {
+    padding: 6px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .voteControls {
+    gap: 0;
+  }
+
+  .thumb {
+    width: 38px;
+    height: 38px;
   }
 }
