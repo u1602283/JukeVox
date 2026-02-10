@@ -20,5 +20,6 @@ public interface IPartyService
     List<GuestSession> GetAllGuests();
     GuestSession? SetGuestCredits(string sessionId, int credits);
     List<GuestSession> AdjustAllCredits(int delta);
+    bool RemoveGuest(string sessionId);
     void EndParty();
 }

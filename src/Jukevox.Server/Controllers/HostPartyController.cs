@@ -252,6 +252,24 @@ public class HostPartyController : ControllerBase
         return Ok(dtos);
     }
 
+    [HttpDelete("guests/{sessionId}")]
+    public async Task<IActionResult> KickGuest(string sessionId)
+    {
+        if (!HttpContext.IsHostAuthenticated())
+            return Unauthorized(new { error = "Host authentication required" });
+
+        if (!_partyService.RemoveGuest(sessionId))
+            return NotFound(new { error = "Guest not found" });
+
+        var connectionId = _connectionMapping.GetConnectionId(sessionId);
+        if (connectionId != null)
+        {
+            await _hubContext.Clients.Client(connectionId).PartyEnded();
+        }
+
+        return NoContent();
+    }
+
     [HttpPost("end")]
     public async Task<IActionResult> EndParty()
     {

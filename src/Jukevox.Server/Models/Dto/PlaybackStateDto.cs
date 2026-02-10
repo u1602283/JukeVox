@@ -14,4 +14,6 @@ public class PlaybackStateDto
     public bool SupportsVolume { get; set; } = true;
     public string? DeviceId { get; set; }
     public string? DeviceName { get; set; }
+    public string? AddedByName { get; set; }
+    public bool IsFromBasePlaylist { get; set; }
 }

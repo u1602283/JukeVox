@@ -156,7 +156,9 @@ public class PlaybackController : ControllerBase
             VolumePercent = state?.VolumePercent ?? 0,
             SupportsVolume = state?.SupportsVolume ?? true,
             DeviceId = state?.DeviceId,
-            DeviceName = state?.DeviceName
+            DeviceName = state?.DeviceName,
+            AddedByName = track.AddedByName,
+            IsFromBasePlaylist = track.IsFromBasePlaylist
         };
         await _hubContext.Clients.Group(partyId).NowPlayingChanged(dto);
     }

@@ -101,6 +101,14 @@
   text-overflow: ellipsis;
 }
 
+.quip {
+  color: var(--text-tertiary);
+  font-size: 0.9rem;
+  font-style: italic;
+  margin-top: 14px;
+  line-height: 1.4;
+}
+
 /* Progress bar (guest) */
 .progressBar {
   height: 6px;

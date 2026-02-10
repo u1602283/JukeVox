@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { Music } from 'lucide-react';
 import { api } from '../api/client';
 import { useParty } from '../hooks/useParty';
@@ -9,6 +9,53 @@ function formatTime(ms: number): string {
   const mins = Math.floor(ms / 60000);
   const secs = Math.floor((ms % 60000) / 1000);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+const guestQuips = [
+  (n: string) => `Queued by ${n}. Finger snaps for ${n}, everyone!`,
+  (n: string) => `Blame ${n} for this one.`,
+  (n: string) => `${n} spent one of their precious credits on this. No refunds.`,
+  (n: string) => `This is ${n}'s fault. Take it up with them.`,
+  (n: string) => `${n} would like everyone to know they have taste. Allegedly.`,
+  (n: string) => `A gift to the party from ${n}. Keep the receipt.`,
+  (n: string) => `${n} heard this song once and made it everyone's problem.`,
+  (n: string) => `${n} queued this with their whole chest.`,
+  (n: string) => `Everyone thank ${n}. Or don't. It's a free country.`,
+  (n: string) => `Personally selected by ${n}. Condolences or congratulations as appropriate.`,
+  (n: string) => `${n} really said "this is the one" and hit queue. Confidence is key.`,
+  (n: string) => `DJ ${n} has entered the chat.`,
+  (n: string) => `${n} chose this. Bold. Very bold.`,
+];
+
+const basePlaylistQuips = [
+  "Nobody queued this. The algorithm is in charge now. Happy?",
+  "Auto-playing because apparently nobody has opinions.",
+  "This is what happens when nobody queues. You did this.",
+  "The playlist is on autopilot. Feel free to actually participate anytime.",
+  "Playing from the backup playlist. Your silence has been noted.",
+  "Chosen by a computer because humans couldn't be bothered.",
+  "Nobody had anything to say so here we are.",
+  "The queue was empty. Nature abhors a vacuum and so does this DJ.",
+];
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function getQuip(addedByName?: string, isFromBasePlaylist?: boolean, trackUri?: string): string | null {
+  if (!trackUri) return null;
+  const hash = hashString(trackUri);
+  if (isFromBasePlaylist || addedByName === 'Base Playlist') {
+    return basePlaylistQuips[hash % basePlaylistQuips.length];
+  }
+  if (addedByName && addedByName !== 'Host') {
+    return guestQuips[hash % guestQuips.length](addedByName);
+  }
+  return null;
 }
 
 export function NowPlaying({ children }: { children?: ReactNode }) {
@@ -86,6 +133,11 @@ export function NowPlaying({ children }: { children?: ReactNode }) {
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
   }, [nowPlaying?.isPlaying, nowPlaying?.durationMs, nowPlaying?.trackUri, nowPlaying?.trackName]);
+
+  const quip = useMemo(
+    () => getQuip(nowPlaying?.addedByName, nowPlaying?.isFromBasePlaylist, nowPlaying?.trackUri),
+    [nowPlaying?.addedByName, nowPlaying?.isFromBasePlaylist, nowPlaying?.trackUri]
+  );
 
   if (!nowPlaying || !nowPlaying.trackName) {
     return (
@@ -175,6 +227,7 @@ export function NowPlaying({ children }: { children?: ReactNode }) {
         <div className={styles.info}>
           <div className={styles.track}>{nowPlaying.trackName}</div>
           <div className={styles.artist}>{nowPlaying.artistName}</div>
+          {quip && <div className={styles.quip}>{quip}</div>}
         </div>
         {children}
       </div>

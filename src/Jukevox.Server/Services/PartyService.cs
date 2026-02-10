@@ -191,6 +191,17 @@ public class PartyService : IPartyService
         }
     }
 
+    public bool RemoveGuest(string sessionId)
+    {
+        lock (_lock)
+        {
+            if (_currentParty == null) return false;
+            if (!_currentParty.Guests.Remove(sessionId)) return false;
+            PersistStateInternal();
+            return true;
+        }
+    }
+
     public void EndParty()
     {
         lock (_lock)

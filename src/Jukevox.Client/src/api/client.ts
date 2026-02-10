@@ -115,6 +115,9 @@ export const api = {
       body: JSON.stringify({ credits }),
     }),
 
+  kickGuest: (sessionId: string) =>
+    request<void>(`${BASE}/host/party/guests/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
+
   endParty: () =>
     request<{ ended: boolean }>(`${BASE}/host/party/end`, { method: 'POST' }),
 

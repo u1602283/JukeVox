@@ -150,6 +150,13 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                 bool staleDuringGrace = inGracePeriod && state!.TrackUri != _lastTrackUri;
                 if (!staleDuringGrace)
                 {
+                    // Enrich with current track attribution
+                    if (party.CurrentTrack != null)
+                    {
+                        state!.AddedByName = party.CurrentTrack.AddedByName;
+                        state!.IsFromBasePlaylist = party.CurrentTrack.IsFromBasePlaylist;
+                    }
+
                     if (state!.TrackUri != _lastTrackUri)
                     {
                         await hubContext.Clients.Group(party.Id).NowPlayingChanged(state);
@@ -198,7 +205,9 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                         DurationMs = next.DurationMs,
                         VolumePercent = state?.VolumePercent ?? 0,
                         DeviceId = state?.DeviceId ?? _lastDeviceId,
-                        DeviceName = state?.DeviceName
+                        DeviceName = state?.DeviceName,
+                        AddedByName = next.AddedByName,
+                        IsFromBasePlaylist = next.IsFromBasePlaylist
                     };
                     await hubContext.Clients.Group(party.Id).NowPlayingChanged(nowPlayingDto);
 

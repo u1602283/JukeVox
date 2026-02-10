@@ -69,6 +69,11 @@ public class PartyController : ControllerBase
         if (party.SpotifyTokens != null)
         {
             nowPlaying = await _playerService.GetPlaybackStateAsync();
+            if (nowPlaying != null && party.CurrentTrack != null)
+            {
+                nowPlaying.AddedByName = party.CurrentTrack.AddedByName;
+                nowPlaying.IsFromBasePlaylist = party.CurrentTrack.IsFromBasePlaylist;
+            }
         }
 
         return Ok(new PartyStateDto

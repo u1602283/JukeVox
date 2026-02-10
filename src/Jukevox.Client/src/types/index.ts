@@ -40,6 +40,8 @@ export interface PlaybackState {
   supportsVolume: boolean;
   deviceId?: string;
   deviceName?: string;
+  addedByName?: string;
+  isFromBasePlaylist?: boolean;
 }
 
 export interface SearchResult {

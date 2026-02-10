@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, RefreshCw, Minus, Plus } from 'lucide-react';
+import { X, RefreshCw, Minus, Plus, UserX } from 'lucide-react';
 import { api } from '../api/client';
 import type { GuestInfo } from '../types';
 import styles from './ManagePanel.module.css';
@@ -48,6 +48,16 @@ export function ManagePanel({ mode, visible = true, onClose, onPartyEnded }: Man
     try {
       const updated = await api.setGuestCredits(sessionId, credits);
       setGuests(gs => gs.map(g => g.sessionId === sessionId ? updated : g));
+    } catch {
+      setGuests(prev);
+    }
+  };
+
+  const handleKick = async (sessionId: string) => {
+    const prev = guests;
+    setGuests(gs => gs.filter(g => g.sessionId !== sessionId));
+    try {
+      await api.kickGuest(sessionId);
     } catch {
       setGuests(prev);
     }
@@ -123,6 +133,13 @@ export function ManagePanel({ mode, visible = true, onClose, onPartyEnded }: Man
                     <Plus size={14} />
                   </button>
                 </div>
+                <button
+                  className={styles.kickBtn}
+                  onClick={() => handleKick(guest.sessionId)}
+                  aria-label={`Kick ${guest.displayName}`}
+                >
+                  <UserX size={14} />
+                </button>
               </div>
             ))
           )}

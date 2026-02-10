@@ -178,6 +178,24 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Kick button */
+.kickBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.kickBtn:hover {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
 /* Bulk credits */
 .bulkRow {
   display: flex;
