@@ -9,7 +9,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>var _ty;document.addEventListener('gesturestart',function(e){e.preventDefault()});document.addEventListener('touchstart',function(e){_ty=e.touches[0].clientY},{passive:true});document.addEventListener('touchmove',function(e){if(e.touches.length>1){e.preventDefault();return}var s=document.scrollingElement;if(e.touches[0].clientY<_ty&&s.scrollTop+s.clientHeight>=s.scrollHeight-1)e.preventDefault()},{passive:false})</script>
+    <script>var _ty;document.addEventListener('gesturestart',function(e){e.preventDefault()});document.addEventListener('touchstart',function(e){_ty=e.touches[0].clientY},{passive:true});document.addEventListener('touchmove',function(e){if(e.touches.length>1){e.preventDefault();return}if(e.target.closest('[data-scrollable]'))return;var s=document.scrollingElement;if(e.touches[0].clientY<_ty&&s.scrollTop+s.clientHeight>=s.scrollHeight-1)e.preventDefault()},{passive:false})</script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -43,12 +43,37 @@
   font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: -0.03em;
+  width: 100%;
+}
+
+@media (min-width: 1025px) {
+  .headerTitle {
+    width: auto;
+  }
 }
 
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  flex: 1;
+}
+
+.headerIcons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+@media (min-width: 1025px) {
+  .headerRight {
+    flex: initial;
+  }
+
+  .headerIcons {
+    margin-left: 0;
+  }
 }
 
 .inviteCode {
@@ -96,8 +121,8 @@
 
 /* Search toggle button */
 .searchToggle {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
