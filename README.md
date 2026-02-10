@@ -20,7 +20,7 @@ mkcert -install   # one-time: trust the local CA
 mkcert -cert-file cert.pem -key-file key.pem jukevox-dev.scottp.dev localhost 127.0.0.1
 ```
 
-Place `cert.pem` and `key.pem` in the project root. Both Vite and Kestrel auto-detect them from there.
+Place `cert.pem` and `key.pem` in the project root. Both Vite and Kestrel auto-detect them from there — no extra configuration needed.
 
 ### 2. DNS
 
@@ -32,11 +32,23 @@ Point your dev domain to localhost. Add to `/etc/hosts`:
 
 ### 3. Spotify app
 
-Create a [Spotify Developer](https://developer.spotify.com/dashboard) application and add the redirect URI:
+Create a [Spotify Developer](https://developer.spotify.com/dashboard) application.
+
+**Redirect URI** — add this to your Spotify app's settings:
 
 ```
 https://jukevox-dev.scottp.dev:5001/api/auth/callback
 ```
+
+The app requests the following scopes during OAuth:
+
+| Scope | Purpose |
+|---|---|
+| `user-read-playback-state` | Poll current track and progress |
+| `user-modify-playback-state` | Play, pause, skip, seek, volume |
+| `user-read-currently-playing` | Detect foreign track changes |
+| `streaming` | Web playback SDK (reserved) |
+| `playlist-read-private` | Base playlist selection |
 
 ### 4. Environment variables
 
@@ -48,7 +60,7 @@ cp .env.example .env
 
 Edit `.env`:
 
-```
+```sh
 SPOTIFY__ClientId=your_client_id
 SPOTIFY__ClientSecret=your_client_secret
 SPOTIFY__RedirectUri=https://jukevox-dev.scottp.dev:5001/api/auth/callback
@@ -61,7 +73,7 @@ HOSTAUTH__ServerDomain=jukevox-dev.scottp.dev
 HOSTAUTH__Origins=https://jukevox-dev.scottp.dev:5173
 ```
 
-When `cert.pem`/`key.pem` are present, Kestrel auto-configures HTTPS on port 5001 so `ASPNETCORE_URLS` is not needed. If the cert files are absent, set `ASPNETCORE_URLS` explicitly.
+When `cert.pem`/`key.pem` are present, Kestrel auto-configures HTTPS on port 5001 so `ASPNETCORE_URLS` is not needed. If the cert files are absent, set `ASPNETCORE_URLS=https://127.0.0.1:5001` explicitly.
 
 Export the variables before running (or use [direnv](https://direnv.net/)):
 
@@ -89,7 +101,7 @@ cd src/JukeVox.Server && dotnet run
 cd src/JukeVox.Client && npm run dev
 ```
 
-Open https://jukevox-dev.scottp.dev:5173 in your browser. The Vite dev server proxies `/api` and `/hubs` requests to the backend.
+Open https://jukevox-dev.scottp.dev:5173 in your browser. The Vite dev server proxies `/api` and `/hubs` requests (including WebSocket upgrades for SignalR) to the backend.
 
 ### Host setup
 
@@ -97,7 +109,7 @@ Open https://jukevox-dev.scottp.dev:5173 in your browser. The Vite dev server pr
 2. Navigate to `/host/setup` and enter the token to register your passkey
 3. After registration, go to `/host` to log in and manage parties
 
-Host auth cookies are ephemeral — they are invalidated when the server restarts, so you'll need to log in again after each restart.
+The passkey credential is stored in `host-credential.json` (gitignored). Host auth cookies are ephemeral — they are invalidated when the server restarts, so you'll need to log in again after each restart.
 
 ## Running tests
 
@@ -105,25 +117,89 @@ Host auth cookies are ephemeral — they are invalidated when the server restart
 dotnet test JukeVox.slnx
 ```
 
+Tests use NUnit 4, FluentAssertions, and Moq. Test project is at `tests/JukeVox.Server.Tests/`.
+
 ## Architecture
 
 ```
 src/
   JukeVox.Server/     ASP.NET Core Web API + SignalR hub
-  JukeVox.Client/     React + TypeScript (Vite)
+  JukeVox.Client/     React 19 + TypeScript (Vite)
 tests/
   JukeVox.Server.Tests/
+infra/
+  jukevox.cfn.yml     CloudFormation template (EC2 + Cloudflare tunnel)
 ```
 
-- **Queue management** — App-managed queue (not Spotify's) so users can reorder and remove tracks.
-- **Real-time updates** — SignalR pushes queue and playback state changes to all connected clients.
-- **Playback monitoring** — A background service polls Spotify every 2 seconds and auto-advances the queue when a track ends.
-- **Host auth** — Passkey (WebAuthn) authentication for the host portal via Fido2NetLib.
+- **Queue management** — App-managed queue (not Spotify's) so users can reorder, remove, and vote on tracks. A 4-tier sort system promotes highly-voted songs and demotes disliked ones.
+- **Real-time updates** — SignalR pushes queue changes, playback state, credits, and party lifecycle events to all connected clients.
+- **Playback monitoring** — A background service polls Spotify every 2 seconds, auto-advances the queue when a track ends, and detects when someone changes the track outside the app.
+- **Host auth** — Passkey (WebAuthn) authentication for the host portal via Fido2NetLib v4.
 - **Sessions** — Cookie-based, no user accounts required for guests.
 
-## To-do
+For detailed architecture docs (service internals, queue sorting tiers, voting thresholds, gotchas), see [CLAUDE.md](CLAUDE.md).
 
-- Redesign the UI
-- Build out host functionalities - e.g. guest management (credits etc.)
-- Build pretty playback interface
-- Dockerise
+## Production
+
+### Docker
+
+The project includes a multi-stage Dockerfile:
+
+1. **Frontend build** — `node:22-alpine` runs `npm ci && npm run build`, outputting to `src/Jukevox.Server/wwwroot/`
+2. **Backend build** — `dotnet/sdk:10.0-alpine` restores and publishes the server project
+3. **Runtime** — `dotnet/aspnet:10.0-alpine` runs the app on port 8080
+
+Build and run locally:
+
+```sh
+docker build -t jukevox .
+docker run -p 8080:8080 \
+  -e SPOTIFY__ClientId=... \
+  -e SPOTIFY__ClientSecret=... \
+  -e SPOTIFY__RedirectUri=... \
+  -e FRONTENDURL=... \
+  -e HOSTAUTH__ServerDomain=... \
+  -e HOSTAUTH__Origins=... \
+  jukevox
+```
+
+In production, the backend serves the built React app as static files with SPA fallback (`MapFallbackToFile("index.html")`), so no separate frontend server is needed.
+
+The container runs as a non-root user (`jukevox`, UID 10000). The health endpoint is `GET /api/health`.
+
+### CI/CD
+
+Two GitHub Actions workflows handle build and deploy:
+
+**Build and Push** (`.github/workflows/build-and-push.yml`) — triggers on push to `main` when `src/` or `Dockerfile` changes:
+- Computes a semver tag via [Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning) (`version.json`)
+- Builds a `linux/arm64` Docker image
+- Pushes to Amazon ECR with the version tag + `latest`
+
+**Deploy** (`.github/workflows/deploy.yml`) — manual `workflow_dispatch`:
+- Optionally deploys/updates CloudFormation infrastructure (`infra/jukevox.cfn.yml`)
+- Deploys the app by running `/opt/jukevox/deploy.sh` on the EC2 instance via AWS SSM
+- The deploy script pulls the new image from ECR, restarts the systemd service, and runs a health check
+
+### Infrastructure
+
+The CloudFormation template (`infra/jukevox.cfn.yml`) provisions:
+
+- **EC2** `t4g.micro` (ARM64, Amazon Linux 2023)
+- **Cloudflare tunnel** for ingress — no inbound security group rules needed
+- **Persistent volumes** for `party-state.json` and `host-credential.json`
+- **Systemd services** for the JukeVox container and Cloudflare tunnel daemon
+- **IAM role** with ECR pull + Secrets Manager read permissions
+
+Secrets (Spotify credentials, host auth config, Cloudflare tunnel token) are stored in AWS Secrets Manager and injected at deploy time.
+
+## Persisted state
+
+Two files persist across restarts (both gitignored):
+
+| File | Contents | Notes |
+|---|---|---|
+| `party-state.json` | Active party, queue, guests, tokens | Written after every state mutation by `PartyService` |
+| `host-credential.json` | WebAuthn public key credential | Created during passkey registration at `/host/setup` |
+
+Host auth cookies are **not** persisted — they use ephemeral Data Protection keys that are lost on restart. The host will need to re-authenticate via passkey after each server restart.
