@@ -217,8 +217,7 @@ public class PartyService : IPartyService
         {
             if (_currentParty == null)
             {
-                if (File.Exists(_stateFilePath))
-                    File.Delete(_stateFilePath);
+                File.WriteAllText(_stateFilePath, "null");
                 return;
             }
 
