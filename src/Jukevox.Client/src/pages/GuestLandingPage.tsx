@@ -7,7 +7,7 @@ export function GuestLandingPage() {
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>JukeVox</h1>
-      <p className={styles.subtitle}>Collaborative music for your party</p>
+      <p className={styles.subtitle}>Semi-democratic music queue management</p>
 
       <div className={styles.panel}>
         <JoinForm />

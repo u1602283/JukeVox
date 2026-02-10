@@ -110,6 +110,9 @@
 
 .dnsRecord code {
   color: var(--accent);
+  display: inline-block;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .continueBtn {
