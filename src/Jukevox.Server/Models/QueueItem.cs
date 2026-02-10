@@ -1,5 +1,3 @@
-using System.Text.Json.Serialization;
-
 namespace JukeVox.Server.Models;
 
 public class QueueItem
@@ -19,6 +17,5 @@ public class QueueItem
     public bool HostPinned { get; set; }
     public Dictionary<string, int> Votes { get; set; } = new();
 
-    [JsonIgnore]
     public int Score => Votes.Values.Sum();
 }
