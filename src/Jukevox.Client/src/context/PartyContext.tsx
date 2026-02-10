@@ -2,7 +2,7 @@ import { createContext, useState, useCallback, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { PartyState, PlaybackState, QueueItem } from '../types';
 import { api } from '../api/client';
-import { createPartyConnection, startConnection, stopConnection } from '../signalr/partyConnection';
+import { createPartyConnection, startConnection, stopConnection, ensureConnected } from '../signalr/partyConnection';
 
 export interface PartyContextValue {
   party: PartyState | null;
@@ -31,6 +31,8 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [userVotes, setUserVotes] = useState<Record<string, number>>({});
   const connectedRef = useRef(false);
+  // Mute SignalR callbacks briefly after a visibility-triggered fetch
+  const muteUntilRef = useRef(0);
 
   const setParty = useCallback((state: PartyState | null) => {
     setPartyRaw(state);
@@ -67,14 +69,48 @@ export function PartyProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, [setParty]);
 
+  // Refetch state when the page becomes visible again (e.g. phone unlock)
+  const partyRef = useRef(party);
+  partyRef.current = party;
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' || !partyRef.current) return;
+
+      // Mute SignalR callbacks for 3s so the fresh REST fetch is the single source of truth
+      muteUntilRef.current = Date.now() + 3000;
+
+      api.getPartyState()
+        .then((state) => {
+          if ('hasParty' in state && !state.hasParty) {
+            setParty(null);
+            return;
+          }
+          const s = state as PartyState;
+          if (s.queue) setQueue(s.queue);
+          if (s.nowPlaying !== undefined) setNowPlaying(s.nowPlaying || null);
+          if (s.creditsRemaining !== undefined) setCredits(s.creditsRemaining);
+          if (s.userVotes) setUserVotes(s.userVotes);
+        })
+        .catch(() => { /* keep existing state on error */ });
+
+      // Ensure SignalR is alive after sleep
+      ensureConnected().catch(() => { /* will retry on next poll */ });
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [setParty]);
+
   // Connect SignalR when party is active
   useEffect(() => {
     if (!party || connectedRef.current) return;
 
+    const isMuted = () => Date.now() < muteUntilRef.current;
+
     const conn = createPartyConnection(party.partyId, {
-      onNowPlayingChanged: (state) => setNowPlaying(state),
-      onPlaybackStateUpdated: (state) => setNowPlaying(state),
+      onNowPlayingChanged: (state) => { if (!isMuted()) setNowPlaying(state); },
+      onPlaybackStateUpdated: (state) => { if (!isMuted()) setNowPlaying(state); },
       onQueueUpdated: (q) => {
+        if (isMuted()) return;
         setQueue(q);
         // Prune stale votes for items no longer in the queue
         const queueIds = new Set(q.map(item => item.id));
@@ -86,7 +122,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
           return pruned;
         });
       },
-      onCreditsUpdated: (c) => setCredits(c),
+      onCreditsUpdated: (c) => { if (!isMuted()) setCredits(c); },
       onPartyEnded: () => {
         setPartyRaw(null);
         setNowPlaying(null);

@@ -46,3 +46,12 @@ export async function stopConnection(): Promise<void> {
     connection = null;
   }
 }
+
+export async function ensureConnected(): Promise<void> {
+  if (!connection) return;
+  if (connection.state === signalR.HubConnectionState.Connected) return;
+  // If reconnecting, let it finish; if disconnected, restart
+  if (connection.state === signalR.HubConnectionState.Disconnected) {
+    await connection.start();
+  }
+}
