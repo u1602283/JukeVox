@@ -283,6 +283,15 @@ public class QueueService : IQueueService
 
         sorted.Sort((a, b) =>
         {
+            // Tier 0: promoted base playlist (3+ upvotes) — top of queue
+            // Tier 1: guest/host-added items
+            // Tier 2: unpromoted base playlist items
+            static int Tier(QueueItem x) => x.IsFromBasePlaylist
+                ? (x.Score >= 3 ? 0 : 2)
+                : 1;
+            var tierCmp = Tier(a).CompareTo(Tier(b));
+            if (tierCmp != 0) return tierCmp;
+
             // Only upvotes (positive score) shift position; downvotes don't move items down
             var aKey = a.InsertionOrder - Math.Max(a.Score, 0);
             var bKey = b.InsertionOrder - Math.Max(b.Score, 0);
