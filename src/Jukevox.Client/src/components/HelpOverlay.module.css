@@ -73,6 +73,23 @@
   overscroll-behavior: contain;
 }
 
+.quote {
+  font-size: 1rem;
+  font-style: italic;
+  color: var(--text-tertiary);
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 14px;
+  margin-bottom: 14px;
+}
+
+.quoteAttribution {
+  font-size: 0.78rem;
+  font-style: normal;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  opacity: 0.7;
+}
+
 .intro {
   font-size: 0.92rem;
   color: var(--text-secondary);

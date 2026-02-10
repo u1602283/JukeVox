@@ -20,8 +20,12 @@ export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
           </button>
         </div>
         <div className={styles.content} data-scrollable>
+          <blockquote className={styles.quote}>
+            "I love democracy."
+            <footer className={styles.quoteAttribution}>- Supreme Chancellor Sheev Palpatine</footer>
+          </blockquote>
           <p className={styles.intro}>
-            Welcome to JukeVox — semi-democratised music queue management.
+            Welcome to JukeVox - semi-democratised music queue management.
             The host controls the party, but you get a say. Sort of.
           </p>
 
@@ -29,15 +33,15 @@ export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
             <h3 className={styles.sectionTitle}>Adding Songs</h3>
             <p>
               Tap the search icon in the header, find a song, and add it to the queue.
-              Revolutionary stuff, we know. Your song lands ahead of any
-              background playlist tracks, so it <em>will</em> get played — eventually.
+              Groundbreaking, right? Your song lands ahead of any
+              background playlist tracks, so it <em>will</em> get played - eventually (probably).
             </p>
           </section>
 
           <section className={styles.section}>
             <h3 className={styles.sectionTitle}>Credits</h3>
             <p>
-              Each song you queue costs one credit. When you're out, you're out — no
+              Each song you queue costs one credit. When you're out, you're out - no
               begging the app will help. The host decides how many credits you get and
               can grant more or revoke them at any time, for any reason, with zero
               accountability. Democracy has its limits.
@@ -47,14 +51,21 @@ export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
           <section className={styles.section}>
             <h3 className={styles.sectionTitle}>Voting</h3>
             <p>
-              Every queued song can be upvoted or downvoted. Upvotes push a song
-              higher in the queue — one vote, one position. Downvotes don't move
-              anything down (we're not monsters), but if a song hits -3 it gets
-              removed entirely. Consider it a collective veto.
+              Every queued song can be upvoted or downvoted. Any song
+              with at least 3 upvotes shoots to the top of the queue.
+              The people have spoken.
             </p>
             <p>
-              If a background playlist track somehow gets 3 or more upvotes,
-              it'll be promoted to the very top of the queue. The people have spoken.
+              On the flip side, if a song hits -3 it gets removed entirely.
+              No refund on the credit, either - consider it a lesson in
+              taste. Below that threshold, votes are
+              purely decorative - a gentle nod of approval or quiet disapproval
+              that changes absolutely nothing. Yet.
+            </p>
+            <p>
+              The host can also drag the queue into whatever order they like,
+              and that overrides everything. Benevolent dictatorship with
+              democratic characteristics.
             </p>
           </section>
         </div>

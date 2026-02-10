@@ -99,12 +99,13 @@ public class QueueService : IQueueService
             party.Queue.Clear();
             party.Queue.AddRange(reordered);
 
-            // Reassign insertion orders to match new positions so votes offset from new anchors
+            // Pin all items at the host's chosen order
             for (int i = 0; i < party.Queue.Count; i++)
+            {
                 party.Queue[i].InsertionOrder = i;
+                party.Queue[i].HostPinned = true;
+            }
             party.NextInsertionOrder = party.Queue.Count;
-
-            SortQueue(party);
             _partyService.PersistState();
             return true;
         }
@@ -240,18 +241,23 @@ public class QueueService : IQueueService
             var item = party.Queue.Find(q => q.Id == itemId);
             if (item == null) return (false, "Item not found");
 
+            bool wasPromoted = !item.HostPinned && item.Score >= 3;
+
             if (vote == 0)
                 item.Votes.Remove(sessionId);
             else
                 item.Votes[sessionId] = vote;
+
+            bool isPromoted = !item.HostPinned && item.Score >= 3;
 
             // Auto-remove items at -3 or below
             if (item.Score <= -3)
             {
                 party.Queue.Remove(item);
             }
-            else
+            else if (wasPromoted != isPromoted)
             {
+                // Only re-sort when crossing the promotion threshold
                 SortQueue(party);
             }
 
@@ -283,21 +289,30 @@ public class QueueService : IQueueService
 
         sorted.Sort((a, b) =>
         {
-            // Tier 0: promoted base playlist (3+ upvotes) — top of queue
-            // Tier 1: guest/host-added items
-            // Tier 2: unpromoted base playlist items
-            static int Tier(QueueItem x) => x.IsFromBasePlaylist
-                ? (x.Score >= 3 ? 0 : 2)
-                : 1;
+            // Tier 0: promoted (3+ votes, not host-pinned) — top of queue
+            // Tier 1: host-pinned items — maintain host's exact order
+            // Tier 2: regular queued items (not base playlist)
+            // Tier 3: base playlist items
+            static int Tier(QueueItem x)
+            {
+                if (!x.HostPinned && x.Score >= 3) return 0;
+                if (x.HostPinned) return 1;
+                if (!x.IsFromBasePlaylist) return 2;
+                return 3;
+            }
+
             var tierCmp = Tier(a).CompareTo(Tier(b));
             if (tierCmp != 0) return tierCmp;
 
-            // Only upvotes (positive score) shift position; downvotes don't move items down
-            var aKey = a.InsertionOrder - Math.Max(a.Score, 0);
-            var bKey = b.InsertionOrder - Math.Max(b.Score, 0);
-            if (aKey != bKey) return aKey.CompareTo(bKey);
-            if (a.Score != b.Score) return b.Score.CompareTo(a.Score); // higher score wins
-            return a.InsertionOrder.CompareTo(b.InsertionOrder); // lower insertion order wins
+            // Promoted tier: higher score first, then earlier insertion wins
+            if (Tier(a) == 0)
+            {
+                if (a.Score != b.Score) return b.Score.CompareTo(a.Score);
+                return a.InsertionOrder.CompareTo(b.InsertionOrder);
+            }
+
+            // All other tiers: FIFO by InsertionOrder
+            return a.InsertionOrder.CompareTo(b.InsertionOrder);
         });
 
         party.Queue.Clear();

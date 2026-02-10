@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GripVertical, X, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useParty } from '../hooks/useParty';
 import { api } from '../api/client';
@@ -19,6 +19,8 @@ export function QueueList() {
   const dragItemRef = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const itemRects = useRef<DOMRect[]>([]);
+  const queueRef = useRef(queue);
+  useEffect(() => { queueRef.current = queue; }, [queue]);
 
   const handleRemove = async (id: string) => {
     try {
@@ -71,50 +73,66 @@ export function QueueList() {
     return insertAt;
   };
 
+  const overIndexRef = useRef<number | null>(null);
+
   const onPointerDown = (e: React.PointerEvent, index: number) => {
     if (!isHost) return;
     e.preventDefault();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
     dragItemRef.current = index;
+    overIndexRef.current = index;
     captureRects();
     setDragIndex(index);
     setOverIndex(index);
-  };
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    const dragFrom = dragItemRef.current;
-    if (dragFrom === null) return;
-    const target = getInsertIndex(e.clientY, dragFrom);
-    setOverIndex(target);
-  };
+    const handleMove = (ev: PointerEvent) => {
+      const dragFrom = dragItemRef.current;
+      if (dragFrom === null) return;
+      const target = getInsertIndex(ev.clientY, dragFrom);
+      overIndexRef.current = target;
+      setOverIndex(target);
+    };
 
-  const onPointerUp = async () => {
-    const from = dragItemRef.current;
-    const to = overIndex;
-    dragItemRef.current = null;
-    setDragIndex(null);
-    setOverIndex(null);
+    const handleUp = async () => {
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleUp);
+      document.removeEventListener('pointercancel', handleCancel);
 
-    if (from === null || to === null || from === to) return;
+      const from = dragItemRef.current;
+      const to = overIndexRef.current;
+      dragItemRef.current = null;
+      overIndexRef.current = null;
+      setDragIndex(null);
+      setOverIndex(null);
 
-    // Optimistic reorder
-    const reordered = [...queue];
-    const [moved] = reordered.splice(from, 1);
-    reordered.splice(to, 0, moved);
-    setQueue(reordered);
+      if (from === null || to === null || from === to) return;
 
-    try {
-      await api.reorderQueue(reordered.map(item => item.id));
-    } catch (err) {
-      console.error('Failed to reorder queue:', err);
-    }
-  };
+      const reordered = [...queueRef.current];
+      const [moved] = reordered.splice(from, 1);
+      reordered.splice(to, 0, moved);
+      setQueue(reordered);
 
-  const onPointerCancel = () => {
-    dragItemRef.current = null;
-    setDragIndex(null);
-    setOverIndex(null);
+      try {
+        await api.reorderQueue(reordered.map(item => item.id));
+      } catch (err) {
+        console.error('Failed to reorder queue:', err);
+      }
+    };
+
+    const handleCancel = () => {
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleUp);
+      document.removeEventListener('pointercancel', handleCancel);
+
+      dragItemRef.current = null;
+      overIndexRef.current = null;
+      setDragIndex(null);
+      setOverIndex(null);
+    };
+
+    document.addEventListener('pointermove', handleMove);
+    document.addEventListener('pointerup', handleUp);
+    document.addEventListener('pointercancel', handleCancel);
   };
 
   if (queue.length === 0) {
@@ -167,9 +185,6 @@ export function QueueList() {
                 <div
                   className={styles.dragHandle}
                   onPointerDown={(e) => onPointerDown(e, originalIndex)}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerCancel}
                 >
                   <GripVertical size={20} />
                 </div>

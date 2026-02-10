@@ -381,7 +381,7 @@ public class QueueServiceTests
     }
 
     [Test]
-    public void Vote_SortsByPositionOffset()
+    public void Vote_BelowThreshold_DoesNotChangeOrder()
     {
         _partyServiceMock.Setup(p => p.GetCurrentParty()).Returns(_party).Verifiable(Times.Exactly(2));
         _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Exactly(2));
@@ -397,22 +397,21 @@ public class QueueServiceTests
         var guest = TestData.CreateGuestSession("g1", "G1", 5);
         _party.Guests["g1"] = guest;
 
-        // Upvote Song 3 twice (from two users) to move it up by 2 positions
+        // Two upvotes on Song 3 (below threshold of 3) — order should not change
         _service.Vote(_party.HostSessionId, item3.Id, 1);
         _service.Vote("g1", item3.Id, 1);
 
-        // Song 3 (insertionOrder=2, score=2, key=0) should now be at position 0
-        // Song 1 (insertionOrder=0, score=0, key=0) should be at position 1 (tiebreak: higher score wins, so Song 3 first)
-        // Song 2 (insertionOrder=1, score=0, key=1) should be at position 2
-        _party.Queue[0].TrackName.Should().Be("Song 3");
-        _party.Queue[1].TrackName.Should().Be("Song 1");
-        _party.Queue[2].TrackName.Should().Be("Song 2");
+        _party.Queue[0].TrackName.Should().Be("Song 1");
+        _party.Queue[1].TrackName.Should().Be("Song 2");
+        _party.Queue[2].TrackName.Should().Be("Song 3");
     }
 
     [Test]
-    public void Vote_SingleUpvoteMovesByOnePosition()
+    public void Vote_ThreeUpvotes_PromotesToTop()
     {
-        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+        _partyServiceMock.Setup(p => p.GetCurrentParty()).Returns(_party).Verifiable(Times.Exactly(3));
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Exactly(3));
+
         var item1 = TestData.CreateQueueItem("Song 1");
         item1.InsertionOrder = 0;
         var item2 = TestData.CreateQueueItem("Song 2");
@@ -421,12 +420,18 @@ public class QueueServiceTests
         item3.InsertionOrder = 2;
         _party.Queue.AddRange([item1, item2, item3]);
 
-        // One upvote on Song 3: key goes from 2 to 1
-        _service.Vote(_party.HostSessionId, item3.Id, 1);
+        var g1 = TestData.CreateGuestSession("g1", "G1", 5);
+        var g2 = TestData.CreateGuestSession("g2", "G2", 5);
+        _party.Guests["g1"] = g1;
+        _party.Guests["g2"] = g2;
 
-        // Song 1 (key=0), Song 3 (key=1, but higher score wins tiebreak with Song 2), Song 2 (key=1)
-        _party.Queue[0].TrackName.Should().Be("Song 1");
-        _party.Queue[1].TrackName.Should().Be("Song 3");
+        // Three upvotes on Song 3 — should promote to top
+        _service.Vote(_party.HostSessionId, item3.Id, 1);
+        _service.Vote("g1", item3.Id, 1);
+        _service.Vote("g2", item3.Id, 1);
+
+        _party.Queue[0].TrackName.Should().Be("Song 3");
+        _party.Queue[1].TrackName.Should().Be("Song 1");
         _party.Queue[2].TrackName.Should().Be("Song 2");
     }
 
@@ -519,6 +524,30 @@ public class QueueServiceTests
     }
 
     [Test]
+    public void Vote_SingleUpvote_DoesNotResortQueue()
+    {
+        // Simulates legacy state where InsertionOrders don't match physical order
+        // (e.g. from old per-vote sorting). A sub-threshold vote should never re-sort.
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
+
+        var item1 = TestData.CreateQueueItem("Song A");
+        item1.InsertionOrder = 2; // Out of order!
+        var item2 = TestData.CreateQueueItem("Song B");
+        item2.InsertionOrder = 0;
+        var item3 = TestData.CreateQueueItem("Song C");
+        item3.InsertionOrder = 1;
+        _party.Queue.AddRange([item1, item2, item3]);
+
+        // Upvote Song B — should NOT trigger a re-sort
+        _service.Vote(_party.HostSessionId, item2.Id, 1);
+
+        _party.Queue[0].TrackName.Should().Be("Song A");
+        _party.Queue[1].TrackName.Should().Be("Song B");
+        _party.Queue[2].TrackName.Should().Be("Song C");
+        item2.Score.Should().Be(1);
+    }
+
+    [Test]
     public void Vote_AsGuest_Succeeds()
     {
         _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.Once);
@@ -532,5 +561,46 @@ public class QueueServiceTests
         success.Should().BeTrue();
         error.Should().BeNull();
         item.Score.Should().Be(1);
+    }
+
+    [Test]
+    public void Vote_SingleUpvote_WithBasePlaylist_DoesNotChangeOrder()
+    {
+        // Mimics real app: base playlist set, then manual songs added, then upvote
+        _partyServiceMock.Setup(p => p.GetCurrentParty()).Returns(_party).Verifiable(Times.AtLeast(1));
+        _partyServiceMock.Setup(p => p.PersistState()).Verifiable(Times.AtLeast(1));
+
+        // Set up base playlist (adds shuffled base items to queue)
+        var baseTracks = new List<BasePlaylistTrack>
+        {
+            TestData.CreateBasePlaylistTrack("Base 1"),
+            TestData.CreateBasePlaylistTrack("Base 2"),
+            TestData.CreateBasePlaylistTrack("Base 3"),
+        };
+        _service.SetBasePlaylist(baseTracks, "playlist-123", "Test Playlist");
+
+        // Guest adds manual songs (these should go before base playlist items)
+        var guest = TestData.CreateGuestSession("guest-1", "Alice", 5);
+        _party.Guests["guest-1"] = guest;
+        _service.AddToQueue("guest-1", TestData.CreateAddToQueueRequest("Manual 1"));
+        _service.AddToQueue("guest-1", TestData.CreateAddToQueueRequest("Manual 2"));
+        _service.AddToQueue("guest-1", TestData.CreateAddToQueueRequest("Manual 3"));
+
+        // Verify initial order: manual songs before base playlist
+        var queueBefore = _service.GetQueue();
+        queueBefore[0].TrackName.Should().Be("Manual 1");
+        queueBefore[1].TrackName.Should().Be("Manual 2");
+        queueBefore[2].TrackName.Should().Be("Manual 3");
+        // Base items are after (indices 3, 4, 5)
+        queueBefore.Skip(3).Should().AllSatisfy(q => q.IsFromBasePlaylist.Should().BeTrue());
+
+        // Now upvote Manual 2 — this should NOT change the order
+        _service.Vote("guest-1", queueBefore[1].Id, 1);
+
+        var queueAfter = _service.GetQueue();
+        queueAfter[0].TrackName.Should().Be("Manual 1");
+        queueAfter[1].TrackName.Should().Be("Manual 2");
+        queueAfter[1].Score.Should().Be(1);
+        queueAfter[2].TrackName.Should().Be("Manual 3");
     }
 }
