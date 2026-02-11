@@ -290,15 +290,15 @@ public class QueueService : IQueueService
         sorted.Sort((a, b) =>
         {
             // Tier 0: promoted (3+ votes, not host-pinned) — top of queue
-            // Tier 1: host-pinned items — maintain host's exact order
+            // Tier 1: host-pinned items — maintain host's exact order (non-base only)
             // Tier 2: regular queued items (not base playlist)
-            // Tier 3: base playlist items
+            // Tier 3: base playlist items (always bottom, even if host-pinned)
             static int Tier(QueueItem x)
             {
                 if (!x.HostPinned && x.Score >= 3) return 0;
+                if (x.IsFromBasePlaylist) return 3;
                 if (x.HostPinned) return 1;
-                if (!x.IsFromBasePlaylist) return 2;
-                return 3;
+                return 2;
             }
 
             var tierCmp = Tier(a).CompareTo(Tier(b));

@@ -67,7 +67,7 @@ JukeVox is a collaborative Spotify queue app. A host creates a party, connects t
 
 `PartyContext` (React Context) is the single source of truth. On mount it checks for an existing session via `GET /api/party/state`. When a party is active, it creates a SignalR connection that updates `nowPlaying`, `queue`, and `credits` in real time. REST calls go through `src/api/client.ts` with `credentials: 'include'` for cookie auth.
 
-When the tab regains visibility, `PartyContext` fetches fresh state via REST and mutes SignalR callbacks for 3 seconds (`muteUntilRef`) to prevent stale SignalR messages from overwriting the fresh data.
+When the tab regains visibility, `PartyContext` fetches fresh state via REST to ensure the UI is current. SignalR callbacks are not muted — duplicate data from SignalR is harmless since `useAnimatedList` diffs by key and identical data produces no animations.
 
 ### Vite proxy
 
@@ -141,7 +141,7 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 ## Gotchas
 
 - **index.html inline script**: Prevents pinch-zoom (`gesturestart`) and blocks overscroll on elements that aren't marked `[data-scrollable]`. If a scrollable component doesn't scroll on mobile, add `data-scrollable` to it.
-- **Visibility change mute window**: When tab regains focus, REST fetch overwrites state and SignalR callbacks are muted for 3 seconds (`muteUntilRef` in `PartyContext.tsx`). Prevents stale SignalR messages from overwriting fresh REST data.
+- **Visibility change refresh**: When tab regains focus, REST fetch refreshes state. SignalR is not muted — `useAnimatedList` handles duplicate/identical data gracefully.
 - **NowPlaying uses requestAnimationFrame**: Progress bar updates at 60fps via direct DOM writes (refs, not React state). Seeking uses `pendingSeekRef` to ignore server updates within 3 seconds of a seek. No React re-renders during normal playback.
 - **Ephemeral Data Protection**: Host auth cookies are invalid after server restart (uses `AddEphemeralDataProtection`).
 - **InsertionOrder vs physical position**: Items can have InsertionOrders that don't match their list index (from legacy state or host reorder). `SortQueue` uses InsertionOrder for FIFO, not list position.
@@ -167,7 +167,7 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 
 | File | Responsibility |
 |---|---|
-| `PartyContext.tsx` | Single source of truth, SignalR lifecycle, visibility mute window |
+| `PartyContext.tsx` | Single source of truth, SignalR lifecycle, visibility refresh |
 | `NowPlaying.tsx` | RAF-based progress bar, seeking, quip generation |
 | `QueueList.tsx` | Voting (optimistic updates), drag-and-drop reorder (host only) |
 | `SearchOverlay.tsx` / `useSearch.ts` | Debounced search with request cancellation |

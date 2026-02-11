@@ -31,8 +31,6 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [userVotes, setUserVotes] = useState<Record<string, number>>({});
   const connectedRef = useRef(false);
-  // Mute SignalR callbacks briefly after a visibility-triggered fetch
-  const muteUntilRef = useRef(0);
 
   const setParty = useCallback((state: PartyState | null) => {
     setPartyRaw(state);
@@ -76,9 +74,6 @@ export function PartyProvider({ children }: { children: ReactNode }) {
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible' || !partyRef.current) return;
 
-      // Mute SignalR callbacks for 3s so the fresh REST fetch is the single source of truth
-      muteUntilRef.current = Date.now() + 3000;
-
       api.getPartyState()
         .then((state) => {
           if ('hasParty' in state && !state.hasParty) {
@@ -104,13 +99,10 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!party || connectedRef.current) return;
 
-    const isMuted = () => Date.now() < muteUntilRef.current;
-
     const conn = createPartyConnection(party.partyId, {
-      onNowPlayingChanged: (state) => { if (!isMuted()) setNowPlaying(state); },
-      onPlaybackStateUpdated: (state) => { if (!isMuted()) setNowPlaying(state); },
+      onNowPlayingChanged: (state) => { setNowPlaying(state); },
+      onPlaybackStateUpdated: (state) => { setNowPlaying(state); },
       onQueueUpdated: (q) => {
-        if (isMuted()) return;
         setQueue(q);
         // Prune stale votes for items no longer in the queue
         const queueIds = new Set(q.map(item => item.id));
@@ -122,7 +114,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
           return pruned;
         });
       },
-      onCreditsUpdated: (c) => { if (!isMuted()) setCredits(c); },
+      onCreditsUpdated: (c) => { setCredits(c); },
       onPartyEnded: () => {
         setPartyRaw(null);
         setNowPlaying(null);

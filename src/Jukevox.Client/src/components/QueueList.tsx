@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { GripVertical, X, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useParty } from '../hooks/useParty';
+import { useAnimatedList } from '../hooks/useAnimatedList';
 import { api } from '../api/client';
 import styles from './QueueList.module.css';
 
@@ -17,7 +18,16 @@ export function QueueList() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const dragItemRef = useRef<number | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+
+  const { animatedItems, containerRef: animatedContainerRef } = useAnimatedList(queue, {
+    keyFn: item => item.id,
+    disabled: dragIndex !== null,
+  });
+  const listElRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useCallback((el: HTMLDivElement | null) => {
+    listElRef.current = el;
+    animatedContainerRef(el);
+  }, [animatedContainerRef]);
   const itemRects = useRef<DOMRect[]>([]);
   const scrollYStartRef = useRef(0);
   const autoScrollRafRef = useRef<number | null>(null);
@@ -62,9 +72,9 @@ export function QueueList() {
   };
 
   const captureRects = () => {
-    if (!listRef.current) return;
+    if (!listElRef.current) return;
     scrollYStartRef.current = window.scrollY;
-    const items = listRef.current.querySelectorAll('[data-queue-item]');
+    const items = listElRef.current.querySelectorAll('[data-queue-item]');
     itemRects.current = Array.from(items).map(el => el.getBoundingClientRect());
   };
 
@@ -148,7 +158,7 @@ export function QueueList() {
     overIndexRef.current = index;
     captureRects();
     scrollAtAlignRef.current = window.scrollY;
-    const items = listRef.current?.querySelectorAll<HTMLElement>('[data-queue-item]');
+    const items = listElRef.current?.querySelectorAll<HTMLElement>('[data-queue-item]');
     draggedElRef.current = items?.[index] ?? null;
     setDragIndex(index);
     setOverIndex(index);
@@ -224,7 +234,7 @@ export function QueueList() {
     document.addEventListener('pointercancel', handleCancel);
   };
 
-  if (queue.length === 0) {
+  if (animatedItems.length === 0) {
     return (
       <div className={styles.empty}>
         <p>Queue is empty. Search for songs to add!</p>
@@ -233,14 +243,19 @@ export function QueueList() {
   }
 
   // Build the visual order for rendering
-  const displayQueue = [...queue];
+  const displayItems = [...animatedItems];
   if (dragIndex !== null && overIndex !== null && dragIndex !== overIndex) {
-    const [moved] = displayQueue.splice(dragIndex, 1);
-    displayQueue.splice(overIndex, 0, moved);
+    const [moved] = displayItems.splice(dragIndex, 1);
+    displayItems.splice(overIndex, 0, moved);
   }
 
-  // Find the boundary between manual and base playlist items
-  const firstBaseIndex = displayQueue.findIndex(item => item.isFromBasePlaylist);
+  // Find the boundary between manual and base playlist items (exclude exiting items)
+  const nonExiting = displayItems.filter(ai => ai.phase !== 'exiting');
+  const firstBaseIndex = nonExiting.findIndex(ai => ai.item.isFromBasePlaylist);
+  const firstBaseKey = firstBaseIndex >= 0 ? nonExiting[firstBaseIndex].key : null;
+  const firstBaseDisplayIndex = firstBaseKey !== null
+    ? displayItems.findIndex(ai => ai.key === firstBaseKey)
+    : -1;
   const manualCount = firstBaseIndex >= 0 ? firstBaseIndex : queue.length;
 
   return (
@@ -251,14 +266,29 @@ export function QueueList() {
           {manualCount > 0 ? `${manualCount} requested` : `${queue.length} from playlist`}
         </span>
       </div>
-      {displayQueue.map((item, index) => {
+      {displayItems.map((ai, index) => {
+        const { item, phase, key } = ai;
         const originalIndex = queue.indexOf(item);
         const isDragging = originalIndex === dragIndex;
-        const showDivider = index === firstBaseIndex && firstBaseIndex > 0;
+        const showDivider = index === firstBaseDisplayIndex && firstBaseIndex > 0;
         const myVote = userVotes[item.id] ?? 0;
+        // Count non-exiting items before this one (inclusive) for display number
+        let visibleNum = 0;
+        if (phase !== 'exiting') {
+          for (let i = 0; i <= index; i++) {
+            if (displayItems[i].phase !== 'exiting') visibleNum++;
+          }
+        }
 
         return (
-          <div key={item.id}>
+          <div
+            key={key}
+            data-key={key}
+            className={[
+              phase === 'entering' ? styles.itemEntering : '',
+              phase === 'exiting' ? styles.itemExiting : '',
+            ].join(' ')}
+          >
             {showDivider && (
               <div className={styles.divider}>From base playlist</div>
             )}
@@ -278,7 +308,7 @@ export function QueueList() {
                   <GripVertical size={20} />
                 </div>
               )}
-              <span className={styles.index}>{index + 1}</span>
+              <span className={styles.index}>{phase !== 'exiting' ? visibleNum : ''}</span>
               {item.albumImageUrl && (
                 <img src={item.albumImageUrl} alt="" className={styles.thumb} />
               )}

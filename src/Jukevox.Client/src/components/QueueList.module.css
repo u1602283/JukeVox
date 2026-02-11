@@ -224,6 +224,35 @@
   font-weight: 500;
 }
 
+/* Entry: driven imperatively by useAnimatedList (inline styles).
+   overflow: clip (not hidden) avoids creating a BFC so the inner
+   .item's margin-bottom collapses through normally — no layout
+   shift when the class is removed after the animation. */
+.itemEntering {
+  overflow: clip;
+}
+
+/* Exit: fade out + collapse height */
+@keyframes queueItemExit {
+  from {
+    opacity: 1;
+    max-height: 120px;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    margin-bottom: 0;
+    transform: scale(0.95);
+  }
+}
+
+.itemExiting {
+  animation: queueItemExit 750ms var(--ease-out) both;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 /* Mobile: always show remove button, compact vote controls */
 @media (max-width: 640px) {
   .removeBtn {
