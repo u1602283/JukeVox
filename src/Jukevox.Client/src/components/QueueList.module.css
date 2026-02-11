@@ -150,20 +150,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  padding: 4px;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
   background: transparent;
   border: none;
   cursor: pointer;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 28px;
+  min-height: 28px;
   transition: color var(--duration-fast), background var(--duration-fast);
 }
 
-.voteBtn:hover {
-  color: var(--text-primary);
-  background: var(--bg-elevated-hover);
+@media (hover: hover) {
+  .voteBtn:hover {
+    color: var(--text-primary);
+    background: var(--bg-elevated-hover);
+  }
 }
 
 .voteBtnActive.voteBtnUp {
@@ -265,9 +267,9 @@
   }
 
   .voteBtn {
-    padding: 6px;
-    min-width: 36px;
-    min-height: 36px;
+    padding: 4px;
+    min-width: 32px;
+    min-height: 32px;
   }
 
   .voteControls {
