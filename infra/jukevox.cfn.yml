@@ -175,7 +175,7 @@ Resources:
             exec > >(tee /var/log/user-data.log) 2>&1
 
             # ── Install Docker, SSM agent, and tools ──
-            dnf install -y docker amazon-ssm-agent aws-cli jq words
+            dnf install -y docker amazon-ssm-agent aws-cli jq
             systemctl enable --now amazon-ssm-agent
             systemctl enable --now docker
 
