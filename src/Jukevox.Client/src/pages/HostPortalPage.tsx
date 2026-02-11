@@ -13,6 +13,7 @@ import { HostControls } from '../components/HostControls';
 import { DeviceSelector } from '../components/DeviceSelector';
 import { BasePlaylistSelector } from '../components/BasePlaylistSelector';
 import { ManagePanel } from '../components/ManagePanel';
+import { TabIndicator } from '../components/TabIndicator';
 import type { HostStatus, SavedPartySummary } from '../types';
 import styles from './HostPortalPage.module.css';
 import partyStyles from './PartyPage.module.css';
@@ -38,6 +39,9 @@ export function HostPortalPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'playing' | 'queue' | 'manage'>('playing');
+
+  // Tab indicator
+  const tabIndex = mobileView === 'playing' ? 0 : mobileView === 'queue' ? 1 : 2;
 
   // Sticky header scroll detection
   const [scrolled, setScrolled] = useState(false);
@@ -294,18 +298,22 @@ export function HostPortalPage() {
         </div>
       </header>
 
-      <div className={partyStyles.contentGrid}>
-        <div className={`${partyStyles.heroColumn} ${mobileView !== 'playing' ? partyStyles.mobileHidden : ''}`}>
-          <NowPlaying>
-            <HostControls />
-          </NowPlaying>
-        </div>
-        <div className={mobileView !== 'queue' ? partyStyles.mobileHidden : ''}>
-          <QueueList />
-          <BasePlaylistSelector />
-        </div>
-        <div className={`${partyStyles.desktopHidden} ${mobileView !== 'manage' ? partyStyles.mobileHidden : ''}`}>
-          <ManagePanel mode="inline" visible={mobileView === 'manage'} onPartyEnded={handlePartyEnded} />
+      <div className={`${partyStyles.contentGrid} ${partyStyles.hasSlideTrack}`}>
+        <div className={partyStyles.slideTrack} style={{ '--tab-index': tabIndex } as React.CSSProperties}>
+          <div className={`${partyStyles.slidePanel} ${partyStyles.slidePanelFirst}`}>
+            <div className={partyStyles.heroColumn}>
+              <NowPlaying>
+                <HostControls />
+              </NowPlaying>
+            </div>
+          </div>
+          <div className={partyStyles.slidePanel}>
+            <QueueList />
+            <BasePlaylistSelector />
+          </div>
+          <div className={`${partyStyles.slidePanel} ${partyStyles.desktopHidden}`}>
+            <ManagePanel mode="inline" visible={mobileView === 'manage'} onPartyEnded={handlePartyEnded} />
+          </div>
         </div>
       </div>
 
@@ -327,6 +335,7 @@ export function HostPortalPage() {
       )}
 
       <nav className={partyStyles.mobileNav}>
+        <TabIndicator tabIndex={tabIndex} tabCount={3} />
         <button
           className={`${partyStyles.mobileNavBtn} ${mobileView === 'playing' ? partyStyles.mobileNavBtnActive : ''}`}
           onClick={() => setMobileView('playing')}

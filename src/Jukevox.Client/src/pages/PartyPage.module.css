@@ -176,6 +176,20 @@
   gap: 8px;
 }
 
+.indicator {
+  position: absolute;
+  top: 8px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: rgba(29, 185, 84, 0.22);
+  pointer-events: none;
+  left: calc(12px + var(--tab-index, 0) * (100% - 16px) / var(--tab-count, 2));
+  right: calc(100% - 4px - (var(--tab-index, 0) + 1) * (100% - 16px) / var(--tab-count, 2));
+  transition:
+    left 300ms cubic-bezier(0.4, 0, 0.2, 1),
+    right 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 @supports not (backdrop-filter: blur(1px)) {
   .mobileNav {
     background: var(--bg-elevated);
@@ -195,7 +209,9 @@
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--text-tertiary);
-  transition: color var(--duration-fast), background var(--duration-fast);
+  transition: color var(--duration-fast), font-weight var(--duration-fast);
+  position: relative;
+  z-index: 1;
 }
 
 .mobileNavBtn:hover {
@@ -203,7 +219,6 @@
 }
 
 .mobileNavBtnActive {
-  background: var(--accent-subtle);
   color: var(--accent);
   font-weight: 600;
 }
@@ -212,6 +227,40 @@
 @media (max-width: 1024px) {
   .mobileHidden {
     display: none !important;
+  }
+}
+
+/* Sliding content panels (mobile) */
+.slideTrack {
+  display: flex;
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(calc(-100% * var(--tab-index, 0)));
+}
+
+.slidePanel {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .contentGrid.hasSlideTrack {
+    overflow: clip;
+  }
+}
+
+@media (min-width: 1025px) {
+  .slideTrack {
+    display: contents;
+  }
+
+  .slidePanel {
+    /* Reset flex sizing so grid takes over */
+    flex: unset;
+    min-width: unset;
+  }
+
+  .slidePanelFirst {
+    display: contents;
   }
 }
 

@@ -7,6 +7,7 @@ import { QueueList } from '../components/QueueList';
 import { SearchOverlay } from '../components/SearchOverlay';
 import { HelpOverlay } from '../components/HelpOverlay';
 import { CreditsBadge } from '../components/CreditsBadge';
+import { TabIndicator } from '../components/TabIndicator';
 import styles from './PartyPage.module.css';
 
 export function PartyPage() {
@@ -28,6 +29,8 @@ export function PartyPage() {
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, []);
+
+  const tabIndex = mobileView === 'queue' ? 1 : 0;
 
   const handleCloseSearch = () => {
     setSearchOpen(false);
@@ -72,12 +75,16 @@ export function PartyPage() {
         </div>
       </header>
 
-      <div className={styles.contentGrid}>
-        <div className={`${styles.heroColumn} ${mobileView !== 'playing' ? styles.mobileHidden : ''}`}>
-          <NowPlaying />
-        </div>
-        <div className={mobileView !== 'queue' ? styles.mobileHidden : ''}>
-          <QueueList />
+      <div className={`${styles.contentGrid} ${styles.hasSlideTrack}`}>
+        <div className={styles.slideTrack} style={{ '--tab-index': tabIndex } as React.CSSProperties}>
+          <div className={`${styles.slidePanel} ${styles.slidePanelFirst}`}>
+            <div className={styles.heroColumn}>
+              <NowPlaying />
+            </div>
+          </div>
+          <div className={styles.slidePanel}>
+            <QueueList />
+          </div>
         </div>
       </div>
 
@@ -93,6 +100,7 @@ export function PartyPage() {
       />
 
       <nav className={styles.mobileNav}>
+        <TabIndicator tabIndex={tabIndex} tabCount={2} />
         <button
           className={`${styles.mobileNavBtn} ${mobileView === 'playing' ? styles.mobileNavBtnActive : ''}`}
           onClick={() => setMobileView('playing')}
