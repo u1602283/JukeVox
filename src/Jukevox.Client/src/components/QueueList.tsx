@@ -19,6 +19,11 @@ export function QueueList() {
   const dragItemRef = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const itemRects = useRef<DOMRect[]>([]);
+  const scrollYStartRef = useRef(0);
+  const autoScrollRafRef = useRef<number | null>(null);
+  const lastClientYRef = useRef(0);
+  const scrollAtAlignRef = useRef(0);
+  const draggedElRef = useRef<HTMLElement | null>(null);
   const queueRef = useRef(queue);
   useEffect(() => { queueRef.current = queue; }, [queue]);
 
@@ -58,19 +63,79 @@ export function QueueList() {
 
   const captureRects = () => {
     if (!listRef.current) return;
+    scrollYStartRef.current = window.scrollY;
     const items = listRef.current.querySelectorAll('[data-queue-item]');
     itemRects.current = Array.from(items).map(el => el.getBoundingClientRect());
   };
 
   const getInsertIndex = (clientY: number, dragFrom: number): number => {
     const rects = itemRects.current;
+    const baseScroll = scrollYStartRef.current;
+    const docY = clientY + window.scrollY;
     let insertAt = 0;
     for (let i = 0; i < rects.length; i++) {
       if (i === dragFrom) continue;
-      const mid = rects[i].top + rects[i].height / 2;
-      if (clientY > mid) insertAt++;
+      const mid = (rects[i].top + baseScroll) + rects[i].height / 2;
+      if (docY > mid) insertAt++;
     }
     return insertAt;
+  };
+
+  const cancelAutoScroll = () => {
+    if (autoScrollRafRef.current !== null) {
+      cancelAnimationFrame(autoScrollRafRef.current);
+      autoScrollRafRef.current = null;
+    }
+  };
+
+  const startAutoScroll = () => {
+    if (autoScrollRafRef.current !== null) return;
+    const EDGE_ZONE = 80;
+    const MAX_SPEED = 12;
+
+    const tick = () => {
+      const dragFrom = dragItemRef.current;
+      if (dragFrom === null) return;
+
+      const y = lastClientYRef.current;
+      const vh = window.innerHeight;
+      let speed = 0;
+
+      if (y < EDGE_ZONE) {
+        speed = -MAX_SPEED * (1 - y / EDGE_ZONE);
+      } else if (y > vh - EDGE_ZONE) {
+        speed = MAX_SPEED * (1 - (vh - y) / EDGE_ZONE);
+      }
+
+      if (speed !== 0) {
+        const maxScroll = document.documentElement.scrollHeight - vh;
+        const currentScroll = window.scrollY;
+        const clampedSpeed = speed > 0
+          ? Math.min(speed, maxScroll - currentScroll)
+          : Math.max(speed, -currentScroll);
+
+        const rounded = Math.round(clampedSpeed);
+        if (rounded !== 0) {
+          window.scrollBy(0, rounded);
+          const target = getInsertIndex(lastClientYRef.current, dragFrom);
+          if (target !== overIndexRef.current) {
+            scrollAtAlignRef.current = window.scrollY;
+          }
+          overIndexRef.current = target;
+          setOverIndex(target);
+
+          const drift = window.scrollY - scrollAtAlignRef.current;
+          if (draggedElRef.current) {
+            draggedElRef.current.style.transition = 'none';
+            draggedElRef.current.style.transform = `translateY(${drift}px) scale(1.02)`;
+          }
+        }
+      }
+
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    };
+
+    autoScrollRafRef.current = requestAnimationFrame(tick);
   };
 
   const overIndexRef = useRef<number | null>(null);
@@ -82,21 +147,38 @@ export function QueueList() {
     dragItemRef.current = index;
     overIndexRef.current = index;
     captureRects();
+    scrollAtAlignRef.current = window.scrollY;
+    const items = listRef.current?.querySelectorAll<HTMLElement>('[data-queue-item]');
+    draggedElRef.current = items?.[index] ?? null;
     setDragIndex(index);
     setOverIndex(index);
 
     const handleMove = (ev: PointerEvent) => {
       const dragFrom = dragItemRef.current;
       if (dragFrom === null) return;
+      lastClientYRef.current = ev.clientY;
+      scrollAtAlignRef.current = window.scrollY;
+      if (draggedElRef.current) {
+        draggedElRef.current.style.transition = '';
+        draggedElRef.current.style.transform = '';
+      }
       const target = getInsertIndex(ev.clientY, dragFrom);
       overIndexRef.current = target;
       setOverIndex(target);
+      startAutoScroll();
     };
 
     const handleUp = async () => {
       document.removeEventListener('pointermove', handleMove);
       document.removeEventListener('pointerup', handleUp);
       document.removeEventListener('pointercancel', handleCancel);
+      cancelAutoScroll();
+      window.scrollTo(0, Math.round(window.scrollY));
+      if (draggedElRef.current) {
+        draggedElRef.current.style.transition = '';
+        draggedElRef.current.style.transform = '';
+        draggedElRef.current = null;
+      }
 
       const from = dragItemRef.current;
       const to = overIndexRef.current;
@@ -123,6 +205,13 @@ export function QueueList() {
       document.removeEventListener('pointermove', handleMove);
       document.removeEventListener('pointerup', handleUp);
       document.removeEventListener('pointercancel', handleCancel);
+      cancelAutoScroll();
+      window.scrollTo(0, Math.round(window.scrollY));
+      if (draggedElRef.current) {
+        draggedElRef.current.style.transition = '';
+        draggedElRef.current.style.transform = '';
+        draggedElRef.current = null;
+      }
 
       dragItemRef.current = null;
       overIndexRef.current = null;
