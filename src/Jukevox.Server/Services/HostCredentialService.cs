@@ -21,17 +21,22 @@ public class HostCredentialService
     // Temporary challenge storage for WebAuthn ceremonies
     private readonly ConcurrentDictionary<string, (object Options, DateTime Created)> _pendingChallenges = new();
 
-    private const string DictionaryPath = "/usr/share/dict/words";
+    private static readonly string[] DictionaryPaths =
+    [
+        "/usr/share/dict/words",
+        "/usr/share/dict/british"
+    ];
     private const string SpecialChars = "!@#$%^&*+=?~";
 
     private static readonly Lazy<string[]> DictionaryWords = new(() =>
     {
-        if (!File.Exists(DictionaryPath))
+        var path = DictionaryPaths.FirstOrDefault(File.Exists);
+        if (path == null)
             return [];
 
-        return File.ReadAllLines(DictionaryPath)
-            .Select(w => w.ToLowerInvariant().Replace("'", ""))
-            .Where(w => w.Length >= 3 && w.All(char.IsLetter))
+        return File.ReadAllLines(path)
+            .Select(w => w.ToLowerInvariant())
+            .Where(w => w.Length >= 5 && w.All(c => c >= 'a' && c <= 'z'))
             .Distinct()
             .ToArray();
     });
@@ -170,8 +175,8 @@ public class HostCredentialService
         if (words.Length == 0)
         {
             _logger.LogWarning(
-                "Dictionary not found at {Path}. Install the 'words' package. Using random fallback token.",
-                DictionaryPath);
+                "Dictionary not found at any of [{Paths}]. Install the 'words' package. Using random fallback token.",
+                string.Join(", ", DictionaryPaths));
             return Convert.ToHexString(RandomNumberGenerator.GetBytes(20));
         }
 
