@@ -22,6 +22,7 @@ COPY --from=backend-build /app/publish .
 EXPOSE 8080
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
 ENV ASPNETCORE_URLS=http://+:8080
-RUN addgroup -g 10000 -S jukevox && adduser -u 10000 -S jukevox -G jukevox
+RUN apk add --no-cache words && \
+    addgroup -g 10000 -S jukevox && adduser -u 10000 -S jukevox -G jukevox
 USER jukevox
 ENTRYPOINT ["dotnet", "Jukevox.Server.dll"]

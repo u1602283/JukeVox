@@ -85,7 +85,7 @@ export function HostSetupPage() {
           </p>
           <input
             type="text"
-            placeholder="Setup token (e.g. Crimson-Tiger-7-Plasma-Moon)"
+            placeholder="Setup token from server console"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             autoComplete="off"

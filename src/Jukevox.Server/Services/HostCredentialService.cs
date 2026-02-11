@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using DnsClient;
 using DnsClient.Protocol;
@@ -20,19 +21,20 @@ public class HostCredentialService
     // Temporary challenge storage for WebAuthn ceremonies
     private readonly ConcurrentDictionary<string, (object Options, DateTime Created)> _pendingChallenges = new();
 
-    private static readonly string[] Adjectives =
-    [
-        "Amber", "Bold", "Calm", "Crimson", "Dark", "Eager", "Fading", "Golden",
-        "Hollow", "Iron", "Jade", "Keen", "Lunar", "Misty", "Noble", "Opal",
-        "Pale", "Quiet", "Rapid", "Silver", "Tidal", "Ultra", "Vivid", "Wild"
-    ];
+    private const string DictionaryPath = "/usr/share/dict/words";
+    private const string SpecialChars = "!@#$%^&*+=?~";
 
-    private static readonly string[] Nouns =
-    [
-        "Arrow", "Beacon", "Cedar", "Drift", "Eagle", "Falcon", "Grove", "Harbor",
-        "Ivory", "Jungle", "Kite", "Lantern", "Mesa", "Nebula", "Orbit", "Plasma",
-        "Quartz", "Ridge", "Storm", "Tiger", "Umbra", "Vortex", "Willow", "Zenith"
-    ];
+    private static readonly Lazy<string[]> DictionaryWords = new(() =>
+    {
+        if (!File.Exists(DictionaryPath))
+            return [];
+
+        return File.ReadAllLines(DictionaryPath)
+            .Select(w => w.ToLowerInvariant().Replace("'", ""))
+            .Where(w => w.Length >= 3 && w.All(char.IsLetter))
+            .Distinct()
+            .ToArray();
+    });
 
     public HostCredentialService(IWebHostEnvironment env, ILogger<HostCredentialService> logger, Fido2Configuration fido2Config)
     {
@@ -162,16 +164,27 @@ public class HostCredentialService
         _logger.LogWarning("");
     }
 
-    private static string GeneratePassphrase()
+    private string GeneratePassphrase()
     {
-        // Format: Adjective-Noun-Number-Adjective-Noun
-        // Entropy: ~24 * ~24 * 90 * ~24 * ~24 ≈ 28M combinations
-        var adj1 = Adjectives[RandomNumberGenerator.GetInt32(Adjectives.Length)];
-        var noun1 = Nouns[RandomNumberGenerator.GetInt32(Nouns.Length)];
-        var num = RandomNumberGenerator.GetInt32(10, 100);
-        var adj2 = Adjectives[RandomNumberGenerator.GetInt32(Adjectives.Length)];
-        var noun2 = Nouns[RandomNumberGenerator.GetInt32(Nouns.Length)];
-        return $"{adj1}-{noun1}-{num}-{adj2}-{noun2}";
+        var words = DictionaryWords.Value;
+        if (words.Length == 0)
+        {
+            _logger.LogWarning(
+                "Dictionary not found at {Path}. Install the 'words' package. Using random fallback token.",
+                DictionaryPath);
+            return Convert.ToHexString(RandomNumberGenerator.GetBytes(20));
+        }
+
+        // Format: word<0-99><symbol> x4, e.g. "humble67#forest29!ocean41=bright93?"
+        // Entropy: ~(words^4) * (100^4) * (13^4) — well over 100 bits with a standard dictionary
+        var sb = new StringBuilder();
+        for (var i = 0; i < 4; i++)
+        {
+            sb.Append(words[RandomNumberGenerator.GetInt32(words.Length)]);
+            sb.Append(RandomNumberGenerator.GetInt32(100));
+            sb.Append(SpecialChars[RandomNumberGenerator.GetInt32(SpecialChars.Length)]);
+        }
+        return sb.ToString();
     }
 
     private bool TryLoadFromDns()

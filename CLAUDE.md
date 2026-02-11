@@ -129,7 +129,7 @@ Key file: `Services/PlaybackMonitorService.cs`
 
 Fido2NetLib v4 handles registration and assertion. Setup flow:
 
-1. First server run generates a one-time `JUKEVOX_SETUP_TOKEN` (printed to console)
+1. First server run generates a one-time setup token from `/usr/share/dict/words` (printed to console). Format: `word<0-99><symbol>` x4, e.g. `humble67#forest29!ocean41=bright93?`. Requires the `words` package.
 2. Host visits `/host/setup`, enters the token, registers a passkey
 3. Credential stored in `host-credential.json`
 4. Subsequent logins at `/host` use passkey assertion
