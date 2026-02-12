@@ -147,9 +147,14 @@ public class HostPartyController : ControllerBase
         var queue = _queueService.GetQueue();
         await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
 
-        // Auto-play if nothing is currently playing
+        // Auto-play if nothing is playing, or if Spotify is playing a track
+        // we didn't start (e.g. a Spotify mix) — skip to our queue to take control
         var cachedPlayback = _monitorService.GetCachedPlaybackState();
-        if (cachedPlayback == null || !cachedPlayback.IsPlaying)
+        var isPlayingOurTrack = cachedPlayback?.IsPlaying == true
+            && party.CurrentTrack != null
+            && cachedPlayback.TrackUri == party.CurrentTrack.TrackUri;
+
+        if (!isPlayingOurTrack)
         {
             var next = _queueService.Dequeue();
             if (next != null)
