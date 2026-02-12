@@ -6,19 +6,23 @@
   isolation: isolate;
 }
 
-/* Ambient glow backdrop from album art */
-.container::before {
-  content: '';
+/* Ambient glow backdrop layers (crossfade between album art) */
+.ambientLayer {
   position: absolute;
   inset: 0;
-  background-image: var(--album-art-url);
   background-size: cover;
   background-position: center;
   filter: blur(80px) saturate(1.8);
-  opacity: 0.35;
   z-index: -2;
   pointer-events: none;
-  scale: 1.5;
+  transform: scale(1.5) translateZ(0);
+  will-change: opacity;
+  opacity: 0;
+  transition: opacity 800ms ease-in-out;
+}
+
+.ambientLayerVisible {
+  opacity: 0.45;
 }
 
 .container::after {

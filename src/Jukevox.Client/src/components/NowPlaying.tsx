@@ -1,9 +1,86 @@
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { Music } from 'lucide-react';
 import { api } from '../api/client';
 import { useParty } from '../hooks/useParty';
 import styles from './NowPlaying.module.css';
+
+/** Preload an image; resolves when ready, rejects on error. */
+function preloadImage(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+/**
+ * Two-layer crossfade for the ambient album art background.
+ * Returns the two layers (A/B) and which is currently visible,
+ * swapping whenever a new URL finishes preloading.
+ */
+function useAmbientCrossfade(imageUrl: string | undefined) {
+  const [layers, setLayers] = useState<{
+    a: string | null; b: string | null; active: 'a' | 'b'; immediate: boolean;
+  }>({
+    a: null, b: null, active: 'a', immediate: false,
+  });
+  // Only updated inside async callbacks (rAF / preload .then) so that
+  // React StrictMode's unmount+remount cycle doesn't stale-lock the ref.
+  const appliedUrlRef = useRef<string | null>(null);
+  const isFirstRef = useRef(true);
+
+  // Clear the immediate flag after one frame so subsequent changes crossfade
+  useEffect(() => {
+    if (!layers.immediate) return;
+    const id = requestAnimationFrame(() => {
+      setLayers(prev => prev.immediate ? { ...prev, immediate: false } : prev);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [layers.immediate]);
+
+  useEffect(() => {
+    const url = imageUrl ?? null;
+    if (url === appliedUrlRef.current) return;
+
+    let cancelled = false;
+
+    if (!url) {
+      const id = requestAnimationFrame(() => {
+        if (cancelled) return;
+        appliedUrlRef.current = null;
+        isFirstRef.current = true;
+        setLayers({ a: null, b: null, active: 'a', immediate: false });
+      });
+      return () => { cancelled = true; cancelAnimationFrame(id); };
+    }
+
+    // Preload the image then update layers.
+    // On first load this resolves near-instantly from browser cache
+    // (the <img> tag already loaded it). Subsequent changes crossfade.
+    preloadImage(url).then(() => {
+      if (cancelled) return;
+      appliedUrlRef.current = url;
+      if (isFirstRef.current) {
+        // First image: appear immediately (no 800ms fade-in from nothing)
+        isFirstRef.current = false;
+        setLayers({ a: url, b: null, active: 'a', immediate: true });
+      } else {
+        setLayers(prev => {
+          const nextLayer = prev.active === 'a' ? 'b' : 'a';
+          return { ...prev, [nextLayer]: url, active: nextLayer, immediate: false };
+        });
+      }
+    }).catch(() => {
+      // Image failed to load — ignore
+    });
+
+    return () => { cancelled = true; };
+  }, [imageUrl]);
+
+  return layers;
+}
 
 function formatTime(ms: number): string {
   const mins = Math.floor(ms / 60000);
@@ -61,6 +138,7 @@ function getQuip(addedByName?: string, isFromBasePlaylist?: boolean, trackUri?: 
 export function NowPlaying({ children }: { children?: ReactNode }) {
   const { nowPlaying, party } = useParty();
   const isHost = party?.isHost && party.spotifyConnected;
+  const ambientLayers = useAmbientCrossfade(nowPlaying?.albumImageUrl);
 
   // Seeking (ref-only, no React state needed)
   const seekingRef = useRef(false);
@@ -178,12 +256,26 @@ export function NowPlaying({ children }: { children?: ReactNode }) {
     ? Math.min(nowPlaying.progressMs / nowPlaying.durationMs, 1)
     : 0;
 
-  const albumArtStyle = nowPlaying.albumImageUrl
-    ? { '--album-art-url': `url(${nowPlaying.albumImageUrl})` } as React.CSSProperties
-    : undefined;
-
   return (
-    <div className={styles.container} style={albumArtStyle}>
+    <div className={styles.container}>
+      {ambientLayers.a && (
+        <div
+          className={`${styles.ambientLayer} ${ambientLayers.active === 'a' ? styles.ambientLayerVisible : ''}`}
+          style={{
+            backgroundImage: `url(${ambientLayers.a})`,
+            ...(ambientLayers.immediate ? { transition: 'none' } : {}),
+          }}
+        />
+      )}
+      {ambientLayers.b && (
+        <div
+          className={`${styles.ambientLayer} ${ambientLayers.active === 'b' ? styles.ambientLayerVisible : ''}`}
+          style={{
+            backgroundImage: `url(${ambientLayers.b})`,
+            ...(ambientLayers.immediate ? { transition: 'none' } : {}),
+          }}
+        />
+      )}
       <div className={styles.content}>
         {nowPlaying.albumImageUrl && (
           <img
