@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
+  <!-- Stylized music note / sound wave -->
+  <g transform="translate(256,256)">
+    <!-- Central disc -->
+    <circle cx="0" cy="40" r="56" fill="#1db954"/>
+    <circle cx="0" cy="40" r="18" fill="#0a0a0a"/>
+    <!-- Note stem -->
+    <rect x="50" y="-120" width="12" height="166" rx="6" fill="#1db954"/>
+    <!-- Note flag -->
+    <path d="M62-120 Q120-130 100-70 Q85-50 62-60Z" fill="#1db954"/>
+    <!-- Sound waves -->
+    <path d="M-90-20 Q-130,40 -90,100" fill="none" stroke="#1db954" stroke-width="10" stroke-linecap="round" opacity="0.5"/>
+    <path d="M-120-40 Q-170,40 -120,120" fill="none" stroke="#1db954" stroke-width="10" stroke-linecap="round" opacity="0.3"/>
+  </g>
+</svg>
