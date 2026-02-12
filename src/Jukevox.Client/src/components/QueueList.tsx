@@ -34,6 +34,7 @@ export function QueueList() {
   const lastClientYRef = useRef(0);
   const scrollAtAlignRef = useRef(0);
   const draggedElRef = useRef<HTMLElement | null>(null);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
   const queueRef = useRef(queue);
   useEffect(() => { queueRef.current = queue; }, [queue]);
 
@@ -71,9 +72,25 @@ export function QueueList() {
     }
   };
 
+  const findScrollContainer = (el: HTMLElement): HTMLElement | null => {
+    let parent = el.parentElement;
+    while (parent && parent !== document.documentElement) {
+      const { overflowY } = getComputedStyle(parent);
+      if (overflowY === 'auto' || overflowY === 'scroll') return parent;
+      parent = parent.parentElement;
+    }
+    return null;
+  };
+
+  const getScrollY = () => {
+    const sc = scrollContainerRef.current;
+    return sc ? sc.scrollTop : window.scrollY;
+  };
+
   const captureRects = () => {
     if (!listElRef.current) return;
-    scrollYStartRef.current = window.scrollY;
+    scrollContainerRef.current = findScrollContainer(listElRef.current);
+    scrollYStartRef.current = getScrollY();
     const items = listElRef.current.querySelectorAll('[data-queue-item]');
     itemRects.current = Array.from(items).map(el => el.getBoundingClientRect());
   };
@@ -81,7 +98,7 @@ export function QueueList() {
   const getInsertIndex = (clientY: number, dragFrom: number): number => {
     const rects = itemRects.current;
     const baseScroll = scrollYStartRef.current;
-    const docY = clientY + window.scrollY;
+    const docY = clientY + getScrollY();
     let insertAt = 0;
     for (let i = 0; i < rects.length; i++) {
       if (i === dragFrom) continue;
@@ -107,6 +124,7 @@ export function QueueList() {
       const dragFrom = dragItemRef.current;
       if (dragFrom === null) return;
 
+      const sc = scrollContainerRef.current;
       const y = lastClientYRef.current;
       const vh = window.innerHeight;
       let speed = 0;
@@ -118,23 +136,29 @@ export function QueueList() {
       }
 
       if (speed !== 0) {
-        const maxScroll = document.documentElement.scrollHeight - vh;
-        const currentScroll = window.scrollY;
+        const maxScroll = sc
+          ? sc.scrollHeight - sc.clientHeight
+          : document.documentElement.scrollHeight - vh;
+        const currentScroll = sc ? sc.scrollTop : window.scrollY;
         const clampedSpeed = speed > 0
           ? Math.min(speed, maxScroll - currentScroll)
           : Math.max(speed, -currentScroll);
 
         const rounded = Math.round(clampedSpeed);
         if (rounded !== 0) {
-          window.scrollBy(0, rounded);
+          if (sc) {
+            sc.scrollTop += rounded;
+          } else {
+            window.scrollBy(0, rounded);
+          }
           const target = getInsertIndex(lastClientYRef.current, dragFrom);
           if (target !== overIndexRef.current) {
-            scrollAtAlignRef.current = window.scrollY;
+            scrollAtAlignRef.current = getScrollY();
           }
           overIndexRef.current = target;
           setOverIndex(target);
 
-          const drift = window.scrollY - scrollAtAlignRef.current;
+          const drift = getScrollY() - scrollAtAlignRef.current;
           if (draggedElRef.current) {
             draggedElRef.current.style.transition = 'none';
             draggedElRef.current.style.transform = `translateY(${drift}px) scale(1.02)`;
@@ -157,7 +181,7 @@ export function QueueList() {
     dragItemRef.current = index;
     overIndexRef.current = index;
     captureRects();
-    scrollAtAlignRef.current = window.scrollY;
+    scrollAtAlignRef.current = getScrollY();
     const items = listElRef.current?.querySelectorAll<HTMLElement>('[data-queue-item]');
     draggedElRef.current = items?.[index] ?? null;
     setDragIndex(index);
@@ -167,7 +191,7 @@ export function QueueList() {
       const dragFrom = dragItemRef.current;
       if (dragFrom === null) return;
       lastClientYRef.current = ev.clientY;
-      scrollAtAlignRef.current = window.scrollY;
+      scrollAtAlignRef.current = getScrollY();
       if (draggedElRef.current) {
         draggedElRef.current.style.transition = '';
         draggedElRef.current.style.transform = '';
@@ -183,7 +207,12 @@ export function QueueList() {
       document.removeEventListener('pointerup', handleUp);
       document.removeEventListener('pointercancel', handleCancel);
       cancelAutoScroll();
-      window.scrollTo(0, Math.round(window.scrollY));
+      const sc = scrollContainerRef.current;
+      if (sc) {
+        sc.scrollTop = Math.round(sc.scrollTop);
+      } else {
+        window.scrollTo(0, Math.round(window.scrollY));
+      }
       if (draggedElRef.current) {
         draggedElRef.current.style.transition = '';
         draggedElRef.current.style.transform = '';
@@ -216,7 +245,12 @@ export function QueueList() {
       document.removeEventListener('pointerup', handleUp);
       document.removeEventListener('pointercancel', handleCancel);
       cancelAutoScroll();
-      window.scrollTo(0, Math.round(window.scrollY));
+      const sc2 = scrollContainerRef.current;
+      if (sc2) {
+        sc2.scrollTop = Math.round(sc2.scrollTop);
+      } else {
+        window.scrollTo(0, Math.round(window.scrollY));
+      }
       if (draggedElRef.current) {
         draggedElRef.current.style.transition = '';
         draggedElRef.current.style.transform = '';
@@ -240,6 +274,15 @@ export function QueueList() {
         <p>Queue is empty. Search for songs to add!</p>
       </div>
     );
+  }
+
+  // Precompute stable numbers from original order (unaffected by drag reorder)
+  const stableNumbers = new Map<string, number>();
+  let stableCount = 0;
+  for (const ai of animatedItems) {
+    if (ai.phase !== 'exiting') {
+      stableNumbers.set(ai.key, ++stableCount);
+    }
   }
 
   // Build the visual order for rendering
@@ -272,13 +315,7 @@ export function QueueList() {
         const isDragging = originalIndex === dragIndex;
         const showDivider = index === firstBaseDisplayIndex && firstBaseIndex > 0;
         const myVote = userVotes[item.id] ?? 0;
-        // Count non-exiting items before this one (inclusive) for display number
-        let visibleNum = 0;
-        if (phase !== 'exiting') {
-          for (let i = 0; i <= index; i++) {
-            if (displayItems[i].phase !== 'exiting') visibleNum++;
-          }
-        }
+        const visibleNum = stableNumbers.get(key) ?? 0;
 
         return (
           <div
@@ -308,7 +345,7 @@ export function QueueList() {
                   <GripVertical size={20} />
                 </div>
               )}
-              <span className={styles.index}>{phase !== 'exiting' ? visibleNum : ''}</span>
+              <span className={styles.index}>{visibleNum || ''}</span>
               {item.albumImageUrl && (
                 <img src={item.albumImageUrl} alt="" className={styles.thumb} />
               )}

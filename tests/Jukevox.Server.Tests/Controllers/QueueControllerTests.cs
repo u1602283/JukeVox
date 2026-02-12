@@ -94,7 +94,7 @@ public class QueueControllerTests
         var party = TestData.CreateParty();
         var queueDtos = new List<QueueItemDto>();
 
-        _queueService.Setup(q => q.AddToQueue("host-session", request)).Returns((addedItem, (string?)null)).Verifiable(Times.Once);
+        _queueService.Setup(q => q.AddToQueue("host-session", request, true)).Returns((addedItem, (string?)null)).Verifiable(Times.Once);
         _partyService.Setup(p => p.GetCurrentParty()).Returns(party).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue()).Returns(queueDtos).Verifiable(Times.Once);
         _hub.PartyClient.Setup(c => c.QueueUpdated(queueDtos)).Returns(Task.CompletedTask).Verifiable(Times.Once);
@@ -110,7 +110,7 @@ public class QueueControllerTests
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
         _partyService.Setup(p => p.IsParticipant("guest-1")).Returns(true).Verifiable(Times.Once);
         var request = TestData.CreateAddToQueueRequest();
-        _queueService.Setup(q => q.AddToQueue("guest-1", request)).Returns(((QueueItem?)null, "No credits remaining")).Verifiable(Times.Once);
+        _queueService.Setup(q => q.AddToQueue("guest-1", request, false)).Returns(((QueueItem?)null, "No credits remaining")).Verifiable(Times.Once);
 
         var result = await _controller.AddToQueue(request);
 

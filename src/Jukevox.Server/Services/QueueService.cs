@@ -13,14 +13,14 @@ public class QueueService : IQueueService
         _partyService = partyService;
     }
 
-    public (QueueItem? Item, string? Error) AddToQueue(string sessionId, AddToQueueRequest request)
+    public (QueueItem? Item, string? Error) AddToQueue(string sessionId, AddToQueueRequest request, bool isHost = false)
     {
         lock (_lock)
         {
             var party = _partyService.GetCurrentParty();
             if (party == null) return (null, "No active party");
 
-            bool isHost = party.HostSessionId == sessionId;
+            isHost = isHost || party.HostSessionId == sessionId;
             string addedByName = "Host";
 
             if (!isHost)
@@ -227,7 +227,7 @@ public class QueueService : IQueueService
         }
     }
 
-    public (bool Success, string? Error) Vote(string sessionId, string itemId, int vote)
+    public (bool Success, string? Error) Vote(string sessionId, string itemId, int vote, bool isHost = false)
     {
         lock (_lock)
         {
@@ -237,7 +237,7 @@ public class QueueService : IQueueService
             if (vote is not (-1 or 0 or 1))
                 return (false, "Vote must be -1, 0, or 1");
 
-            bool isHost = party.HostSessionId == sessionId;
+            isHost = isHost || party.HostSessionId == sessionId;
             if (!isHost && !party.Guests.ContainsKey(sessionId))
                 return (false, "Not a party participant");
 

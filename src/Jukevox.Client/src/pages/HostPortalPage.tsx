@@ -302,18 +302,18 @@ export function HostPortalPage() {
 
       <div className={`${partyStyles.contentGrid} ${partyStyles.hasSlideTrack}`}>
         <div className={partyStyles.slideTrack} style={{ '--tab-index': tabIndex } as React.CSSProperties}>
-          <div className={`${partyStyles.slidePanel} ${partyStyles.slidePanelFirst}`}>
+          <div className={`${partyStyles.slidePanel} ${partyStyles.slidePanelFirst}`} data-scrollable>
             <div className={partyStyles.heroColumn}>
               <NowPlaying>
                 <HostControls />
               </NowPlaying>
             </div>
           </div>
-          <div className={partyStyles.slidePanel}>
+          <div className={partyStyles.slidePanel} data-scrollable>
             <QueueList />
             <BasePlaylistSelector />
           </div>
-          <div className={`${partyStyles.slidePanel} ${partyStyles.desktopHidden}`}>
+          <div className={`${partyStyles.slidePanel} ${partyStyles.desktopHidden}`} data-scrollable>
             <ManagePanel mode="inline" visible={mobileView === 'manage'} onPartyEnded={handlePartyEnded} />
           </div>
         </div>

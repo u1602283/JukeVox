@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using JukeVox.Server.Extensions;
 using JukeVox.Server.Middleware;
 using JukeVox.Server.Services;
 
@@ -21,7 +22,8 @@ public class SearchController : ControllerBase
     public async Task<IActionResult> Search([FromQuery] string q, [FromQuery] int limit = 20)
     {
         var sessionId = HttpContext.GetSessionId();
-        if (!_partyService.IsParticipant(sessionId))
+        var isHost = HttpContext.IsHostAuthenticated();
+        if (!isHost && !_partyService.IsParticipant(sessionId))
             return Unauthorized();
 
         if (string.IsNullOrWhiteSpace(q))

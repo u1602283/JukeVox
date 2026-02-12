@@ -79,12 +79,12 @@ export function PartyPage() {
 
       <div className={`${styles.contentGrid} ${styles.hasSlideTrack}`}>
         <div className={styles.slideTrack} style={{ '--tab-index': tabIndex } as React.CSSProperties}>
-          <div className={`${styles.slidePanel} ${styles.slidePanelFirst}`}>
+          <div className={`${styles.slidePanel} ${styles.slidePanelFirst}`} data-scrollable>
             <div className={styles.heroColumn}>
               <NowPlaying />
             </div>
           </div>
-          <div className={styles.slidePanel}>
+          <div className={styles.slidePanel} data-scrollable>
             <QueueList />
           </div>
         </div>

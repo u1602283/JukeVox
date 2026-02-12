@@ -267,8 +267,29 @@
 }
 
 @media (max-width: 1024px) {
+  .page {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
   .contentGrid.hasSlideTrack {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
     overflow: clip;
+  }
+
+  .slideTrack {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .slidePanel {
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 

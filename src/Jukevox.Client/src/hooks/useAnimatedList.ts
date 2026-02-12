@@ -52,15 +52,9 @@ export function useAnimatedList<T>(
     disabled,
   });
 
-  // FLIP refs — only accessed in effects, never during render
-  const prevRectsRef = useRef<Map<string, DOMRect>>(new Map());
   const wasDisabledRef = useRef(disabled);
   // Track which keys have already had their enter animation triggered (one-shot)
   const animatedEnterKeysRef = useRef<Set<string>>(new Set());
-  // Track whether the previous layout effect had animations in progress —
-  // skip FLIP for one cycle after enter/exit animations complete so
-  // the class/style cleanup render doesn't trigger spurious FLIP moves.
-  const hadAnimatingRef = useRef(false);
 
   // --- Detect entering/exiting during render (no intermediate paint) ---
   const currentKeys = new Set(items.map(keyFn));
@@ -194,19 +188,11 @@ export function useAnimatedList<T>(
     animatedItems.push(entry);
   }
 
-  // --- Imperative enter animation + FLIP position animation ---
+  // --- Imperative enter animation ---
   useLayoutEffect(() => {
-    const wasDisabled = wasDisabledRef.current;
     wasDisabledRef.current = disabled;
 
-    const isAnimating = enteringKeys.size > 0 || exitingItems.length > 0;
-    const wasAnimating = hadAnimatingRef.current;
-    hadAnimatingRef.current = isAnimating;
-
-    if (!containerEl || disabled) {
-      prevRectsRef.current = new Map();
-      return;
-    }
+    if (!containerEl || disabled) return;
 
     // Prune stale keys from animatedEnterKeysRef
     const currentKeySet = new Set(items.map(keyFn));
@@ -214,7 +200,6 @@ export function useAnimatedList<T>(
       if (!currentKeySet.has(k)) animatedEnterKeysRef.current.delete(k);
     }
 
-    // --- Imperative enter animation (one-shot per key) ---
     const enterEls: HTMLElement[] = [];
     for (const key of enteringKeys) {
       if (animatedEnterKeysRef.current.has(key)) continue;
@@ -225,97 +210,37 @@ export function useAnimatedList<T>(
       }
     }
 
-    if (enterEls.length > 0) {
-      // Apply collapsed state immediately (before paint).
-      // No marginBottom — the inner .item's margin collapses through
-      // the wrapper naturally (overflow: clip doesn't create a BFC).
+    if (enterEls.length === 0) return;
+
+    // Apply collapsed state immediately (before paint)
+    for (const el of enterEls) {
+      el.style.transition = 'none';
+      el.style.opacity = '0';
+      el.style.maxHeight = '0';
+      el.style.transform = 'translateY(-8px)';
+    }
+    // Force reflow so the browser registers the collapsed state
+    void containerEl.offsetHeight;
+    // Animate to expanded state
+    requestAnimationFrame(() => {
       for (const el of enterEls) {
-        el.style.transition = 'none';
-        el.style.opacity = '0';
-        el.style.maxHeight = '0';
-        el.style.transform = 'translateY(-8px)';
+        const ease = getComputedStyle(containerEl).getPropertyValue('--ease-out').trim()
+          || 'cubic-bezier(0.16, 1, 0.3, 1)';
+        el.style.transition = `opacity ${enterDurationMs}ms ${ease}, max-height ${enterDurationMs}ms ${ease}, transform ${enterDurationMs}ms ${ease}`;
+        el.style.opacity = '1';
+        el.style.maxHeight = '120px';
+        el.style.transform = '';
       }
-      // Force reflow so the browser registers the collapsed state
-      void containerEl.offsetHeight;
-      // Animate to expanded state
-      requestAnimationFrame(() => {
+      // Clean up inline styles after transition completes
+      setTimeout(() => {
         for (const el of enterEls) {
-          const ease = getComputedStyle(containerEl).getPropertyValue('--ease-out').trim()
-            || 'cubic-bezier(0.16, 1, 0.3, 1)';
-          el.style.transition = `opacity ${enterDurationMs}ms ${ease}, max-height ${enterDurationMs}ms ${ease}, transform ${enterDurationMs}ms ${ease}`;
-          el.style.opacity = '1';
-          el.style.maxHeight = '120px';
+          el.style.transition = '';
+          el.style.opacity = '';
+          el.style.maxHeight = '';
           el.style.transform = '';
         }
-        // Clean up inline styles after transition completes
-        setTimeout(() => {
-          for (const el of enterEls) {
-            el.style.transition = '';
-            el.style.opacity = '';
-            el.style.maxHeight = '';
-            el.style.transform = '';
-          }
-        }, enterDurationMs + 50);
-      });
-    }
-
-    // --- FLIP position animation ---
-    const els = containerEl.querySelectorAll<HTMLElement>('[data-key]');
-    const newRects = new Map<string, DOMRect>();
-    els.forEach(el => {
-      newRects.set(el.dataset.key!, el.getBoundingClientRect());
+      }, enterDurationMs + 50);
     });
-
-    if (!wasDisabled && prevRectsRef.current.size > 0) {
-      const oldRects = prevRectsRef.current;
-
-      // Only FLIP when key sets match (pure reorder, no add/remove)
-      const oldKeySet = new Set(oldRects.keys());
-      const newKeySet = new Set(newRects.keys());
-      let sameKeys = oldKeySet.size === newKeySet.size;
-      if (sameKeys) {
-        for (const k of oldKeySet) {
-          if (!newKeySet.has(k)) { sameKeys = false; break; }
-        }
-      }
-
-      if (sameKeys && !isAnimating && !wasAnimating) {
-        const toAnimate: Array<{ el: HTMLElement; deltaY: number }> = [];
-        els.forEach(el => {
-          const key = el.dataset.key!;
-          const oldRect = oldRects.get(key);
-          const newRect = newRects.get(key)!;
-          if (oldRect) {
-            const deltaY = oldRect.top - newRect.top;
-            if (Math.abs(deltaY) > 2) {
-              toAnimate.push({ el, deltaY });
-            }
-          }
-        });
-
-        if (toAnimate.length > 0) {
-          for (const { el, deltaY } of toAnimate) {
-            el.style.transition = 'none';
-            el.style.transform = `translateY(${deltaY}px)`;
-          }
-          void containerEl.offsetHeight;
-          requestAnimationFrame(() => {
-            for (const { el } of toAnimate) {
-              el.style.transition = 'transform 300ms cubic-bezier(0.16, 1, 0.3, 1)';
-              el.style.transform = '';
-            }
-            setTimeout(() => {
-              for (const { el } of toAnimate) {
-                el.style.transition = '';
-                el.style.transform = '';
-              }
-            }, 310);
-          });
-        }
-      }
-    }
-
-    prevRectsRef.current = newRects;
   });
 
   return { animatedItems, containerRef };

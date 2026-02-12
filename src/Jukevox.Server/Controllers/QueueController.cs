@@ -55,7 +55,7 @@ public class QueueController : ControllerBase
         if (!isHost && !_partyService.IsParticipant(sessionId))
             return Unauthorized();
 
-        var (item, error) = _queueService.AddToQueue(sessionId, request);
+        var (item, error) = _queueService.AddToQueue(sessionId, request, isHost);
         if (item == null)
             return BadRequest(new { error });
 
@@ -135,7 +135,7 @@ public class QueueController : ControllerBase
         if (!isHost && !_partyService.IsParticipant(sessionId))
             return Unauthorized();
 
-        var (success, error) = _queueService.Vote(sessionId, id, request.Vote);
+        var (success, error) = _queueService.Vote(sessionId, id, request.Vote, isHost);
         if (!success)
             return BadRequest(new { error });
 
