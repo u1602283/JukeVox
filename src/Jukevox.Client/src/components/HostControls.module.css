@@ -125,13 +125,19 @@
   color: var(--text-tertiary);
 }
 
+@media (max-width: 1024px) {
+  .buttons {
+    margin-bottom: 8px;
+  }
+}
+
 @media (max-width: 640px) {
   .buttons {
     gap: 20px;
   }
 
   .mainBtn {
-    width: 52px;
-    height: 52px;
+    width: 48px;
+    height: 48px;
   }
 }

@@ -257,7 +257,7 @@ export function NowPlaying({ children }: { children?: ReactNode }) {
     : 0;
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${!isHost ? styles.guestView : ''}`}>
       {ambientLayers.a && (
         <div
           className={`${styles.ambientLayer} ${ambientLayers.active === 'a' ? styles.ambientLayerVisible : ''}`}

@@ -222,15 +222,36 @@
 }
 
 @media (max-width: 1024px) {
+  .container {
+    padding: 20px;
+  }
+
+  .content {
+    gap: 12px;
+  }
+
   .art {
-    width: 60vw;
+    width: min(60vw, 28dvh);
     max-width: 320px;
     height: auto;
     aspect-ratio: 1;
   }
 
+  .progressBar {
+    margin-top: 14px;
+  }
+
+  .guestView .art {
+    width: min(65vw, 36dvh);
+  }
+
   .progress {
     max-width: 70vw;
+  }
+
+  .quip {
+    margin-top: 6px;
+    font-size: 0.82rem;
   }
 }
 
