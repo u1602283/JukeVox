@@ -12,16 +12,16 @@ public class PartyController : ControllerBase
 {
     private readonly IPartyService _partyService;
     private readonly IQueueService _queueService;
-    private readonly ISpotifyPlayerService _playerService;
+    private readonly IPlaybackMonitorService _monitorService;
 
     public PartyController(
         IPartyService partyService,
         IQueueService queueService,
-        ISpotifyPlayerService playerService)
+        IPlaybackMonitorService monitorService)
     {
         _partyService = partyService;
         _queueService = queueService;
-        _playerService = playerService;
+        _monitorService = monitorService;
     }
 
     [HttpPost("join")]
@@ -50,7 +50,7 @@ public class PartyController : ControllerBase
     }
 
     [HttpGet("state")]
-    public async Task<IActionResult> GetState()
+    public IActionResult GetState()
     {
         var sessionId = HttpContext.GetSessionId();
         var party = _partyService.GetCurrentParty();
@@ -65,17 +65,6 @@ public class PartyController : ControllerBase
 
         var guest = isHost ? null : _partyService.GetGuest(sessionId);
 
-        PlaybackStateDto? nowPlaying = null;
-        if (party.SpotifyTokens != null)
-        {
-            nowPlaying = await _playerService.GetPlaybackStateAsync();
-            if (nowPlaying != null && party.CurrentTrack != null)
-            {
-                nowPlaying.AddedByName = party.CurrentTrack.AddedByName;
-                nowPlaying.IsFromBasePlaylist = party.CurrentTrack.IsFromBasePlaylist;
-            }
-        }
-
         return Ok(new PartyStateDto
         {
             PartyId = party.Id,
@@ -86,7 +75,7 @@ public class PartyController : ControllerBase
             DisplayName = guest?.DisplayName,
             DefaultCredits = party.DefaultCredits,
             Queue = _queueService.GetQueue(),
-            NowPlaying = nowPlaying,
+            NowPlaying = _monitorService.GetCachedPlaybackState(),
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
             UserVotes = _queueService.GetUserVotes(sessionId)

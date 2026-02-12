@@ -68,8 +68,8 @@ public class QueueController : ControllerBase
         // If this is the first song in the queue, try to start playback immediately
         if (queue.Count == 1 && party.SpotifyTokens != null)
         {
-            var playback = await _playerService.GetPlaybackStateAsync();
-            if (playback == null || !playback.IsPlaying)
+            var cachedPlayback = _monitorService.GetCachedPlaybackState();
+            if (cachedPlayback == null || !cachedPlayback.IsPlaying)
             {
                 var next = _queueService.Dequeue();
                 if (next != null)

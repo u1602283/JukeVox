@@ -118,7 +118,7 @@ public class PlaybackControllerTests
         _partyService.Setup(p => p.GetCurrentParty()).Returns(party).Verifiable(Times.Once);
         _playerService.Setup(p => p.PlayTrackAsync(prevTrack.TrackUri, null)).ReturnsAsync(true).Verifiable(Times.Once);
         _monitorService.Setup(m => m.NotifyTrackStarted(prevTrack.TrackUri)).Verifiable(Times.Once);
-        _playerService.Setup(p => p.GetPlaybackStateAsync()).ReturnsAsync((PlaybackStateDto?)null).Verifiable(Times.Once);
+        _monitorService.Setup(m => m.GetCachedPlaybackState()).Returns((PlaybackStateDto?)null).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue()).Returns([]).Verifiable(Times.Once);
         _hub.PartyClient.Setup(c => c.NowPlayingChanged(It.IsAny<PlaybackStateDto>())).Returns(Task.CompletedTask).Verifiable(Times.Once);
         _hub.PartyClient.Setup(c => c.QueueUpdated(It.IsAny<List<QueueItemDto>>())).Returns(Task.CompletedTask).Verifiable(Times.Once);
@@ -150,7 +150,7 @@ public class PlaybackControllerTests
         _queueService.Setup(q => q.Dequeue()).Returns(nextTrack).Verifiable(Times.Once);
         _playerService.Setup(p => p.PlayTrackAsync(nextTrack.TrackUri, null)).ReturnsAsync(true).Verifiable(Times.Once);
         _monitorService.Setup(m => m.NotifyTrackStarted(nextTrack.TrackUri)).Verifiable(Times.Once);
-        _playerService.Setup(p => p.GetPlaybackStateAsync()).ReturnsAsync((PlaybackStateDto?)null).Verifiable(Times.Once);
+        _monitorService.Setup(m => m.GetCachedPlaybackState()).Returns((PlaybackStateDto?)null).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue()).Returns([]).Verifiable(Times.Once);
         _hub.PartyClient.Setup(c => c.NowPlayingChanged(It.IsAny<PlaybackStateDto>())).Returns(Task.CompletedTask).Verifiable(Times.Once);
         _hub.PartyClient.Setup(c => c.QueueUpdated(It.IsAny<List<QueueItemDto>>())).Returns(Task.CompletedTask).Verifiable(Times.Once);

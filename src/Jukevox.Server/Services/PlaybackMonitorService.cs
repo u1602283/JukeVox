@@ -17,6 +17,8 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
     private bool _weStartedCurrentTrack;
     private bool _idleWatching;
     private DateTime _trackStartedAt = DateTime.MinValue;
+    private volatile PlaybackStateDto? _cachedPlaybackState;
+    private long _cachedAtTicks;
 
     public PlaybackMonitorService(
         IServiceProvider serviceProvider,
@@ -24,6 +26,36 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+    }
+
+    public PlaybackStateDto? GetCachedPlaybackState()
+    {
+        var state = _cachedPlaybackState;
+        if (state == null) return null;
+
+        if (!state.IsPlaying || state.DurationMs <= 0) return state;
+
+        var elapsedMs = (int)((DateTime.UtcNow.Ticks - _cachedAtTicks) / TimeSpan.TicksPerMillisecond);
+        if (elapsedMs <= 0) return state;
+
+        // Return a copy with interpolated progress (don't mutate the cached instance)
+        return new PlaybackStateDto
+        {
+            IsPlaying = state.IsPlaying,
+            TrackUri = state.TrackUri,
+            TrackName = state.TrackName,
+            ArtistName = state.ArtistName,
+            AlbumName = state.AlbumName,
+            AlbumImageUrl = state.AlbumImageUrl,
+            ProgressMs = Math.Min(state.ProgressMs + elapsedMs, state.DurationMs),
+            DurationMs = state.DurationMs,
+            VolumePercent = state.VolumePercent,
+            SupportsVolume = state.SupportsVolume,
+            DeviceId = state.DeviceId,
+            DeviceName = state.DeviceName,
+            AddedByName = state.AddedByName,
+            IsFromBasePlaylist = state.IsFromBasePlaylist
+        };
     }
 
     /// <summary>
@@ -157,6 +189,9 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                         state!.IsFromBasePlaylist = party.CurrentTrack.IsFromBasePlaylist;
                     }
 
+                    _cachedPlaybackState = state;
+                    _cachedAtTicks = DateTime.UtcNow.Ticks;
+
                     if (state!.TrackUri != _lastTrackUri)
                     {
                         await hubContext.Clients.Group(party.Id).NowPlayingChanged(state);
@@ -209,6 +244,8 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                         AddedByName = next.AddedByName,
                         IsFromBasePlaylist = next.IsFromBasePlaylist
                     };
+                    _cachedPlaybackState = nowPlayingDto;
+                    _cachedAtTicks = DateTime.UtcNow.Ticks;
                     await hubContext.Clients.Group(party.Id).NowPlayingChanged(nowPlayingDto);
 
                 }
@@ -224,6 +261,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
             {
                 _weStartedCurrentTrack = false;
                 _idleWatching = true;
+                _cachedPlaybackState = null;
                 _logger.LogInformation("Queue empty, entering idle watching mode");
             }
         }

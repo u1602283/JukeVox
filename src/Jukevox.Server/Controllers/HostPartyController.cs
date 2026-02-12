@@ -148,8 +148,8 @@ public class HostPartyController : ControllerBase
         await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
 
         // Auto-play if nothing is currently playing
-        var playback = await _playerService.GetPlaybackStateAsync();
-        if (playback == null || !playback.IsPlaying)
+        var cachedPlayback = _monitorService.GetCachedPlaybackState();
+        if (cachedPlayback == null || !cachedPlayback.IsPlaying)
         {
             var next = _queueService.Dequeue();
             if (next != null)

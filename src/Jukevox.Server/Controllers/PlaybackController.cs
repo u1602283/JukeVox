@@ -142,7 +142,7 @@ public class PlaybackController : ControllerBase
 
     private async Task BroadcastNowPlaying(string partyId, Models.QueueItem track)
     {
-        var state = await _playerService.GetPlaybackStateAsync();
+        var cached = _monitorService.GetCachedPlaybackState();
         var dto = new PlaybackStateDto
         {
             IsPlaying = true,
@@ -153,10 +153,10 @@ public class PlaybackController : ControllerBase
             AlbumImageUrl = track.AlbumImageUrl,
             ProgressMs = 0,
             DurationMs = track.DurationMs,
-            VolumePercent = state?.VolumePercent ?? 0,
-            SupportsVolume = state?.SupportsVolume ?? true,
-            DeviceId = state?.DeviceId,
-            DeviceName = state?.DeviceName,
+            VolumePercent = cached?.VolumePercent ?? 0,
+            SupportsVolume = cached?.SupportsVolume ?? true,
+            DeviceId = cached?.DeviceId,
+            DeviceName = cached?.DeviceName,
             AddedByName = track.AddedByName,
             IsFromBasePlaylist = track.IsFromBasePlaylist
         };

@@ -15,7 +15,7 @@ public class PartyControllerTests
 {
     private Mock<IPartyService> _partyService = null!;
     private Mock<IQueueService> _queueService = null!;
-    private Mock<ISpotifyPlayerService> _playerService = null!;
+    private Mock<IPlaybackMonitorService> _monitorService = null!;
     private PartyController _controller = null!;
 
     [SetUp]
@@ -23,12 +23,12 @@ public class PartyControllerTests
     {
         _partyService = new Mock<IPartyService>();
         _queueService = new Mock<IQueueService>();
-        _playerService = new Mock<ISpotifyPlayerService>();
+        _monitorService = new Mock<IPlaybackMonitorService>();
 
         _controller = new PartyController(
             _partyService.Object,
             _queueService.Object,
-            _playerService.Object);
+            _monitorService.Object);
     }
 
     [TearDown]
@@ -38,8 +38,8 @@ public class PartyControllerTests
         _partyService.VerifyNoOtherCalls();
         _queueService.VerifyAll();
         _queueService.VerifyNoOtherCalls();
-        _playerService.VerifyAll();
-        _playerService.VerifyNoOtherCalls();
+        _monitorService.VerifyAll();
+        _monitorService.VerifyNoOtherCalls();
     }
 
     [Test]
@@ -74,19 +74,19 @@ public class PartyControllerTests
     }
 
     [Test]
-    public async Task GetState_NoParty_ReturnsHasPartyFalse()
+    public void GetState_NoParty_ReturnsHasPartyFalse()
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
         _partyService.Setup(p => p.GetCurrentParty()).Returns((Party?)null).Verifiable(Times.Once);
 
-        var result = await _controller.GetState();
+        var result = _controller.GetState();
 
         result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().NotBeNull();
     }
 
     [Test]
-    public async Task GetState_AsHost_ReturnsHostState()
+    public void GetState_AsHost_ReturnsHostState()
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext("host-session");
         var party = TestData.CreateParty("host-session");
@@ -94,8 +94,9 @@ public class PartyControllerTests
         _partyService.Setup(p => p.GetGuest("host-session")).Returns((GuestSession?)null).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue()).Returns([]).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetUserVotes("host-session")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
+        _monitorService.Setup(m => m.GetCachedPlaybackState()).Returns((PlaybackStateDto?)null).Verifiable(Times.Once);
 
-        var result = await _controller.GetState();
+        var result = _controller.GetState();
 
         var state = result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeOfType<PartyStateDto>().Subject;
@@ -103,14 +104,14 @@ public class PartyControllerTests
     }
 
     [Test]
-    public async Task GetState_AsStranger_ReturnsHasPartyFalse()
+    public void GetState_AsStranger_ReturnsHasPartyFalse()
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("stranger");
         var party = TestData.CreateParty();
         _partyService.Setup(p => p.GetCurrentParty()).Returns(party).Verifiable(Times.Once);
         _partyService.Setup(p => p.GetGuest("stranger")).Returns((GuestSession?)null).Verifiable(Times.Once);
 
-        var result = await _controller.GetState();
+        var result = _controller.GetState();
 
         result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().NotBeNull();
