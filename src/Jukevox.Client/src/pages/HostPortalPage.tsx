@@ -266,7 +266,10 @@ export function HostPortalPage() {
     <div className={partyStyles.page}>
       <div ref={sentinelRef} style={{ height: 1 }} />
       <header className={`${partyStyles.header} ${scrolled ? partyStyles.headerScrolled : ''}`}>
-        <h1 className={partyStyles.headerTitle}>JukeVox</h1>
+        <h1 className={partyStyles.headerTitle} style={{ width: 'auto', flex: 1 }}>JukeVox</h1>
+        <button className={partyStyles.logoutBtn} onClick={handleLogout}>
+          Logout
+        </button>
         <div className={partyStyles.headerRight}>
           <button className={partyStyles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
             <span className={partyStyles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
@@ -293,9 +296,6 @@ export function HostPortalPage() {
             aria-label="Manage party"
           >
             <Settings size={20} />
-          </button>
-          <button className={partyStyles.logoutBtn} onClick={handleLogout}>
-            Logout
           </button>
         </div>
       </header>

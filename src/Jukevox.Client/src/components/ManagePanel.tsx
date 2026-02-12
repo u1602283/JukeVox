@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, RefreshCw, Minus, Plus, UserX } from 'lucide-react';
 import { api } from '../api/client';
 import type { GuestInfo } from '../types';
@@ -164,7 +165,7 @@ export function ManagePanel({ mode, visible = true, onClose, onPartyEnded }: Man
         </div>
       </div>
 
-      {confirmEnd && (
+      {confirmEnd && createPortal(
         <div className={styles.confirmOverlay} onClick={() => setConfirmEnd(false)}>
           <div className={styles.confirmDialog} onClick={e => e.stopPropagation()}>
             <div className={styles.confirmTitle}>End Party?</div>
@@ -180,7 +181,8 @@ export function ManagePanel({ mode, visible = true, onClose, onPartyEnded }: Man
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

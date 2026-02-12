@@ -30,6 +30,8 @@ The `viewport-fit=cover` meta tag extends the viewport into the safe area (statu
 
 **Root cause**: The inline script in `index.html` prevents overscroll by checking `scrollTop + clientHeight >= scrollHeight`. Adding safe area padding to `body` or the header increases `scrollHeight`, which breaks this check. The page becomes scrollable by the safe area amount.
 
+**Key discovery**: Horizontal overflow in the header causes vertical scrolling too. When the host header's second row (invite code, Spotify status, device selector, search, logout) was too wide for the viewport, it created horizontal overflow which then enabled vertical scrolling — bypassing the overscroll prevention script entirely. Moving the logout button to the title row fixed this without any scroll-related CSS changes. **When adding safe area padding, check that the extra header padding doesn't cause the second row to overflow horizontally** — this is likely the real cause, not the `scrollHeight` increase.
+
 **Deeper issue**: The slide track layout means off-screen panels (queue, manage) contribute to page height even when not visible. The overscroll script masks this in regular Safari, but in standalone mode the behaviour diverges.
 
 **Attempted approaches**:

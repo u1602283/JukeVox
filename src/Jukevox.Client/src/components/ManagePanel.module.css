@@ -283,7 +283,7 @@
   width: calc(100% - 40px);
   box-shadow: var(--shadow-xl);
   text-align: center;
-  animation: slideDown var(--duration-normal) var(--ease-out);
+  animation: dialogSlideDown var(--duration-normal) var(--ease-out);
 }
 
 .confirmTitle {
@@ -352,5 +352,16 @@
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes dialogSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

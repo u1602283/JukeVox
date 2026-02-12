@@ -39,6 +39,14 @@
   }
 }
 
+@media (min-width: 1025px) {
+  @supports not (backdrop-filter: blur(1px)) {
+    .header {
+      background: var(--bg-primary);
+    }
+  }
+}
+
 .headerTitle {
   font-size: 1.3rem;
   font-weight: 700;
@@ -299,13 +307,25 @@
 }
 
 @media (min-width: 1025px) {
+  .page {
+    padding-top: 0;
+  }
+
   .header {
-    margin-bottom: 44px;
+    /* Always show glass toolbar on desktop (no scroll transition) */
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-bottom: 1px solid var(--glass-border);
+    margin-left: calc(-1 * var(--content-padding));
+    margin-right: calc(-1 * var(--content-padding));
+    padding: 16px var(--content-padding) 12px;
+    margin-bottom: 24px;
   }
 
   .heroColumn {
     position: sticky;
-    top: 92px;
+    top: 96px;
   }
 }
 
