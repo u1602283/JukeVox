@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Settings } from 'lucide-react';
+import { Search, Settings, Share2 } from 'lucide-react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { api } from '../api/client';
@@ -13,6 +13,7 @@ import { HostControls } from '../components/HostControls';
 import { DeviceSelector } from '../components/DeviceSelector';
 import { BasePlaylistSelector } from '../components/BasePlaylistSelector';
 import { ManagePanel } from '../components/ManagePanel';
+import { ShareOverlay } from '../components/ShareOverlay';
 import { TabIndicator } from '../components/TabIndicator';
 import type { HostStatus, SavedPartySummary } from '../types';
 import styles from './HostPortalPage.module.css';
@@ -38,6 +39,7 @@ export function HostPortalPage() {
   // Active party UI state
   const [searchOpen, setSearchOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'playing' | 'queue' | 'manage'>('playing');
 
   // Tab indicator
@@ -266,9 +268,9 @@ export function HostPortalPage() {
       <header className={`${partyStyles.header} ${scrolled ? partyStyles.headerScrolled : ''}`}>
         <h1 className={partyStyles.headerTitle}>JukeVox</h1>
         <div className={partyStyles.headerRight}>
-          <span className={partyStyles.inviteCode}>
-            <span className={partyStyles.inviteCodeValue}>{party.inviteCode}</span>
-          </span>
+          <button className={partyStyles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
+            <span className={partyStyles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
+          </button>
           {!party.spotifyConnected && (
             <a href="/api/auth/login" className={partyStyles.connectBtn}>
               Connect Spotify
@@ -325,6 +327,8 @@ export function HostPortalPage() {
         results={results}
         loading={searchLoading}
       />
+
+      <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} inviteCode={party.inviteCode} />
 
       {manageOpen && (
         <ManagePanel

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, HelpCircle } from 'lucide-react';
+import { Search, HelpCircle, Share2 } from 'lucide-react';
 import { useParty } from '../hooks/useParty';
 import { useSearch } from '../hooks/useSearch';
 import { NowPlaying } from '../components/NowPlaying';
 import { QueueList } from '../components/QueueList';
 import { SearchOverlay } from '../components/SearchOverlay';
 import { HelpOverlay } from '../components/HelpOverlay';
+import { ShareOverlay } from '../components/ShareOverlay';
 import { CreditsBadge } from '../components/CreditsBadge';
 import { TabIndicator } from '../components/TabIndicator';
 import styles from './PartyPage.module.css';
@@ -18,6 +19,7 @@ export function PartyPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'playing' | 'queue'>('playing');
   const [helpOpen, setHelpOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -48,9 +50,9 @@ export function PartyPage() {
         </h1>
         <div className={styles.headerRight}>
           <CreditsBadge />
-          <span className={styles.inviteCode}>
-            <span className={styles.inviteCodeValue}>{party.inviteCode}</span>
-          </span>
+          <button className={styles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
+            <span className={styles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
+          </button>
           {party.isHost && party.spotifyConnected && (
             <span className={styles.spotifyStatus}>Connected</span>
           )}
@@ -89,6 +91,7 @@ export function PartyPage() {
       </div>
 
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} inviteCode={party.inviteCode} />
 
       <SearchOverlay
         open={searchOpen}

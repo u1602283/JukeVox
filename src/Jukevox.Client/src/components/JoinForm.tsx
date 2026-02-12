@@ -3,9 +3,13 @@ import { api } from '../api/client';
 import { useParty } from '../hooks/useParty';
 import styles from './JoinForm.module.css';
 
-export function JoinForm() {
+interface JoinFormProps {
+  initialCode?: string;
+}
+
+export function JoinForm({ initialCode = '' }: JoinFormProps) {
   const { setParty, setQueue, setCredits } = useParty();
-  const [inviteCode, setInviteCode] = useState('');
+  const [inviteCode, setInviteCode] = useState(initialCode);
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
