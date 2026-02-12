@@ -143,6 +143,7 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 - **index.html inline script**: Prevents pinch-zoom (`gesturestart`) and blocks overscroll on elements that aren't marked `[data-scrollable]`. If a scrollable component doesn't scroll on mobile, add `data-scrollable` to it.
 - **Visibility change refresh**: When tab regains focus, REST fetch refreshes state. SignalR is not muted — `useAnimatedList` handles duplicate/identical data gracefully.
 - **NowPlaying uses requestAnimationFrame**: Progress bar updates at 60fps via direct DOM writes (refs, not React state). Seeking uses `pendingSeekRef` to ignore server updates within 3 seconds of a seek. No React re-renders during normal playback.
+- **Ambient art crossfade**: `useAmbientCrossfade` hook uses two alternating DOM layers (not CSS `::before`) because CSS can't transition between `url()` values. Layers use `translateZ(0)` + `will-change: opacity` to force GPU compositing (prevents deferred paint with heavy blur filters). Ref updates are deferred to async callbacks (preload `.then()`) to survive StrictMode's unmount+remount cycle.
 - **Ephemeral Data Protection**: Host auth cookies are invalid after server restart (uses `AddEphemeralDataProtection`).
 - **InsertionOrder vs physical position**: Items can have InsertionOrders that don't match their list index (from legacy state or host reorder). `SortQueue` uses InsertionOrder for FIFO, not list position.
 - **Spotify rate limiting**: `SpotifyPlayerService.SendAsync` retries on 429 with `Retry-After` header (defaults to 1s). Recursive retry with no max depth.
@@ -168,7 +169,7 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 | File | Responsibility |
 |---|---|
 | `PartyContext.tsx` | Single source of truth, SignalR lifecycle, visibility refresh |
-| `NowPlaying.tsx` | RAF-based progress bar, seeking, quip generation |
+| `NowPlaying.tsx` | RAF-based progress bar, seeking, quip generation, ambient art crossfade |
 | `QueueList.tsx` | Voting (optimistic updates), drag-and-drop reorder (host only) |
 | `SearchOverlay.tsx` / `useSearch.ts` | Debounced search with request cancellation |
 | `HostControls.tsx` | Playback buttons, volume slider (debounced 300ms) |
