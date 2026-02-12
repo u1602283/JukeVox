@@ -87,6 +87,24 @@
   transform: scale(0.92);
 }
 
+.addBtnInQueue {
+  background: var(--bg-elevated-hover);
+  color: var(--text-tertiary);
+  cursor: default;
+}
+
 .addedCheck {
   color: #000;
+}
+
+.inQueueBadge {
+  font-size: 0.7rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.inPlaylistBadge {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  font-weight: 500;
 }

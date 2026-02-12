@@ -48,6 +48,9 @@ public class QueueService : IQueueService
                 InsertionOrder = party.NextInsertionOrder++
             };
 
+            // Remove matching base playlist items (promotes the track to a manual request)
+            party.Queue.RemoveAll(q => q.IsFromBasePlaylist && TracksMatch(q, item));
+
             // Insert before base playlist items so manual requests take priority
             var insertIndex = party.Queue.FindIndex(q => q.IsFromBasePlaylist);
             if (insertIndex >= 0)
@@ -281,6 +284,13 @@ public class QueueService : IQueueService
             }
             return votes;
         }
+    }
+
+    private static bool TracksMatch(QueueItem a, QueueItem b)
+    {
+        if (a.TrackUri == b.TrackUri) return true;
+        return string.Equals(a.TrackName, b.TrackName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(a.ArtistName, b.ArtistName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void SortQueue(Party party)
