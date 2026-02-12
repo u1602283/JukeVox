@@ -90,6 +90,40 @@
   padding: 20px;
 }
 
+.filterWrap {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.filterIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.filterInput {
+  width: 100%;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 9px 12px 9px 34px;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color var(--duration-fast);
+}
+
+.filterInput::placeholder {
+  color: var(--text-tertiary);
+}
+
+.filterInput:focus {
+  border-color: var(--accent);
+}
+
 .list {
   display: flex;
   flex-direction: column;
