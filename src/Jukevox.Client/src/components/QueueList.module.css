@@ -208,13 +208,15 @@
     background var(--duration-fast);
 }
 
-.item:hover .removeBtn {
-  opacity: 1;
-}
+@media (hover: hover) {
+  .item:hover .removeBtn {
+    opacity: 1;
+  }
 
-.removeBtn:hover {
-  color: var(--danger);
-  background: var(--danger-subtle);
+  .removeBtn:hover {
+    color: var(--danger);
+    background: var(--danger-subtle);
+  }
 }
 
 .divider {
