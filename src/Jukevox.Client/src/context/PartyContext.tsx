@@ -9,7 +9,7 @@ export interface PartyContextValue {
   setParty: (party: PartyState | null) => void;
   nowPlaying: PlaybackState | null;
   queue: QueueItem[];
-  setQueue: (queue: QueueItem[]) => void;
+  setQueue: (queue: QueueItem[] | ((prev: QueueItem[]) => QueueItem[])) => void;
   credits: number | null;
   setCredits: (credits: number) => void;
   error: string | null;

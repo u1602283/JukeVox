@@ -52,11 +52,10 @@ export function QueueList() {
     // Toggle: same direction again removes the vote
     const newVote = currentVote === direction ? 0 : direction;
 
-    // Optimistic update
-    const prevVote = currentVote;
-    const scoreDelta = newVote - prevVote;
+    // Optimistic update (updater form avoids stale closure over queue)
+    const scoreDelta = newVote - currentVote;
     setUserVote(itemId, newVote);
-    setQueue(queue.map(item =>
+    setQueue(prev => prev.map(item =>
       item.id === itemId ? { ...item, score: item.score + scoreDelta } : item
     ));
 
@@ -64,8 +63,8 @@ export function QueueList() {
       await api.vote(itemId, newVote);
     } catch (err) {
       // Revert on failure
-      setUserVote(itemId, prevVote);
-      setQueue(queue.map(item =>
+      setUserVote(itemId, currentVote);
+      setQueue(prev => prev.map(item =>
         item.id === itemId ? { ...item, score: item.score - scoreDelta } : item
       ));
       console.error('Failed to vote:', err);
