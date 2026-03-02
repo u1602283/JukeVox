@@ -18,6 +18,7 @@ function useMarquee(text: string | undefined) {
   const innerEl = useRef<HTMLSpanElement | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
   const animRef = useRef<Animation | null>(null);
+  const measureIdRef = useRef(0);
 
   const measure = useCallback(() => {
     const outer = outerEl.current;
@@ -30,21 +31,26 @@ function useMarquee(text: string | undefined) {
       animRef.current = null;
     }
     outer.classList.remove(styles.marquee);
-    inner.style.transform = '';
+
+    // Invalidate any pending rAF from a previous measure() call
+    const id = ++measureIdRef.current;
 
     // Allow layout to settle
     requestAnimationFrame(() => {
-      if (!outer || !inner) return;
-      const overflow = inner.scrollWidth - outer.clientWidth;
+      if (measureIdRef.current !== id) return;
+      const o = outerEl.current;
+      const i = innerEl.current;
+      if (!o || !i) return;
+      const overflow = i.scrollWidth - o.clientWidth;
       if (overflow > 1) {
-        outer.classList.add(styles.marquee);
+        o.classList.add(styles.marquee);
 
         // Compute per-element keyframe offsets so hold time is fixed
         const scrollMs = Math.max(overflow / MARQUEE_PX_PER_S, 1) * 1000;
         const totalMs = scrollMs + 2 * MARQUEE_HOLD_MS;
         const holdFrac = MARQUEE_HOLD_MS / totalMs;
 
-        animRef.current = inner.animate(
+        animRef.current = i.animate(
           [
             { transform: 'translateX(0)', offset: 0 },
             { transform: 'translateX(0)', offset: holdFrac },
@@ -80,6 +86,10 @@ function useMarquee(text: string | undefined) {
   }, [measure]);
 
   const innerCallback = useCallback((node: HTMLSpanElement | null) => {
+    if (!node && animRef.current) {
+      animRef.current.cancel();
+      animRef.current = null;
+    }
     innerEl.current = node;
   }, []);
 
