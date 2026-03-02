@@ -2,12 +2,26 @@
  * Mobile overscroll & pinch-zoom prevention.
  *
  * Prevents pull-to-refresh, rubber-banding, and pinch-zoom on iOS/Android
- * while still allowing scrolling inside elements marked with [data-scrollable].
- *
- * IMPORTANT: Any scrollable container in the app must have the `data-scrollable`
- * attribute, otherwise touch scrolling will be blocked on mobile.
- * See the "Gotchas" section in CLAUDE.md for details.
+ * while still allowing normal scrolling inside any overflow:auto/scroll
+ * container. Scrollable containers are detected automatically — no
+ * data attributes required.
  */
+
+/** Walk up the DOM to find the nearest vertically scrollable ancestor. */
+function findScrollableAncestor(el: Element): Element | null {
+  let current = el as HTMLElement | null;
+  while (current && current !== document.documentElement) {
+    const { overflowY } = getComputedStyle(current);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      current.scrollHeight > current.clientHeight
+    ) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
 
 // Block pinch-zoom (iOS Safari gesture events)
 document.addEventListener('gesturestart', (e) => {
@@ -39,13 +53,8 @@ document.addEventListener(
     // Allow range inputs (seek slider, volume slider) to work normally
     if (target instanceof HTMLInputElement && target.type === 'range') return;
 
-    // Allow scrolling inside [data-scrollable] containers if they have overflow
-    const scrollable = target.closest('[data-scrollable]');
-    if (scrollable) {
-      if (scrollable.scrollHeight > scrollable.clientHeight) return;
-      e.preventDefault();
-      return;
-    }
+    // Allow scrolling if the touch is inside a scrollable container
+    if (findScrollableAncestor(target)) return;
 
     // Outside any scrollable container: block overscroll at the bottom edge
     // (prevents pull-to-refresh and rubber-banding)

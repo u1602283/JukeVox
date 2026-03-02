@@ -81,7 +81,7 @@ export function BasePlaylistSelector() {
                 />
               </div>
             )}
-            <div className={styles.list} data-scrollable>
+            <div className={styles.list}>
               {filteredPlaylists.map((pl) => (
                 <button
                   key={pl.id}

@@ -19,7 +19,7 @@ export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
             <X size={20} />
           </button>
         </div>
-        <div className={styles.content} data-scrollable>
+        <div className={styles.content}>
           <blockquote className={styles.quote}>
             "I love democracy."
             <footer className={styles.quoteAttribution}>- Supreme Chancellor Sheev Palpatine</footer>

@@ -145,7 +145,7 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 
 ## Gotchas
 
-- **index.html inline script**: Prevents pinch-zoom (`gesturestart`) and blocks overscroll on elements that aren't marked `[data-scrollable]`. If a scrollable component doesn't scroll on mobile, add `data-scrollable` to it.
+- **Overscroll prevention** (`src/overscroll-prevention.ts`): Prevents pinch-zoom and overscroll on mobile. Scrollable containers are auto-detected via computed `overflow` styles — no attributes needed. Range inputs (`<input type="range">`) are excluded so sliders work on mobile.
 - **Visibility change refresh**: When tab regains focus, REST fetch refreshes state. SignalR is not muted — `useAnimatedList` handles duplicate/identical data gracefully.
 - **NowPlaying uses requestAnimationFrame**: Progress bar updates at 60fps via direct DOM writes (refs, not React state). Seeking uses `pendingSeekRef` to ignore server updates within 3 seconds of a seek. No React re-renders during normal playback. Marquee scrolling for long track/artist names uses the Web Animations API (not CSS animations) with computed keyframe offsets so hold time is fixed regardless of text length.
 - **index.html range input exception**: The overscroll-prevention script has a special early return for `<input type="range">` elements so the seek slider works on mobile.

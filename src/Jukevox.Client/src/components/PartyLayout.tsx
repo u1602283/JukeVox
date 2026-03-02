@@ -46,7 +46,6 @@ export function PartyLayout({ headerTitle, headerRight, panels, overlays }: Part
             <div
               key={i}
               className={`${styles.slidePanel}${panel.first ? ` ${styles.slidePanelFirst}` : ''}${panel.desktopHidden ? ` ${styles.desktopHidden}` : ''}`}
-              data-scrollable
             >
               {panel.first ? (
                 <div className={styles.heroColumn}>
