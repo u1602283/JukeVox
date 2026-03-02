@@ -1,9 +1,55 @@
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import { Music } from 'lucide-react';
 import { api } from '../api/client';
 import { useParty } from '../hooks/useParty';
 import styles from './NowPlaying.module.css';
+
+/**
+ * Measures a text element for overflow and applies a scrolling marquee
+ * animation via CSS custom properties when the text is truncated.
+ */
+function useMarquee(text: string | undefined) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLSpanElement>(null);
+
+  const measure = useCallback(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+
+    // Reset to measure natural width
+    outer.classList.remove(styles.marquee);
+    inner.style.removeProperty('--marquee-distance');
+    inner.style.removeProperty('--marquee-duration');
+
+    // Allow layout to settle
+    requestAnimationFrame(() => {
+      if (!outer || !inner) return;
+      const overflow = inner.scrollWidth - outer.clientWidth;
+      if (overflow > 1) {
+        // ~27px/s scroll speed, min 3s
+        const duration = Math.max(overflow / 27, 3);
+        inner.style.setProperty('--marquee-distance', `-${overflow}px`);
+        inner.style.setProperty('--marquee-duration', `${duration}s`);
+        outer.classList.add(styles.marquee);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    measure();
+  }, [text, measure]);
+
+  // Re-measure on resize
+  useEffect(() => {
+    const observer = new ResizeObserver(measure);
+    if (outerRef.current) observer.observe(outerRef.current);
+    return () => observer.disconnect();
+  }, [measure]);
+
+  return { outerRef, innerRef };
+}
 
 /** Preload an image; resolves when ready, rejects on error. */
 function preloadImage(url: string): Promise<void> {
@@ -139,6 +185,8 @@ export function NowPlaying({ children }: { children?: ReactNode }) {
   const { nowPlaying, party } = useParty();
   const isHost = party?.isHost && party.spotifyConnected;
   const ambientLayers = useAmbientCrossfade(nowPlaying?.albumImageUrl);
+  const trackMarquee = useMarquee(nowPlaying?.trackName);
+  const artistMarquee = useMarquee(nowPlaying?.artistName);
 
   // Seeking (ref-only, no React state needed)
   const seekingRef = useRef(false);
@@ -317,8 +365,12 @@ export function NowPlaying({ children }: { children?: ReactNode }) {
           </div>
         </div>
         <div className={styles.info}>
-          <div className={styles.track}>{nowPlaying.trackName}</div>
-          <div className={styles.artist}>{nowPlaying.artistName}</div>
+          <div className={styles.track} ref={trackMarquee.outerRef}>
+            <span ref={trackMarquee.innerRef}>{nowPlaying.trackName}</span>
+          </div>
+          <div className={styles.artist} ref={artistMarquee.outerRef}>
+            <span ref={artistMarquee.innerRef}>{nowPlaying.artistName}</span>
+          </div>
           {quip && <div className={styles.quip}>{quip}</div>}
         </div>
         {children}

@@ -97,12 +97,35 @@
   margin-bottom: 2px;
 }
 
+.track > span,
+.artist > span {
+  display: inline-block;
+}
+
 .artist {
   color: var(--text-secondary);
   font-size: 0.9rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Marquee scroll for overflowing text */
+.marquee {
+  text-overflow: clip;
+}
+
+.marquee > span {
+  animation: marqueeScroll var(--marquee-duration, 4s) linear 2s infinite alternate;
+}
+
+@keyframes marqueeScroll {
+  0%, 15% {
+    transform: translateX(0);
+  }
+  85%, 100% {
+    transform: translateX(var(--marquee-distance, -100px));
+  }
 }
 
 .quip {
