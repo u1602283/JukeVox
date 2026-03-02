@@ -63,7 +63,7 @@
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex: 1;
 }
 
@@ -76,6 +76,7 @@
 
 @media (min-width: 1025px) {
   .headerRight {
+    gap: 12px;
     flex: initial;
   }
 
@@ -106,9 +107,26 @@
   border-radius: var(--radius-pill);
   font-family: 'SF Mono', 'Fira Code', monospace;
   transition: background var(--duration-fast), transform var(--duration-fast) var(--ease-out);
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 5px;
+}
+
+.inviteCodeCompact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+@media (min-width: 1025px) {
+  .inviteCodeValue {
+    display: inline-flex;
+  }
+
+  .inviteCodeCompact {
+    display: none;
+  }
 }
 
 .inviteCode:hover .inviteCodeValue {
@@ -145,14 +163,21 @@
 
 /* Search toggle button */
 .searchToggle {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
   transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+@media (min-width: 1025px) {
+  .searchToggle {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .searchToggle:hover {

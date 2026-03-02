@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { useParty } from '../hooks/useParty';
+import tokenIcon from '../assets/token.svg';
 import styles from './CreditsBadge.module.css';
 
 export function CreditsBadge() {
@@ -24,7 +25,9 @@ export function CreditsBadge() {
       ref={badgeRef}
       className={`${styles.badge} ${credits === 0 ? styles.empty : ''}`}
     >
-      {credits} credit{credits !== 1 ? 's' : ''} remaining
+      <img className={styles.icon} src={tokenIcon} alt="" />
+      <span className={styles.labelFull}>{credits} credit{credits !== 1 ? 's' : ''} remaining</span>
+      <span className={styles.labelCompact}>{credits} credit{credits !== 1 ? 's' : ''}</span>
     </div>
   );
 }

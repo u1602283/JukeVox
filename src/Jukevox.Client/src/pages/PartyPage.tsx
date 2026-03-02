@@ -50,13 +50,14 @@ export function PartyPage() {
         </h1>
         <div className={styles.headerRight}>
           <CreditsBadge />
-          <button className={styles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
-            <span className={styles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
-          </button>
           {party.isHost && party.spotifyConnected && (
             <span className={styles.spotifyStatus}>Connected</span>
           )}
           <div className={styles.headerIcons}>
+            <button className={styles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
+              <span className={styles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
+              <span className={styles.inviteCodeCompact}><Share2 size={18} /></span>
+            </button>
             {!party.isHost && (
               <button
                 className={styles.searchToggle}

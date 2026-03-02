@@ -21,7 +21,9 @@ export function DeviceSelector() {
   const [selecting, setSelecting] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const [panelTop, setPanelTop] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Close on click outside — must be before early return to satisfy rules-of-hooks
   useEffect(() => {
@@ -66,6 +68,10 @@ export function DeviceSelector() {
 
   const toggleOpen = () => {
     const next = !open;
+    if (next && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPanelTop(rect.bottom + 8);
+    }
     setOpen(next);
     if (next) loadDevices();
   };
@@ -75,6 +81,7 @@ export function DeviceSelector() {
   return (
     <div className={styles.container} ref={panelRef}>
       <button
+        ref={triggerRef}
         onClick={toggleOpen}
         className={`${styles.trigger} ${open ? styles.triggerOpen : ''}`}
       >
@@ -83,7 +90,7 @@ export function DeviceSelector() {
       </button>
 
       {open && (
-        <div className={styles.panel}>
+        <div className={styles.panel} style={{ '--panel-top': `${panelTop}px` } as React.CSSProperties}>
           <div className={styles.panelHeader}>
             <span>Connect to a device</span>
             <button className={styles.closeBtn} onClick={() => setOpen(false)}>

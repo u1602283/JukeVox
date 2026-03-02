@@ -30,19 +30,34 @@
 }
 
 .panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: var(--panel-top, 60px);
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  min-width: 300px;
+  width: calc(100vw - 2 * var(--content-padding));
+  max-width: 340px;
   z-index: 10;
   box-shadow: var(--shadow-xl);
   overflow: hidden;
   animation: fadeInScale var(--duration-normal) var(--ease-out);
+}
+
+@media (min-width: 1025px) {
+  .panel {
+    position: absolute;
+    left: auto;
+    right: 0;
+    transform: none;
+    top: calc(100% + 8px);
+    width: auto;
+    min-width: 300px;
+    max-width: none;
+  }
 }
 
 @supports not (backdrop-filter: blur(1px)) {

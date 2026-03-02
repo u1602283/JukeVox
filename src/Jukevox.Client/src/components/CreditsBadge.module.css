@@ -19,6 +19,30 @@
   color: var(--danger);
 }
 
+.icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.labelFull {
+  display: none;
+}
+
+.labelCompact {
+  display: inline;
+}
+
+@media (min-width: 1025px) {
+  .labelFull {
+    display: inline;
+  }
+
+  .labelCompact {
+    display: none;
+  }
+}
+
 .bounce {
   animation: creditBounce 0.4s var(--ease-spring);
 }

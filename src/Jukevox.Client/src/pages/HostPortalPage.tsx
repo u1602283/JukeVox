@@ -271,32 +271,35 @@ export function HostPortalPage() {
           Logout
         </button>
         <div className={partyStyles.headerRight}>
-          <button className={partyStyles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
-            <span className={partyStyles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
-          </button>
           {!party.spotifyConnected && (
             <a href="/api/auth/login" className={partyStyles.connectBtn}>
               Connect Spotify
             </a>
           )}
           {party.spotifyConnected && (
-            <span className={partyStyles.spotifyStatus}>Spotify Connected</span>
+            <span className={`${partyStyles.spotifyStatus} ${partyStyles.desktopOnly}`}>Spotify Connected</span>
           )}
           <DeviceSelector />
-          <button
-            className={partyStyles.searchToggle}
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search for a song"
-          >
-            <Search size={20} />
-          </button>
-          <button
-            className={`${partyStyles.searchToggle} ${partyStyles.desktopOnly}`}
-            onClick={() => setManageOpen(true)}
-            aria-label="Manage party"
-          >
-            <Settings size={20} />
-          </button>
+          <div className={partyStyles.headerIcons}>
+            <button className={partyStyles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
+              <span className={partyStyles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
+              <span className={partyStyles.inviteCodeCompact}><Share2 size={18} /></span>
+            </button>
+            <button
+              className={partyStyles.searchToggle}
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search for a song"
+            >
+              <Search size={20} />
+            </button>
+            <button
+              className={`${partyStyles.searchToggle} ${partyStyles.desktopOnly}`}
+              onClick={() => setManageOpen(true)}
+              aria-label="Manage party"
+            >
+              <Settings size={20} />
+            </button>
+          </div>
         </div>
       </header>
 
