@@ -75,22 +75,27 @@ The frontend dev server proxies `/api/*` and `/hubs/*` (including WebSocket upgr
 
 ## Queue Sorting & Voting
 
-The queue uses a 4-tier sort system. Key file: `Services/QueueService.cs` — `SortQueue()`, `Vote()`, `Reorder()`.
+The queue uses a 3-tier sort system. Key file: `Services/QueueService.cs` — `SortQueue()`, `Vote()`, `Reorder()`.
 
 ### Sort tiers (top to bottom)
 
 | Tier | Criteria | Internal sort |
 |---|---|---|
-| 0 — Promoted | Score >= 3 and not HostPinned | Score desc, then InsertionOrder asc |
-| 1 — Host-pinned | `HostPinned == true` | InsertionOrder asc (host's explicit order) |
-| 2 — Regular | Not base playlist, not pinned, not promoted | InsertionOrder asc (FIFO) |
-| 3 — Base playlist | `IsFromBasePlaylist == true` | InsertionOrder asc (FIFO) |
+| 0 — Promoted | Score >= 3 | Score desc, then InsertionOrder asc |
+| 1 — Regular | Not base playlist, not promoted | InsertionOrder asc (FIFO) |
+| 2 — Base playlist | `IsFromBasePlaylist == true` | InsertionOrder asc (FIFO) |
+
+Votes always win — there is no host pinning. The host can reorder within tiers via drag-and-drop, but vote-based promotion/demotion overrides manual ordering.
 
 ### Voting thresholds
 
-- **Promotion:** Score >= 3 → item moves to Tier 0
+- **Promotion:** Score >= 3 → item moves to Tier 0 (including base playlist items)
 - **Auto-remove:** Score <= -3 → item removed from queue entirely
 - `SortQueue()` is only called on threshold crossings (promotion gained/lost), not on every vote
+
+### Base playlist promotion
+
+When a base playlist item reaches Score >= 3, it promotes to Tier 0 like any other item. The frontend treats it as a non-base item for display purposes (`isFromBasePlaylist && score < 3` determines base playlist styling/divider). If the score drops below 3, it visually returns to the base playlist section. The `IsFromBasePlaylist` flag on the model is never mutated by votes.
 
 ### InsertionOrder
 
@@ -98,7 +103,7 @@ The queue uses a 4-tier sort system. Key file: `Services/QueueService.cs` — `S
 
 ### Host reorder
 
-When the host reorders via drag-and-drop, `HostPinned` is set on **all** items and InsertionOrders are reassigned sequentially. This locks the entire queue into Tier 1 (host's explicit order) until a vote crosses a threshold.
+When the host reorders via drag-and-drop, InsertionOrders are reassigned sequentially to reflect the new order. This controls ordering within tiers but cannot override vote-based promotion. The frontend clamps drag targets so items cannot be dragged across the base playlist boundary — base playlist items can only be reordered among themselves, and non-base items stay above the boundary.
 
 ### Score
 
@@ -142,10 +147,11 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 
 - **index.html inline script**: Prevents pinch-zoom (`gesturestart`) and blocks overscroll on elements that aren't marked `[data-scrollable]`. If a scrollable component doesn't scroll on mobile, add `data-scrollable` to it.
 - **Visibility change refresh**: When tab regains focus, REST fetch refreshes state. SignalR is not muted — `useAnimatedList` handles duplicate/identical data gracefully.
-- **NowPlaying uses requestAnimationFrame**: Progress bar updates at 60fps via direct DOM writes (refs, not React state). Seeking uses `pendingSeekRef` to ignore server updates within 3 seconds of a seek. No React re-renders during normal playback.
+- **NowPlaying uses requestAnimationFrame**: Progress bar updates at 60fps via direct DOM writes (refs, not React state). Seeking uses `pendingSeekRef` to ignore server updates within 3 seconds of a seek. No React re-renders during normal playback. Marquee scrolling for long track/artist names uses the Web Animations API (not CSS animations) with computed keyframe offsets so hold time is fixed regardless of text length.
+- **index.html range input exception**: The overscroll-prevention script has a special early return for `<input type="range">` elements so the seek slider works on mobile.
 - **Ambient art crossfade**: `useAmbientCrossfade` hook uses two alternating DOM layers (not CSS `::before`) because CSS can't transition between `url()` values. Layers use `translateZ(0)` + `will-change: opacity` to force GPU compositing (prevents deferred paint with heavy blur filters). Ref updates are deferred to async callbacks (preload `.then()`) to survive StrictMode's unmount+remount cycle.
 - **Ephemeral Data Protection**: Host auth cookies are invalid after server restart (uses `AddEphemeralDataProtection`).
-- **InsertionOrder vs physical position**: Items can have InsertionOrders that don't match their list index (from legacy state or host reorder). `SortQueue` uses InsertionOrder for FIFO, not list position.
+- **InsertionOrder vs physical position**: Items can have InsertionOrders that don't match their list index (from host reorder). `SortQueue` uses InsertionOrder for FIFO within tiers, not list position.
 - **Spotify rate limiting**: `SpotifyPlayerService.SendAsync` retries on 429 with `Retry-After` header (defaults to 1s). Recursive retry with no max depth.
 - **Invite code alphabet**: `ABCDEFGHJKMNPQRSTUVWXYZ23456789` — excludes I, O, L, 0, 1 to prevent confusion. 6-character codes generated with `RandomNumberGenerator`.
 - **React StrictMode**: Double-renders in dev (not production). Can cause duplicate API calls during development.
@@ -169,8 +175,9 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 | File | Responsibility |
 |---|---|
 | `PartyContext.tsx` | Single source of truth, SignalR lifecycle, visibility refresh |
-| `NowPlaying.tsx` | RAF-based progress bar, seeking, quip generation, ambient art crossfade |
-| `QueueList.tsx` | Voting (optimistic updates), drag-and-drop reorder (host only) |
+| `PartyLayout.tsx` | Shared layout shell for PartyPage and HostPortalPage (scroll sentinel, sticky header, slide-track panels, mobile tab nav) |
+| `NowPlaying.tsx` | RAF-based progress bar, seeking, quip generation, ambient art crossfade, marquee |
+| `QueueList.tsx` | Voting (optimistic updates), drag-and-drop reorder (host only, clamped at base playlist boundary) |
 | `SearchOverlay.tsx` / `useSearch.ts` | Debounced search with request cancellation |
 | `HostControls.tsx` | Playback buttons, volume slider (debounced 300ms) |
 | `ManagePanel.tsx` | Guest list, credits, kick, end party |
