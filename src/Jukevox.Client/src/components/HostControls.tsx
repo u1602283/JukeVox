@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Volume1, VolumeX } from 'lucide-react';
 import { api } from '../api/client';
 import { useParty } from '../hooks/useParty';
@@ -6,10 +6,14 @@ import styles from './HostControls.module.css';
 
 export function HostControls() {
   const { nowPlaying, party } = useParty();
-  const [volume, setVolume] = useState(nowPlaying?.volumePercent ?? 50);
+  // Local override while the user is actively dragging the slider.
+  // null = use the server value from nowPlaying.
+  const [localVolume, setLocalVolume] = useState<number | null>(null);
   const volumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!party?.isHost || !party.spotifyConnected) return null;
+
+  const volume = localVolume ?? nowPlaying?.volumePercent ?? 50;
 
   const handlePause = () => api.pause().catch(() => {});
   const handleResume = () => api.resume().catch(() => {});
@@ -18,14 +22,16 @@ export function HostControls() {
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
-    setVolume(val);
+    setLocalVolume(val);
     if (volumeTimer.current) clearTimeout(volumeTimer.current);
     volumeTimer.current = setTimeout(() => {
       api.setVolume(val).catch(() => {});
+      volumeTimer.current = null;
+      setLocalVolume(null);
     }, 300);
   };
 
-  const supportsVolume = nowPlaying?.supportsVolume ?? true;
+  const supportsVolume = nowPlaying?.supportsVolume ?? false;
   const VolumeIcon = volume === 0 ? VolumeX : volume < 50 ? Volume1 : Volume2;
 
   return (

@@ -239,6 +239,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                         ProgressMs = 0,
                         DurationMs = next.DurationMs,
                         VolumePercent = state?.VolumePercent ?? 0,
+                        SupportsVolume = state?.SupportsVolume ?? true,
                         DeviceId = state?.DeviceId ?? _lastDeviceId,
                         DeviceName = state?.DeviceName,
                         AddedByName = next.AddedByName,
