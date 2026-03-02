@@ -242,7 +242,7 @@
   }
 
   .guestView .art {
-    width: min(65vw, 36dvh);
+    width: min(65vw, 30dvh);
   }
 
   .progress {
@@ -252,6 +252,28 @@
   .quip {
     margin-top: 6px;
     font-size: 0.82rem;
+  }
+}
+
+@media (max-height: 740px) and (max-width: 1024px) {
+  .container:not(.guestView) .quip {
+    display: none;
+  }
+}
+
+@media (max-height: 670px) and (max-width: 1024px) {
+  .container:not(.guestView) {
+    padding: 12px 20px;
+  }
+
+  .container:not(.guestView) .art {
+    width: min(60vw, 24dvh);
+  }
+}
+
+@media (max-height: 600px) and (max-width: 1024px) {
+  .guestView .progress {
+    display: none;
   }
 }
 
