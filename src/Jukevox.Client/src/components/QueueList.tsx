@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { GripVertical, X, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useParty } from '../hooks/useParty';
 import { useAnimatedList } from '../hooks/useAnimatedList';
+import { useDragReorder } from '../hooks/useDragReorder';
 import { api } from '../api/client';
 import styles from './QueueList.module.css';
 
@@ -11,32 +13,56 @@ function formatDuration(ms: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+// Promoted base playlist items (score >= 3) are treated as non-base for display
+const isBaseDisplay = (item: { isFromBasePlaylist: boolean; score: number }) =>
+  item.isFromBasePlaylist && item.score < 3;
+
 export function QueueList() {
   const { queue, setQueue, party, userVotes, setUserVote } = useParty();
   const isHost = party?.isHost ?? false;
 
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
-  const dragItemRef = useRef<number | null>(null);
+  const queueRef = useRef(queue);
+  useEffect(() => { queueRef.current = queue; }, [queue]);
+
+  const clampIndex = useCallback((target: number, from: number) => {
+    const q = queueRef.current;
+    const baseStart = q.findIndex(i => isBaseDisplay(i));
+    if (baseStart < 0) return target;
+    const draggingBase = isBaseDisplay(q[from]);
+    if (draggingBase) return Math.max(target, baseStart);
+    return Math.min(target, baseStart - 1);
+  }, []);
+
+  const handleReorder = useCallback(async (reordered: typeof queue) => {
+    setQueue(reordered);
+    try {
+      await api.reorderQueue(reordered.map(item => item.id));
+    } catch (err) {
+      console.error('Failed to reorder queue:', err);
+    }
+  }, [setQueue]);
+
+  const canDrag = useCallback(() => isHost, [isHost]);
+
+  const { drag, dragHandleProps, containerRef: dragContainerRef } = useDragReorder({
+    items: queue,
+    keyFn: item => item.id,
+    canDrag,
+    clampIndex,
+    onReorder: handleReorder,
+  });
 
   const { animatedItems, containerRef: animatedContainerRef } = useAnimatedList(queue, {
     keyFn: item => item.id,
-    disabled: dragIndex !== null,
+    disabled: drag.dragging,
   });
+
   const listElRef = useRef<HTMLDivElement | null>(null);
   const listRef = useCallback((el: HTMLDivElement | null) => {
     listElRef.current = el;
     animatedContainerRef(el);
-  }, [animatedContainerRef]);
-  const itemRects = useRef<DOMRect[]>([]);
-  const scrollYStartRef = useRef(0);
-  const autoScrollRafRef = useRef<number | null>(null);
-  const lastClientYRef = useRef(0);
-  const scrollAtAlignRef = useRef(0);
-  const draggedElRef = useRef<HTMLElement | null>(null);
-  const scrollContainerRef = useRef<HTMLElement | null>(null);
-  const queueRef = useRef(queue);
-  useEffect(() => { queueRef.current = queue; }, [queue]);
+    dragContainerRef(el);
+  }, [animatedContainerRef, dragContainerRef]);
 
   const handleRemove = async (id: string) => {
     try {
@@ -49,10 +75,8 @@ export function QueueList() {
 
   const handleVote = async (itemId: string, direction: 1 | -1) => {
     const currentVote = userVotes[itemId] ?? 0;
-    // Toggle: same direction again removes the vote
     const newVote = currentVote === direction ? 0 : direction;
 
-    // Optimistic update (updater form avoids stale closure over queue)
     const scoreDelta = newVote - currentVote;
     setUserVote(itemId, newVote);
     setQueue(prev => prev.map(item =>
@@ -62,219 +86,12 @@ export function QueueList() {
     try {
       await api.vote(itemId, newVote);
     } catch (err) {
-      // Revert on failure
       setUserVote(itemId, currentVote);
       setQueue(prev => prev.map(item =>
         item.id === itemId ? { ...item, score: item.score - scoreDelta } : item
       ));
       console.error('Failed to vote:', err);
     }
-  };
-
-  const findScrollContainer = (el: HTMLElement): HTMLElement | null => {
-    let parent = el.parentElement;
-    while (parent && parent !== document.documentElement) {
-      const { overflowY } = getComputedStyle(parent);
-      if (overflowY === 'auto' || overflowY === 'scroll') return parent;
-      parent = parent.parentElement;
-    }
-    return null;
-  };
-
-  const getScrollY = () => {
-    const sc = scrollContainerRef.current;
-    return sc ? sc.scrollTop : window.scrollY;
-  };
-
-  const captureRects = () => {
-    if (!listElRef.current) return;
-    scrollContainerRef.current = findScrollContainer(listElRef.current);
-    scrollYStartRef.current = getScrollY();
-    const items = listElRef.current.querySelectorAll('[data-queue-item]');
-    itemRects.current = Array.from(items).map(el => el.getBoundingClientRect());
-  };
-
-  const getInsertIndex = (clientY: number, dragFrom: number): number => {
-    const rects = itemRects.current;
-    const baseScroll = scrollYStartRef.current;
-    const docY = clientY + getScrollY();
-    let insertAt = 0;
-    for (let i = 0; i < rects.length; i++) {
-      if (i === dragFrom) continue;
-      const mid = (rects[i].top + baseScroll) + rects[i].height / 2;
-      if (docY > mid) insertAt++;
-    }
-    return insertAt;
-  };
-
-  const cancelAutoScroll = () => {
-    if (autoScrollRafRef.current !== null) {
-      cancelAnimationFrame(autoScrollRafRef.current);
-      autoScrollRafRef.current = null;
-    }
-  };
-
-  const startAutoScroll = () => {
-    if (autoScrollRafRef.current !== null) return;
-    const EDGE_ZONE = 80;
-    const MAX_SPEED = 12;
-
-    const tick = () => {
-      const dragFrom = dragItemRef.current;
-      if (dragFrom === null) return;
-
-      const sc = scrollContainerRef.current;
-      const y = lastClientYRef.current;
-      const vh = window.innerHeight;
-      let speed = 0;
-
-      if (y < EDGE_ZONE) {
-        speed = -MAX_SPEED * (1 - y / EDGE_ZONE);
-      } else if (y > vh - EDGE_ZONE) {
-        speed = MAX_SPEED * (1 - (vh - y) / EDGE_ZONE);
-      }
-
-      if (speed !== 0) {
-        const maxScroll = sc
-          ? sc.scrollHeight - sc.clientHeight
-          : document.documentElement.scrollHeight - vh;
-        const currentScroll = sc ? sc.scrollTop : window.scrollY;
-        const clampedSpeed = speed > 0
-          ? Math.min(speed, maxScroll - currentScroll)
-          : Math.max(speed, -currentScroll);
-
-        const rounded = Math.round(clampedSpeed);
-        if (rounded !== 0) {
-          if (sc) {
-            sc.scrollTop += rounded;
-          } else {
-            window.scrollBy(0, rounded);
-          }
-          const target = getInsertIndex(lastClientYRef.current, dragFrom);
-          if (target !== overIndexRef.current) {
-            scrollAtAlignRef.current = getScrollY();
-          }
-          overIndexRef.current = target;
-          setOverIndex(target);
-
-          const drift = getScrollY() - scrollAtAlignRef.current;
-          if (draggedElRef.current) {
-            draggedElRef.current.style.transition = 'none';
-            draggedElRef.current.style.transform = `translateY(${drift}px) scale(1.02)`;
-          }
-        }
-      }
-
-      autoScrollRafRef.current = requestAnimationFrame(tick);
-    };
-
-    autoScrollRafRef.current = requestAnimationFrame(tick);
-  };
-
-  const overIndexRef = useRef<number | null>(null);
-
-  // Prevent dragging items across the base playlist boundary
-  const clampDragIndex = (target: number, from: number) => {
-    const q = queueRef.current;
-    const baseStart = q.findIndex(i => isBaseDisplay(i));
-    if (baseStart < 0) return target; // no base playlist items
-    const draggingBase = isBaseDisplay(q[from]);
-    if (draggingBase) return Math.max(target, baseStart);
-    return Math.min(target, baseStart - 1);
-  };
-
-  const onPointerDown = (e: React.PointerEvent, index: number) => {
-    if (!isHost) return;
-    e.preventDefault();
-
-    dragItemRef.current = index;
-    overIndexRef.current = index;
-    captureRects();
-    scrollAtAlignRef.current = getScrollY();
-    const items = listElRef.current?.querySelectorAll<HTMLElement>('[data-queue-item]');
-    draggedElRef.current = items?.[index] ?? null;
-    setDragIndex(index);
-    setOverIndex(index);
-
-    const handleMove = (ev: PointerEvent) => {
-      const dragFrom = dragItemRef.current;
-      if (dragFrom === null) return;
-      lastClientYRef.current = ev.clientY;
-      scrollAtAlignRef.current = getScrollY();
-      if (draggedElRef.current) {
-        draggedElRef.current.style.transition = '';
-        draggedElRef.current.style.transform = '';
-      }
-      const target = clampDragIndex(getInsertIndex(ev.clientY, dragFrom), dragFrom);
-      overIndexRef.current = target;
-      setOverIndex(target);
-      startAutoScroll();
-    };
-
-    const handleUp = async () => {
-      document.removeEventListener('pointermove', handleMove);
-      document.removeEventListener('pointerup', handleUp);
-      document.removeEventListener('pointercancel', handleCancel);
-      cancelAutoScroll();
-      const sc = scrollContainerRef.current;
-      if (sc) {
-        sc.scrollTop = Math.round(sc.scrollTop);
-      } else {
-        window.scrollTo(0, Math.round(window.scrollY));
-      }
-      if (draggedElRef.current) {
-        draggedElRef.current.style.transition = '';
-        draggedElRef.current.style.transform = '';
-        draggedElRef.current = null;
-      }
-
-      const from = dragItemRef.current;
-      const to = overIndexRef.current;
-      dragItemRef.current = null;
-      overIndexRef.current = null;
-      setDragIndex(null);
-      setOverIndex(null);
-
-      if (from === null || to === null || from === to) return;
-
-      const reordered = [...queueRef.current];
-      const [moved] = reordered.splice(from, 1);
-      reordered.splice(to, 0, moved);
-      setQueue(reordered);
-
-      try {
-        await api.reorderQueue(reordered.map(item => item.id));
-      } catch (err) {
-        console.error('Failed to reorder queue:', err);
-      }
-    };
-
-    const handleCancel = () => {
-      document.removeEventListener('pointermove', handleMove);
-      document.removeEventListener('pointerup', handleUp);
-      document.removeEventListener('pointercancel', handleCancel);
-      cancelAutoScroll();
-      const sc2 = scrollContainerRef.current;
-      if (sc2) {
-        sc2.scrollTop = Math.round(sc2.scrollTop);
-      } else {
-        window.scrollTo(0, Math.round(window.scrollY));
-      }
-      if (draggedElRef.current) {
-        draggedElRef.current.style.transition = '';
-        draggedElRef.current.style.transform = '';
-        draggedElRef.current = null;
-      }
-
-      dragItemRef.current = null;
-      overIndexRef.current = null;
-      setDragIndex(null);
-      setOverIndex(null);
-    };
-
-    document.addEventListener('pointermove', handleMove);
-    document.addEventListener('pointerup', handleUp);
-    document.addEventListener('pointercancel', handleCancel);
   };
 
   if (animatedItems.length === 0) {
@@ -294,24 +111,41 @@ export function QueueList() {
     }
   }
 
-  // Build the visual order for rendering
-  const displayItems = [...animatedItems];
-  if (dragIndex !== null && overIndex !== null && dragIndex !== overIndex) {
-    const [moved] = displayItems.splice(dragIndex, 1);
-    displayItems.splice(overIndex, 0, moved);
-  }
-
-  // Promoted base playlist items (score >= 3) are treated as non-base for display
-  const isBaseDisplay = (item: typeof queue[number]) => item.isFromBasePlaylist && item.score < 3;
-
   // Find the boundary between manual and base playlist items (exclude exiting items)
-  const nonExiting = displayItems.filter(ai => ai.phase !== 'exiting');
+  const nonExiting = animatedItems.filter(ai => ai.phase !== 'exiting');
   const firstBaseIndex = nonExiting.findIndex(ai => isBaseDisplay(ai.item));
   const firstBaseKey = firstBaseIndex >= 0 ? nonExiting[firstBaseIndex].key : null;
   const firstBaseDisplayIndex = firstBaseKey !== null
-    ? displayItems.findIndex(ai => ai.key === firstBaseKey)
+    ? animatedItems.findIndex(ai => ai.key === firstBaseKey)
     : -1;
   const manualCount = firstBaseIndex >= 0 ? firstBaseIndex : queue.length;
+
+  // During drag: figure out which item gets extra margin to open a slot.
+  // We build a "virtual list" (items minus the ghost), find the item at overIndex,
+  // and give it margin-top equal to the collapsed ghost's height.
+  const draggedItem = drag.fromIndex !== null ? queue[drag.fromIndex] : null;
+  const draggedKey = draggedItem ? draggedItem.id : null;
+  const itemHeight = drag.dragRect ? drag.dragRect.height + 6 : 0; // 6 = margin-bottom
+
+  // Map overIndex (in queue-space minus ghost) to an animatedItems key
+  let gapTargetKey: string | null = null;
+  let gapAtEnd = false;
+  if (drag.dragging && drag.fromIndex !== null && drag.overIndex !== null && drag.overIndex !== drag.fromIndex) {
+    // Build virtual list: non-exiting items, skipping the ghost
+    const virtual: string[] = [];
+    for (const ai of animatedItems) {
+      if (ai.phase === 'exiting') continue;
+      if (ai.key === draggedKey) continue;
+      virtual.push(ai.key);
+    }
+    if (drag.overIndex < virtual.length) {
+      gapTargetKey = virtual[drag.overIndex];
+    } else {
+      // Inserting at the end — margin-bottom on the last virtual item
+      gapAtEnd = true;
+      gapTargetKey = virtual.length > 0 ? virtual[virtual.length - 1] : null;
+    }
+  }
 
   return (
     <div className={styles.container} ref={listRef}>
@@ -321,21 +155,33 @@ export function QueueList() {
           {manualCount > 0 ? `${manualCount} requested` : `${queue.length} from playlist`}
         </span>
       </div>
-      {displayItems.map((ai, index) => {
+      {animatedItems.map((ai, index) => {
         const { item, phase, key } = ai;
         const originalIndex = queue.indexOf(item);
-        const isDragging = originalIndex === dragIndex;
+        const isBeingDragged = drag.dragging && key === draggedKey;
         const showDivider = index === firstBaseDisplayIndex && firstBaseIndex > 0;
         const myVote = userVotes[item.id] ?? 0;
         const visibleNum = stableNumbers.get(key) ?? 0;
+
+        // Compute shift margin: the item at gapTargetKey gets extra space
+        let shiftStyle: React.CSSProperties | undefined;
+        if (key === gapTargetKey && itemHeight > 0) {
+          if (gapAtEnd) {
+            shiftStyle = { marginBottom: itemHeight };
+          } else {
+            shiftStyle = { marginTop: itemHeight };
+          }
+        }
 
         return (
           <div
             key={key}
             data-key={key}
+            style={shiftStyle}
             className={[
               phase === 'entering' ? styles.itemEntering : '',
               phase === 'exiting' ? styles.itemExiting : '',
+              drag.dragging ? styles.dragShifting : '',
             ].join(' ')}
           >
             {showDivider && (
@@ -345,14 +191,14 @@ export function QueueList() {
               data-queue-item
               className={[
                 styles.item,
-                isDragging ? styles.itemDragging : '',
+                isBeingDragged ? styles.dragGhost : '',
                 isBaseDisplay(item) ? styles.itemBase : styles.itemRequested,
               ].join(' ')}
             >
               {isHost && (
                 <div
                   className={styles.dragHandle}
-                  onPointerDown={(e) => onPointerDown(e, originalIndex)}
+                  {...dragHandleProps(originalIndex)}
                 >
                   <GripVertical size={20} />
                 </div>
@@ -408,6 +254,56 @@ export function QueueList() {
           </div>
         );
       })}
+      {drag.dragging && draggedItem && drag.dragRect && createPortal(
+        <div
+          className={styles.dragOverlay}
+          style={{
+            top: drag.pointerY - drag.offsetY,
+            left: drag.dragRect.left,
+            width: drag.dragRect.width,
+          }}
+        >
+          <div
+            className={[
+              styles.item,
+              styles.itemDragging,
+              isBaseDisplay(draggedItem) ? styles.itemBase : styles.itemRequested,
+            ].join(' ')}
+          >
+            {isHost && (
+              <div className={styles.dragHandle}>
+                <GripVertical size={20} />
+              </div>
+            )}
+            <span className={styles.index}>{draggedItem ? stableNumbers.get(draggedItem.id) ?? '' : ''}</span>
+            {draggedItem.albumImageUrl && (
+              <img src={draggedItem.albumImageUrl} alt="" className={styles.thumb} />
+            )}
+            <div className={styles.trackInfo}>
+              <span className={styles.trackName}>{draggedItem.trackName}</span>
+              <span className={styles.trackArtist}>{draggedItem.artistName}</span>
+              <span className={styles.trackMeta}>
+                {formatDuration(draggedItem.durationMs)} &middot; Added by {draggedItem.addedByName}
+              </span>
+            </div>
+            <div className={styles.voteControls}>
+              <button className={styles.voteBtn} aria-label="Upvote">
+                <ThumbsUp size={16} />
+              </button>
+              <span className={styles.voteScore}>{draggedItem.score}</span>
+              <button className={styles.voteBtn} aria-label="Downvote">
+                <ThumbsDown size={16} />
+              </button>
+            </div>
+            {isHost && (
+              <button className={styles.removeBtn}>
+                <X size={18} />
+              </button>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

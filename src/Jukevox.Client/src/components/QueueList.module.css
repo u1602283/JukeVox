@@ -59,11 +59,33 @@
 }
 
 .itemDragging {
-  opacity: 0.85;
+  opacity: 0.95;
   background: var(--bg-elevated-hover);
   transform: scale(1.02);
   box-shadow: var(--shadow-lg);
-  z-index: 5;
+  margin-bottom: 0;
+}
+
+/* Placeholder left behind when an item is being dragged (collapsed) */
+.dragGhost {
+  overflow: hidden;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  opacity: 0;
+}
+
+/* Wrapper class applied during drag to animate items shifting */
+.dragShifting {
+  transition: margin 150ms ease-out;
+}
+
+/* Fixed-position floating copy of the dragged item */
+.dragOverlay {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
 }
 
 .dragHandle {
