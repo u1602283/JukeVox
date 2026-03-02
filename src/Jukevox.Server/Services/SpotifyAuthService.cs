@@ -13,6 +13,7 @@ public class SpotifyAuthService : ISpotifyAuthService
     private readonly HttpClient _httpClient;
     private readonly IPartyService _partyService;
     private readonly ILogger<SpotifyAuthService> _logger;
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     private static readonly string[] Scopes =
     [
@@ -79,7 +80,6 @@ public class SpotifyAuthService : ISpotifyAuthService
         };
 
         _partyService.SetSpotifyTokens(tokens);
-        _partyService.PersistState();
         return tokens;
     }
 
@@ -91,7 +91,21 @@ public class SpotifyAuthService : ISpotifyAuthService
         if (!tokens.IsExpired)
             return tokens.AccessToken;
 
-        return await RefreshTokenAsync(tokens);
+        // Serialize concurrent refresh attempts to avoid thundering herd
+        await _refreshLock.WaitAsync();
+        try
+        {
+            // Re-check after acquiring — another caller may have already refreshed
+            tokens = _partyService.GetSpotifyTokens();
+            if (tokens == null) return null;
+            if (!tokens.IsExpired) return tokens.AccessToken;
+
+            return await RefreshTokenAsync(tokens);
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
     }
 
     private async Task<string?> RefreshTokenAsync(SpotifyTokens tokens)
@@ -123,7 +137,6 @@ public class SpotifyAuthService : ISpotifyAuthService
             tokens.RefreshToken = tokenResponse.RefreshToken;
 
         _partyService.SetSpotifyTokens(tokens);
-        _partyService.PersistState();
         return tokens.AccessToken;
     }
 

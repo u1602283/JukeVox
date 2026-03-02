@@ -127,42 +127,49 @@ public class SpotifyPlayerService : ISpotifyPlayerService
         return response?.IsSuccessStatusCode ?? false;
     }
 
+    private const int MaxRetries = 5;
+
     private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url, string? jsonBody = null)
     {
-        var token = await _authService.GetValidAccessTokenAsync();
-        if (token == null) return null;
-
-        var request = new HttpRequestMessage(method, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        if (jsonBody != null)
-            request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-
-        try
+        for (var attempt = 0; ; attempt++)
         {
-            var response = await _httpClient.SendAsync(request);
+            var token = await _authService.GetValidAccessTokenAsync();
+            if (token == null) return null;
 
-            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            var request = new HttpRequestMessage(method, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            if (jsonBody != null)
+                request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+            try
             {
-                var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(1);
-                _logger.LogWarning("Spotify rate limited. Retry after: {RetryAfter}", retryAfter);
-                await Task.Delay(retryAfter);
-                return await SendAsync(method, url, jsonBody);
-            }
+                var response = await _httpClient.SendAsync(request);
 
-            if (!response.IsSuccessStatusCode)
+                if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < MaxRetries)
+                {
+                    var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(1);
+                    _logger.LogWarning("Spotify rate limited (attempt {Attempt}/{Max}). Retry after: {RetryAfter}",
+                        attempt + 1, MaxRetries, retryAfter);
+                    response.Dispose();
+                    await Task.Delay(retryAfter);
+                    continue;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Spotify API error: {Method} {Url} → {Status} {Body}",
+                        method, url, (int)response.StatusCode, body);
+                }
+
+                return response;
+            }
+            catch (Exception ex)
             {
-                var body = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Spotify API error: {Method} {Url} → {Status} {Body}",
-                    method, url, (int)response.StatusCode, body);
+                _logger.LogError(ex, "Spotify API call failed: {Method} {Url}", method, url);
+                return null;
             }
-
-            return response;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Spotify API call failed: {Method} {Url}", method, url);
-            return null;
         }
     }
 }

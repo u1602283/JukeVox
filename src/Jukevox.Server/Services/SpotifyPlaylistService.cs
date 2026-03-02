@@ -75,32 +75,39 @@ public class SpotifyPlaylistService : ISpotifyPlaylistService
         return tracks;
     }
 
+    private const int MaxRetries = 5;
+
     private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url)
     {
-        var token = await _authService.GetValidAccessTokenAsync();
-        if (token == null) return null;
-
-        var request = new HttpRequestMessage(method, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        try
+        for (var attempt = 0; ; attempt++)
         {
-            var response = await _httpClient.SendAsync(request);
+            var token = await _authService.GetValidAccessTokenAsync();
+            if (token == null) return null;
 
-            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            var request = new HttpRequestMessage(method, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            try
             {
-                var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(1);
-                _logger.LogWarning("Spotify rate limited. Retry after: {RetryAfter}", retryAfter);
-                await Task.Delay(retryAfter);
-                return await SendAsync(method, url);
-            }
+                var response = await _httpClient.SendAsync(request);
 
-            return response;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Spotify API call failed: {Method} {Url}", method, url);
-            return null;
+                if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < MaxRetries)
+                {
+                    var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(1);
+                    _logger.LogWarning("Spotify rate limited (attempt {Attempt}/{Max}). Retry after: {RetryAfter}",
+                        attempt + 1, MaxRetries, retryAfter);
+                    response.Dispose();
+                    await Task.Delay(retryAfter);
+                    continue;
+                }
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Spotify API call failed: {Method} {Url}", method, url);
+                return null;
+            }
         }
     }
 }

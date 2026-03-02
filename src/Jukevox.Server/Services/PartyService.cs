@@ -226,14 +226,15 @@ public class PartyService : IPartyService
     {
         try
         {
-            if (_currentParty == null)
-            {
-                File.WriteAllText(_stateFilePath, "null");
-                return;
-            }
+            var json = _currentParty == null
+                ? "null"
+                : JsonSerializer.Serialize(_currentParty, JsonOptions);
 
-            var json = JsonSerializer.Serialize(_currentParty, JsonOptions);
-            File.WriteAllText(_stateFilePath, json);
+            // Write to a temp file then atomically rename to avoid corruption
+            // if the process crashes mid-write.
+            var tmpPath = _stateFilePath + ".tmp";
+            File.WriteAllText(tmpPath, json);
+            File.Move(tmpPath, _stateFilePath, overwrite: true);
         }
         catch (Exception ex)
         {
