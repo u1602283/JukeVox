@@ -110,22 +110,9 @@
   text-overflow: ellipsis;
 }
 
-/* Marquee scroll for overflowing text */
+/* Marquee scroll for overflowing text (animation driven by Web Animations API) */
 .marquee {
   text-overflow: clip;
-}
-
-.marquee > span {
-  animation: marqueeScroll var(--marquee-duration, 4s) linear 2s infinite alternate;
-}
-
-@keyframes marqueeScroll {
-  0%, 15% {
-    transform: translateX(0);
-  }
-  85%, 100% {
-    transform: translateX(var(--marquee-distance, -100px));
-  }
 }
 
 .quip {

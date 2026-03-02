@@ -9,30 +9,56 @@ import styles from './NowPlaying.module.css';
  * Measures a text element for overflow and applies a scrolling marquee
  * animation via CSS custom properties when the text is truncated.
  */
+const MARQUEE_HOLD_MS = 2000;  // fixed pause at each end of scroll
+const MARQUEE_DELAY_MS = 4000; // initial delay before first scroll
+const MARQUEE_PX_PER_S = 27;   // scroll speed
+
 function useMarquee(text: string | undefined) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLSpanElement>(null);
+  const outerEl = useRef<HTMLDivElement | null>(null);
+  const innerEl = useRef<HTMLSpanElement | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const animRef = useRef<Animation | null>(null);
 
   const measure = useCallback(() => {
-    const outer = outerRef.current;
-    const inner = innerRef.current;
+    const outer = outerEl.current;
+    const inner = innerEl.current;
     if (!outer || !inner) return;
 
-    // Reset to measure natural width
+    // Cancel previous animation
+    if (animRef.current) {
+      animRef.current.cancel();
+      animRef.current = null;
+    }
     outer.classList.remove(styles.marquee);
-    inner.style.removeProperty('--marquee-distance');
-    inner.style.removeProperty('--marquee-duration');
+    inner.style.transform = '';
 
     // Allow layout to settle
     requestAnimationFrame(() => {
       if (!outer || !inner) return;
       const overflow = inner.scrollWidth - outer.clientWidth;
       if (overflow > 1) {
-        // ~27px/s scroll speed, min 3s
-        const duration = Math.max(overflow / 27, 3);
-        inner.style.setProperty('--marquee-distance', `-${overflow}px`);
-        inner.style.setProperty('--marquee-duration', `${duration}s`);
         outer.classList.add(styles.marquee);
+
+        // Compute per-element keyframe offsets so hold time is fixed
+        const scrollMs = Math.max(overflow / MARQUEE_PX_PER_S, 1) * 1000;
+        const totalMs = scrollMs + 2 * MARQUEE_HOLD_MS;
+        const holdFrac = MARQUEE_HOLD_MS / totalMs;
+
+        animRef.current = inner.animate(
+          [
+            { transform: 'translateX(0)', offset: 0 },
+            { transform: 'translateX(0)', offset: holdFrac },
+            { transform: `translateX(-${overflow}px)`, offset: 1 - holdFrac },
+            { transform: `translateX(-${overflow}px)`, offset: 1 },
+          ],
+          {
+            duration: totalMs,
+            iterations: Infinity,
+            direction: 'alternate',
+            delay: MARQUEE_DELAY_MS,
+            easing: 'linear',
+          }
+        );
       }
     });
   }, []);
@@ -41,14 +67,23 @@ function useMarquee(text: string | undefined) {
     measure();
   }, [text, measure]);
 
-  // Re-measure on resize
-  useEffect(() => {
-    const observer = new ResizeObserver(measure);
-    if (outerRef.current) observer.observe(outerRef.current);
-    return () => observer.disconnect();
+  const outerCallback = useCallback((node: HTMLDivElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    outerEl.current = node;
+    if (node) {
+      observerRef.current = new ResizeObserver(measure);
+      observerRef.current.observe(node);
+    }
   }, [measure]);
 
-  return { outerRef, innerRef };
+  const innerCallback = useCallback((node: HTMLSpanElement | null) => {
+    innerEl.current = node;
+  }, []);
+
+  return { outerRef: outerCallback, innerRef: innerCallback };
 }
 
 /** Preload an image; resolves when ready, rejects on error. */
@@ -185,8 +220,8 @@ export function NowPlaying({ children }: { children?: ReactNode }) {
   const { nowPlaying, party } = useParty();
   const isHost = party?.isHost && party.spotifyConnected;
   const ambientLayers = useAmbientCrossfade(nowPlaying?.albumImageUrl);
-  const trackMarquee = useMarquee(nowPlaying?.trackName);
-  const artistMarquee = useMarquee(nowPlaying?.artistName);
+  const { outerRef: trackOuterRef, innerRef: trackInnerRef } = useMarquee(nowPlaying?.trackName);
+  const { outerRef: artistOuterRef, innerRef: artistInnerRef } = useMarquee(nowPlaying?.artistName);
 
   // Seeking (ref-only, no React state needed)
   const seekingRef = useRef(false);
@@ -365,11 +400,11 @@ export function NowPlaying({ children }: { children?: ReactNode }) {
           </div>
         </div>
         <div className={styles.info}>
-          <div className={styles.track} ref={trackMarquee.outerRef}>
-            <span ref={trackMarquee.innerRef}>{nowPlaying.trackName}</span>
+          <div className={styles.track} ref={trackOuterRef}>
+            <span ref={trackInnerRef}>{nowPlaying.trackName}</span>
           </div>
-          <div className={styles.artist} ref={artistMarquee.outerRef}>
-            <span ref={artistMarquee.innerRef}>{nowPlaying.artistName}</span>
+          <div className={styles.artist} ref={artistOuterRef}>
+            <span ref={artistInnerRef}>{nowPlaying.artistName}</span>
           </div>
           {quip && <div className={styles.quip}>{quip}</div>}
         </div>
