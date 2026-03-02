@@ -292,9 +292,12 @@ export function QueueList() {
     displayItems.splice(overIndex, 0, moved);
   }
 
+  // Promoted base playlist items (score >= 3) are treated as non-base for display
+  const isBaseDisplay = (item: typeof queue[number]) => item.isFromBasePlaylist && item.score < 3;
+
   // Find the boundary between manual and base playlist items (exclude exiting items)
   const nonExiting = displayItems.filter(ai => ai.phase !== 'exiting');
-  const firstBaseIndex = nonExiting.findIndex(ai => ai.item.isFromBasePlaylist);
+  const firstBaseIndex = nonExiting.findIndex(ai => isBaseDisplay(ai.item));
   const firstBaseKey = firstBaseIndex >= 0 ? nonExiting[firstBaseIndex].key : null;
   const firstBaseDisplayIndex = firstBaseKey !== null
     ? displayItems.findIndex(ai => ai.key === firstBaseKey)
@@ -334,7 +337,7 @@ export function QueueList() {
               className={[
                 styles.item,
                 isDragging ? styles.itemDragging : '',
-                item.isFromBasePlaylist ? styles.itemBase : styles.itemRequested,
+                isBaseDisplay(item) ? styles.itemBase : styles.itemRequested,
               ].join(' ')}
             >
               {isHost && (

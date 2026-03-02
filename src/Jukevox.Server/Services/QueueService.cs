@@ -251,6 +251,10 @@ public class QueueService : IQueueService
             else
                 item.Votes[sessionId] = vote;
 
+            // Unpin if vote crosses promotion threshold so votes can override host ordering
+            if (item.HostPinned && item.Score >= 3)
+                item.HostPinned = false;
+
             bool isPromoted = !item.HostPinned && item.Score >= 3;
 
             // Auto-remove items at -3 or below
