@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Settings, Share2 } from 'lucide-react';
 import { startAuthentication } from '@simplewebauthn/browser';
@@ -14,7 +14,8 @@ import { DeviceSelector } from '../components/DeviceSelector';
 import { BasePlaylistSelector } from '../components/BasePlaylistSelector';
 import { ManagePanel } from '../components/ManagePanel';
 import { ShareOverlay } from '../components/ShareOverlay';
-import { TabIndicator } from '../components/TabIndicator';
+import { PartyLayout } from '../components/PartyLayout';
+import type { PanelDefinition } from '../components/PartyLayout';
 import type { HostStatus, SavedPartySummary } from '../types';
 import styles from './HostPortalPage.module.css';
 import partyStyles from './PartyPage.module.css';
@@ -40,25 +41,6 @@ export function HostPortalPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<'playing' | 'queue' | 'manage'>('playing');
-
-  // Tab indicator
-  const tabIndex = mobileView === 'playing' ? 0 : mobileView === 'queue' ? 1 : 2;
-
-  // Sticky header scroll detection
-  const [scrolled, setScrolled] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setScrolled(!entry.isIntersecting),
-      { threshold: 1 }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [party]);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -262,107 +244,96 @@ export function HostPortalPage() {
     setParty(null);
   };
 
-  return (
-    <div className={partyStyles.page}>
-      <div ref={sentinelRef} style={{ height: 1 }} />
-      <header className={`${partyStyles.header} ${scrolled ? partyStyles.headerScrolled : ''}`}>
-        <h1 className={partyStyles.headerTitle} style={{ width: 'auto', flex: 1 }}>JukeVox</h1>
-        <button className={partyStyles.logoutBtn} onClick={handleLogout}>
-          Logout
-        </button>
-        <div className={partyStyles.headerRight}>
-          {!party.spotifyConnected && (
-            <a href="/api/auth/login" className={partyStyles.connectBtn}>
-              Connect Spotify
-            </a>
-          )}
-          {party.spotifyConnected && (
-            <span className={`${partyStyles.spotifyStatus} ${partyStyles.desktopOnly}`}>Spotify Connected</span>
-          )}
-          <DeviceSelector />
-          <div className={partyStyles.headerIcons}>
-            <button className={partyStyles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
-              <span className={partyStyles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
-              <span className={partyStyles.inviteCodeCompact}><Share2 size={18} /></span>
-            </button>
-            <button
-              className={partyStyles.searchToggle}
-              onClick={() => setSearchOpen(true)}
-              aria-label="Search for a song"
-            >
-              <Search size={20} />
-            </button>
-            <button
-              className={`${partyStyles.searchToggle} ${partyStyles.desktopOnly}`}
-              onClick={() => setManageOpen(true)}
-              aria-label="Manage party"
-            >
-              <Settings size={20} />
-            </button>
-          </div>
-        </div>
-      </header>
+  const panels: PanelDefinition[] = [
+    {
+      label: 'Now Playing',
+      first: true,
+      content: (
+        <NowPlaying>
+          <HostControls />
+        </NowPlaying>
+      ),
+    },
+    {
+      label: 'Queue',
+      content: (
+        <>
+          <QueueList />
+          <BasePlaylistSelector />
+        </>
+      ),
+    },
+    {
+      label: 'Manage',
+      desktopHidden: true,
+      content: (active) => <ManagePanel mode="inline" visible={active} onPartyEnded={handlePartyEnded} />,
+    },
+  ];
 
-      <div className={`${partyStyles.contentGrid} ${partyStyles.hasSlideTrack}`}>
-        <div className={partyStyles.slideTrack} style={{ '--tab-index': tabIndex } as React.CSSProperties}>
-          <div className={`${partyStyles.slidePanel} ${partyStyles.slidePanelFirst}`} data-scrollable>
-            <div className={partyStyles.heroColumn}>
-              <NowPlaying>
-                <HostControls />
-              </NowPlaying>
+  return (
+    <PartyLayout
+      headerTitle={
+        <h1 className={partyStyles.headerTitle} style={{ width: 'auto', flex: 1 }}>JukeVox</h1>
+      }
+      headerRight={
+        <>
+          <button className={partyStyles.logoutBtn} onClick={handleLogout}>
+            Logout
+          </button>
+          <div className={partyStyles.headerRight}>
+            {!party.spotifyConnected && (
+              <a href="/api/auth/login" className={partyStyles.connectBtn}>
+                Connect Spotify
+              </a>
+            )}
+            {party.spotifyConnected && (
+              <span className={`${partyStyles.spotifyStatus} ${partyStyles.desktopOnly}`}>Spotify Connected</span>
+            )}
+            <DeviceSelector />
+            <div className={partyStyles.headerIcons}>
+              <button className={partyStyles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
+                <span className={partyStyles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
+                <span className={partyStyles.inviteCodeCompact}><Share2 size={18} /></span>
+              </button>
+              <button
+                className={partyStyles.searchToggle}
+                onClick={() => setSearchOpen(true)}
+                aria-label="Search for a song"
+              >
+                <Search size={20} />
+              </button>
+              <button
+                className={`${partyStyles.searchToggle} ${partyStyles.desktopOnly}`}
+                onClick={() => setManageOpen(true)}
+                aria-label="Manage party"
+              >
+                <Settings size={20} />
+              </button>
             </div>
           </div>
-          <div className={partyStyles.slidePanel} data-scrollable>
-            <QueueList />
-            <BasePlaylistSelector />
-          </div>
-          <div className={`${partyStyles.slidePanel} ${partyStyles.desktopHidden}`} data-scrollable>
-            <ManagePanel mode="inline" visible={mobileView === 'manage'} onPartyEnded={handlePartyEnded} />
-          </div>
-        </div>
-      </div>
-
-      <SearchOverlay
-        open={searchOpen}
-        onClose={handleCloseSearch}
-        query={query}
-        onQueryChange={setQuery}
-        results={results}
-        loading={searchLoading}
-      />
-
-      <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} inviteCode={party.inviteCode} />
-
-      {manageOpen && (
-        <ManagePanel
-          mode="overlay"
-          onClose={() => setManageOpen(false)}
-          onPartyEnded={handlePartyEnded}
-        />
-      )}
-
-      <nav className={partyStyles.mobileNav}>
-        <TabIndicator tabIndex={tabIndex} tabCount={3} />
-        <button
-          className={`${partyStyles.mobileNavBtn} ${mobileView === 'playing' ? partyStyles.mobileNavBtnActive : ''}`}
-          onClick={() => setMobileView('playing')}
-        >
-          Now Playing
-        </button>
-        <button
-          className={`${partyStyles.mobileNavBtn} ${mobileView === 'queue' ? partyStyles.mobileNavBtnActive : ''}`}
-          onClick={() => setMobileView('queue')}
-        >
-          Queue
-        </button>
-        <button
-          className={`${partyStyles.mobileNavBtn} ${mobileView === 'manage' ? partyStyles.mobileNavBtnActive : ''}`}
-          onClick={() => setMobileView('manage')}
-        >
-          Manage
-        </button>
-      </nav>
-
-    </div>
+        </>
+      }
+      panels={panels}
+      overlays={
+        <>
+          <SearchOverlay
+            open={searchOpen}
+            onClose={handleCloseSearch}
+            query={query}
+            onQueryChange={setQuery}
+            results={results}
+            loading={searchLoading}
+          />
+          <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} inviteCode={party.inviteCode} />
+          {manageOpen && (
+            <ManagePanel
+              mode="overlay"
+              onClose={() => setManageOpen(false)}
+              onPartyEnded={handlePartyEnded}
+            />
+          )}
+        </>
+      }
+    />
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { Search, HelpCircle, Share2 } from 'lucide-react';
 import { useParty } from '../hooks/useParty';
 import { useSearch } from '../hooks/useSearch';
@@ -8,31 +8,16 @@ import { SearchOverlay } from '../components/SearchOverlay';
 import { HelpOverlay } from '../components/HelpOverlay';
 import { ShareOverlay } from '../components/ShareOverlay';
 import { CreditsBadge } from '../components/CreditsBadge';
-import { TabIndicator } from '../components/TabIndicator';
+import { PartyLayout } from '../components/PartyLayout';
+import type { PanelDefinition } from '../components/PartyLayout';
 import styles from './PartyPage.module.css';
 
 export function PartyPage() {
   const { party } = useParty();
   const { query, setQuery, results, loading } = useSearch();
-  const [scrolled, setScrolled] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<'playing' | 'queue'>('playing');
   const [helpOpen, setHelpOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setScrolled(!entry.isIntersecting),
-      { threshold: 1 }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, []);
-
-  const tabIndex = mobileView === 'queue' ? 1 : 0;
 
   const handleCloseSearch = () => {
     setSearchOpen(false);
@@ -41,13 +26,19 @@ export function PartyPage() {
 
   if (!party) return null;
 
+  const panels: PanelDefinition[] = [
+    { label: 'Now Playing', first: true, content: <NowPlaying /> },
+    { label: 'Queue', content: <QueueList /> },
+  ];
+
   return (
-    <div className={styles.page}>
-      <div ref={sentinelRef} style={{ height: 1 }} />
-      <header className={`${styles.header} ${scrolled ? styles.headerScrolled : ''}`}>
+    <PartyLayout
+      headerTitle={
         <h1 className={styles.headerTitle}>
           {party.displayName ? `Hi, ${party.displayName}!` : 'JukeVox'}
         </h1>
+      }
+      headerRight={
         <div className={styles.headerRight}>
           <CreditsBadge />
           {party.isHost && party.spotifyConnected && (
@@ -76,48 +67,22 @@ export function PartyPage() {
             </button>
           </div>
         </div>
-      </header>
-
-      <div className={`${styles.contentGrid} ${styles.hasSlideTrack}`}>
-        <div className={styles.slideTrack} style={{ '--tab-index': tabIndex } as React.CSSProperties}>
-          <div className={`${styles.slidePanel} ${styles.slidePanelFirst}`} data-scrollable>
-            <div className={styles.heroColumn}>
-              <NowPlaying />
-            </div>
-          </div>
-          <div className={styles.slidePanel} data-scrollable>
-            <QueueList />
-          </div>
-        </div>
-      </div>
-
-      <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} inviteCode={party.inviteCode} />
-
-      <SearchOverlay
-        open={searchOpen}
-        onClose={handleCloseSearch}
-        query={query}
-        onQueryChange={setQuery}
-        results={results}
-        loading={loading}
-      />
-
-      <nav className={styles.mobileNav}>
-        <TabIndicator tabIndex={tabIndex} tabCount={2} />
-        <button
-          className={`${styles.mobileNavBtn} ${mobileView === 'playing' ? styles.mobileNavBtnActive : ''}`}
-          onClick={() => setMobileView('playing')}
-        >
-          Now Playing
-        </button>
-        <button
-          className={`${styles.mobileNavBtn} ${mobileView === 'queue' ? styles.mobileNavBtnActive : ''}`}
-          onClick={() => setMobileView('queue')}
-        >
-          Queue
-        </button>
-      </nav>
-    </div>
+      }
+      panels={panels}
+      overlays={
+        <>
+          <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+          <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} inviteCode={party.inviteCode} />
+          <SearchOverlay
+            open={searchOpen}
+            onClose={handleCloseSearch}
+            query={query}
+            onQueryChange={setQuery}
+            results={results}
+            loading={loading}
+          />
+        </>
+      }
+    />
   );
 }
