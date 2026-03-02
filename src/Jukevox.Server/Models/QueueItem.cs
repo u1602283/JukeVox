@@ -14,7 +14,6 @@ public class QueueItem
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
     public bool IsFromBasePlaylist { get; set; }
     public int InsertionOrder { get; set; }
-    public bool HostPinned { get; set; }
     public Dictionary<string, int> Votes { get; set; } = new();
 
     public int Score => Votes.Values.Sum();

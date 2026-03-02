@@ -174,6 +174,16 @@ export function QueueList() {
 
   const overIndexRef = useRef<number | null>(null);
 
+  // Prevent dragging items across the base playlist boundary
+  const clampDragIndex = (target: number, from: number) => {
+    const q = queueRef.current;
+    const baseStart = q.findIndex(i => isBaseDisplay(i));
+    if (baseStart < 0) return target; // no base playlist items
+    const draggingBase = isBaseDisplay(q[from]);
+    if (draggingBase) return Math.max(target, baseStart);
+    return Math.min(target, baseStart - 1);
+  };
+
   const onPointerDown = (e: React.PointerEvent, index: number) => {
     if (!isHost) return;
     e.preventDefault();
@@ -196,7 +206,7 @@ export function QueueList() {
         draggedElRef.current.style.transition = '';
         draggedElRef.current.style.transform = '';
       }
-      const target = getInsertIndex(ev.clientY, dragFrom);
+      const target = clampDragIndex(getInsertIndex(ev.clientY, dragFrom), dragFrom);
       overIndexRef.current = target;
       setOverIndex(target);
       startAutoScroll();

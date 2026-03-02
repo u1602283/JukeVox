@@ -102,11 +102,10 @@ public class QueueService : IQueueService
             party.Queue.Clear();
             party.Queue.AddRange(reordered);
 
-            // Pin all items at the host's chosen order
+            // Reassign insertion orders to reflect the host's chosen order
             for (int i = 0; i < party.Queue.Count; i++)
             {
                 party.Queue[i].InsertionOrder = i;
-                party.Queue[i].HostPinned = true;
             }
             party.NextInsertionOrder = party.Queue.Count;
             _partyService.PersistState();
@@ -244,18 +243,14 @@ public class QueueService : IQueueService
             var item = party.Queue.Find(q => q.Id == itemId);
             if (item == null) return (false, "Item not found");
 
-            bool wasPromoted = !item.HostPinned && item.Score >= 3;
+            bool wasPromoted = item.Score >= 3;
 
             if (vote == 0)
                 item.Votes.Remove(sessionId);
             else
                 item.Votes[sessionId] = vote;
 
-            // Unpin if vote crosses promotion threshold so votes can override host ordering
-            if (item.HostPinned && item.Score >= 3)
-                item.HostPinned = false;
-
-            bool isPromoted = !item.HostPinned && item.Score >= 3;
+            bool isPromoted = item.Score >= 3;
 
             // Auto-remove items at -3 or below
             if (item.Score <= -3)
@@ -303,16 +298,14 @@ public class QueueService : IQueueService
 
         sorted.Sort((a, b) =>
         {
-            // Tier 0: promoted (3+ votes, not host-pinned) — top of queue
-            // Tier 1: host-pinned items — maintain host's exact order (non-base only)
-            // Tier 2: regular queued items (not base playlist)
-            // Tier 3: base playlist items (always bottom, even if host-pinned)
+            // Tier 0: promoted (3+ votes) — top of queue
+            // Tier 1: regular queued items (not base playlist)
+            // Tier 2: base playlist items (always bottom)
             static int Tier(QueueItem x)
             {
-                if (!x.HostPinned && x.Score >= 3) return 0;
-                if (x.IsFromBasePlaylist) return 3;
-                if (x.HostPinned) return 1;
-                return 2;
+                if (x.Score >= 3) return 0;
+                if (x.IsFromBasePlaylist) return 2;
+                return 1;
             }
 
             var tierCmp = Tier(a).CompareTo(Tier(b));
