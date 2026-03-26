@@ -1,4 +1,13 @@
 steps:
+  - name: version
+    image: mcr.microsoft.com/dotnet/sdk:10.0-alpine
+    commands:
+      - dotnet tool install -g nbgv
+      - export PATH="$PATH:$HOME/.dotnet/tools"
+      - VERSION=$(nbgv get-version -v NuGetPackageVersion)
+      - echo "$VERSION" > .version
+      - echo "Version:$VERSION"
+
   - name: build
     image: woodpeckerci/plugin-docker-buildx
     settings:
@@ -18,18 +27,19 @@ steps:
     commands:
       - apk add --no-cache curl
       - curl -sL https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz | tar xz -C /usr/local/bin crane
-      - crane push jukevox.tar REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} --insecure
-      - crane tag REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} latest --insecure
+      - VERSION=$(cat .version)
+      - crane push jukevox.tar REDACTED_REGISTRY/jukevox:$VERSION --insecure
+      - crane tag REDACTED_REGISTRY/jukevox:$VERSION latest --insecure
 
   - name: cleanup-vulnerable-image
     image: alpine:3
     commands:
       - apk add --no-cache curl jq
-      - "TAG=${CI_COMMIT_SHA:0:8}"
+      - VERSION=$(cat .version)
       - "REGISTRY=http://REDACTED_REGISTRY"
       - "REPO=jukevox"
-      - 'DIGEST=$(curl -sf -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "$REGISTRY/v2/$REPO/manifests/$TAG" -o /dev/null -D - | grep -i docker-content-digest | tr -d "\r" | awk "{print \$2}")'
-      - 'echo "Deleting $REPO:$TAG (digest: $DIGEST)"'
+      - 'DIGEST=$(curl -sf -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "$REGISTRY/v2/$REPO/manifests/$VERSION" -o /dev/null -D - | grep -i docker-content-digest | tr -d "\r" | awk "{print \$2}")'
+      - 'echo "Deleting $REPO:$VERSION (digest: $DIGEST)"'
       - 'curl -sf -X DELETE "$REGISTRY/v2/$REPO/manifests/$DIGEST"'
       - 'echo "Deleted vulnerable image"'
     when:
