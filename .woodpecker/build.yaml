@@ -1,13 +1,17 @@
 steps:
   - name: build
-    image: moby/buildkit:rootless
-    commands:
-      - buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=$CI_WORKSPACE --local dockerfile=$CI_WORKSPACE --output type=image,name=jukevox:${CI_COMMIT_SHA:0:8}
-  # Uncomment when local registry is available
-  # - name: build-and-push
-  #   image: moby/buildkit:rootless
-  #   commands:
-  #     - buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=$CI_WORKSPACE --local dockerfile=$CI_WORKSPACE --output type=image,name=registry.home/jukevox:${CI_COMMIT_SHA:0:8},push=true
+    image: woodpeckerci/plugin-docker-buildx
+    privileged: true
+    settings:
+      dockerfile: Dockerfile
+      dry_run: true
+      # Uncomment when local registry is available
+      # dry_run: false
+      # registry: registry.home
+      # repo: registry.home/jukevox
+      # tags:
+      #   - ${CI_COMMIT_SHA:0:8}
+      #   - latest
 
 when:
   - event: push
