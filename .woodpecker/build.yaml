@@ -1,14 +1,16 @@
 steps:
   - name: build-and-push
-    image: ghcr.io/404systems/plugin-buildah:v1.1.0
+    image: quay.io/buildah/stable
     environment:
       BUILDAH_ISOLATION: chroot
       STORAGE_DRIVER: vfs
-    settings:
-      containerfile: Dockerfile
-      repo: jukevox
-      registry: REDACTED_REGISTRY
-      tags: "${CI_COMMIT_SHA:0:8},latest"
+    commands:
+      - mkdir -p $HOME/.config/containers
+      - printf '[storage]\ndriver = "vfs"\n' > $HOME/.config/containers/storage.conf
+      - buildah bud -t REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} -f Dockerfile .
+      - buildah tag REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} REDACTED_REGISTRY/jukevox:latest
+      - buildah push --tls-verify=false REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8}
+      - buildah push --tls-verify=false REDACTED_REGISTRY/jukevox:latest
 
   - name: scan
     image: alpine:3
