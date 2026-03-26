@@ -18,7 +18,7 @@ steps:
     settings:
       dockerfile: Dockerfile
       registry: REDACTED_REGISTRY
-      repo: jukevox
+      repo: REDACTED_REGISTRY/jukevox
       buildkit_config: |
         [registry."REDACTED_REGISTRY"]
           http = true
