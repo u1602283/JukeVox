@@ -4,7 +4,7 @@ steps:
     settings:
       dockerfile: Dockerfile
       dry-run: true
-      output: type=oci,dest=jukevox.tar
+      output: type=docker,dest=jukevox.tar
 
   - name: scan
     image: alpine:3
