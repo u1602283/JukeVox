@@ -23,7 +23,7 @@ steps:
         [registry."REDACTED_REGISTRY"]
           http = true
       tags:
-        - ${CI_COMMIT_SHA:0:8}
+        - "${CI_COMMIT_SHA:0:8}"
         - latest
 
   - name: cleanup-vulnerable-image
