@@ -1,30 +1,35 @@
 steps:
-  - name: build
-    image: woodpeckerci/plugin-docker-buildx
+  - name: build-and-push
+    image: ghcr.io/404systems/plugin-buildah:v1.1.0
+    environment:
+      BUILDAH_ISOLATION: chroot
+      STORAGE_DRIVER: vfs
     settings:
-      dockerfile: Dockerfile
-      dry-run: true
-      output: type=oci,dest=jukevox.tar
+      containerfile: Dockerfile
+      repo: REDACTED_REGISTRY/jukevox
+      registry: REDACTED_REGISTRY
+      tags: "${CI_COMMIT_SHA:0:8},latest"
 
   - name: scan
     image: alpine:3
     commands:
       - apk add --no-cache curl
       - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
-      - grype oci-archive:jukevox.tar --fail-on critical
+      - grype registry:REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} --fail-on critical
 
-  - name: push
-    image: woodpeckerci/plugin-docker-buildx:6-insecure
-    settings:
-      dockerfile: Dockerfile
-      registry: REDACTED_REGISTRY
-      repo: REDACTED_REGISTRY/jukevox
-      buildkit_config: |
-        [registry."REDACTED_REGISTRY"]
-          http = true
-      tags:
-        - ${CI_COMMIT_SHA:0:8}
-        - latest
+  - name: cleanup-vulnerable-image
+    image: alpine:3
+    commands:
+      - apk add --no-cache curl jq
+      - "TAG=${CI_COMMIT_SHA:0:8}"
+      - "REGISTRY=http://REDACTED_REGISTRY"
+      - "REPO=jukevox"
+      - 'DIGEST=$(curl -sf -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "$REGISTRY/v2/$REPO/manifests/$TAG" -o /dev/null -D - | grep -i docker-content-digest | tr -d "\r" | awk "{print \$2}")'
+      - 'echo "Deleting $REPO:$TAG (digest: $DIGEST)"'
+      - 'curl -sf -X DELETE "$REGISTRY/v2/$REPO/manifests/$DIGEST"'
+      - 'echo "Deleted vulnerable image"'
+    when:
+      - status: failure
 
 when:
   - event: push
