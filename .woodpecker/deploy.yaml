@@ -1,0 +1,24 @@
+name: Deploy
+steps:
+  - name: update-manifest
+    image: alpine/git:latest
+    commands:
+      - apk add --no-cache sed openssh
+      - mkdir -p ~/.ssh
+      - echo "$SSH_KEY" > ~/.ssh/id_ed25519
+      - chmod 600 ~/.ssh/id_ed25519
+      - ssh-keyscan github.com >> ~/.ssh/known_hosts
+      - git clone git@github.com:u1602283/REDACTED_GITOPS_REPO.git /tmp/REDACTED_GITOPS_REPO
+      - sed -i "s|image: registry.home/jukevox:.*|image: registry.home/jukevox:${CI_PIPELINE_ARG_TAG}|" /tmp/REDACTED_GITOPS_REPO/manifests/jukevox/deployment.yaml
+      - cd /tmp/REDACTED_GITOPS_REPO
+      - git config user.name "Woodpecker CI"
+      - git config user.email "ci@woodpecker.local"
+      - git add .
+      - git commit -m "Deploy jukevox:${CI_PIPELINE_ARG_TAG}"
+      - git push
+    secrets:
+      - source: woodpecker-deploy-key
+        target: SSH_KEY
+
+when:
+  - event: manual
