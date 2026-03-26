@@ -9,7 +9,7 @@ steps:
       - chmod 600 ~/.ssh/id_ed25519
       - ssh-keyscan github.com >> ~/.ssh/known_hosts
       - git clone git@github.com:u1602283/REDACTED_GITOPS_REPO.git /tmp/REDACTED_GITOPS_REPO
-      - sed -i "s|image: registry.home/jukevox:.*|image: registry.home/jukevox:${CI_PIPELINE_ARG_TAG}|" /tmp/REDACTED_GITOPS_REPO/manifests/jukevox/deployment.yaml
+      - 'sed -i "s|image: registry.home/jukevox:.*|image: registry.home/jukevox:${CI_PIPELINE_ARG_TAG}|" /tmp/REDACTED_GITOPS_REPO/manifests/jukevox/deployment.yaml'
       - cd /tmp/REDACTED_GITOPS_REPO
       - git config user.name "Woodpecker CI"
       - git config user.email "ci@woodpecker.local"
