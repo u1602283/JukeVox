@@ -3,13 +3,13 @@ steps:
     image: woodpeckerci/plugin-docker-buildx
     settings:
       dockerfile: Dockerfile
-      dry_run: true
-      output: type=docker,dest=${CI_WORKSPACE}/jukevox.tar
+      output: type=docker,dest=/woodpecker/src/jukevox.tar
 
   - name: scan
     image: anchore/grype:latest
     commands:
-      - grype ${CI_WORKSPACE}/jukevox.tar --fail-on critical
+      - ls -la /woodpecker/src/jukevox.tar
+      - grype docker-archive:/woodpecker/src/jukevox.tar --fail-on critical
 
   # Uncomment when local registry is available
   # - name: push
