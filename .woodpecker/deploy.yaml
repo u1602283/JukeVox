@@ -21,4 +21,3 @@ steps:
 
 when:
   - event: manual
-    evaluate: 'CI_PIPELINE_ARG_PIPELINE == "deploy"'
