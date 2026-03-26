@@ -15,6 +15,11 @@ steps:
       - echo "$VERSION" > .version
       - echo "Version:$VERSION"
 
+  - name: test
+    image: mcr.microsoft.com/dotnet/sdk:10.0-alpine
+    commands:
+      - dotnet test Jukevox.slnx
+
   - name: build
     image: woodpeckerci/plugin-docker-buildx
     settings:
