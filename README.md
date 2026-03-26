@@ -167,31 +167,26 @@ In production, the backend serves the built React app as static files with SPA f
 
 The container runs as a non-root user (`jukevox`, UID 10000). The health endpoint is `GET /api/health`.
 
-### CI/CD
+### CI/CD (Woodpecker)
 
-Two GitHub Actions workflows handle build and deploy:
+Pipelines are in `.woodpecker/`. Woodpecker CI runs on the homelab K3s cluster.
 
-**Build and Push** (`.github/workflows/build-and-push.yml`) — triggers on push to `main` when `src/` or `Dockerfile` changes:
-- Computes a semver tag via [Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning) (`version.json`)
-- Builds a `linux/arm64` Docker image
-- Pushes to Amazon ECR with the version tag + `latest`
+**Build pipeline** (`.woodpecker/build.yaml`) — triggers on push to `main` when `src/` or `Dockerfile` changes:
 
-**Deploy** (`.github/workflows/deploy.yml`) — manual `workflow_dispatch`:
-- Optionally deploys/updates CloudFormation infrastructure (`infra/jukevox.cfn.yml`)
-- Deploys the app by running `/opt/jukevox/deploy.sh` on the EC2 instance via AWS SSM
-- The deploy script pulls the new image from ECR, restarts the systemd service, and runs a health check
+1. **Build** — `plugin-docker-buildx` builds the image as a dry-run and exports a Docker-format tarball (`jukevox.tar`). This step runs privileged (Docker-in-Docker) because container image builds require kernel-level filesystem operations. The `WOODPECKER_PLUGINS_PRIVILEGED` server setting scopes this to only the buildx plugin image.
+2. **Scan** — [Grype](https://github.com/anchore/grype) scans the tarball for vulnerabilities. The pipeline fails on critical severity findings.
+3. **Push** — [crane](https://github.com/google/go-containerregistry) pushes the tarball to the internal Distribution registry at `REDACTED_REGISTRY`. Crane is used instead of buildx for the push because BuildKit's `buildkit_config` setting for HTTP registries does not propagate to the nested BuildKit container that buildx spawns. Crane is a simple CLI that talks directly to the registry API, avoiding this issue entirely. The `--insecure` flag allows plain HTTP since the registry is cluster-internal.
+4. **Cleanup** (on failure only) — if the scan fails, deletes the pushed image from the registry via the Distribution API to prevent deploying a vulnerable image.
 
-### Infrastructure
+**Deploy pipeline** (`.woodpecker/deploy.yaml`) — manual trigger:
 
-The CloudFormation template (`infra/jukevox.cfn.yml`) provisions:
+- Clones `REDACTED_GITOPS_REPO`, updates the image tag in the Kubernetes deployment manifest, and pushes. ArgoCD syncs the change automatically.
 
-- **EC2** `t4g.micro` (ARM64, Amazon Linux 2023)
-- **Cloudflare tunnel** for ingress — no inbound security group rules needed
-- **Persistent volumes** for `party-state.json` and `host-credential.json`
-- **Systemd services** for the JukeVox container and Cloudflare tunnel daemon
-- **IAM role** with ECR pull + Secrets Manager read permissions
+**Why this shape:**
+- The build and push are separate steps (not a single buildx build+push) because the scan needs to run between them, and because buildx cannot push to the internal HTTP registry due to BuildKit's nested container architecture ignoring registry config.
+- The tarball format is `type=docker` (not `type=oci`) because crane expects a `manifest.json` at the tar root, which is the Docker tar format. OCI tars use `index.json` instead.
+- Build pods are network-isolated via Kubernetes NetworkPolicy — they can only reach DNS, the internal registry (port 5000), and the public internet. All cluster-internal traffic (other namespaces, node IPs) is blocked.
 
-Secrets (Spotify credentials, host auth config, Cloudflare tunnel token) are stored in AWS Secrets Manager and injected at deploy time.
 
 ## Persisted state
 
