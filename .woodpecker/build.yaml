@@ -11,7 +11,6 @@ steps:
     commands:
       - apk add --no-cache curl
       - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
-      - ls -la jukevox.tar || echo "tar not found"
       - grype oci-archive:jukevox.tar --fail-on critical
 
   # Uncomment when local registry is available
