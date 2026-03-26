@@ -4,12 +4,12 @@ steps:
     settings:
       dockerfile: Dockerfile
       dry_run: true
-      output: type=docker,dest=/tmp/jukevox.tar
+      output: type=docker,dest=${CI_WORKSPACE}/jukevox.tar
 
   - name: scan
     image: anchore/grype:latest
     commands:
-      - grype /tmp/jukevox.tar --fail-on critical
+      - grype ${CI_WORKSPACE}/jukevox.tar --fail-on critical
 
   # Uncomment when local registry is available
   # - name: push
