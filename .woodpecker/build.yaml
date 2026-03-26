@@ -1,13 +1,13 @@
 steps:
   - name: build
-    image: gcr.io/kaniko-project/executor:debug
+    image: moby/buildkit:rootless
     commands:
-      - /kaniko/executor --context=$CI_WORKSPACE --dockerfile=Dockerfile --no-push --tar-path=/dev/null
+      - buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=$CI_WORKSPACE --local dockerfile=$CI_WORKSPACE --output type=image,name=jukevox:${CI_COMMIT_SHA:0:8}
   # Uncomment when local registry is available
   # - name: build-and-push
-  #   image: gcr.io/kaniko-project/executor:debug
+  #   image: moby/buildkit:rootless
   #   commands:
-  #     - /kaniko/executor --context=dir:///woodpecker/src --dockerfile=Dockerfile --destination=registry.home/jukevox:${CI_COMMIT_SHA:0:8} --destination=registry.home/jukevox:latest
+  #     - buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=$CI_WORKSPACE --local dockerfile=$CI_WORKSPACE --output type=image,name=registry.home/jukevox:${CI_COMMIT_SHA:0:8},push=true
 
 when:
   - event: push
