@@ -1,7 +1,6 @@
 steps:
   - name: build
     image: woodpeckerci/plugin-docker-buildx
-    privileged: true
     settings:
       dockerfile: Dockerfile
       dry_run: true
