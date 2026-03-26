@@ -127,8 +127,6 @@ src/
   JukeVox.Client/     React 19 + TypeScript (Vite)
 tests/
   JukeVox.Server.Tests/
-infra/
-  jukevox.cfn.yml     CloudFormation template (EC2 + Cloudflare tunnel)
 ```
 
 - **Queue management** — App-managed queue (not Spotify's) so users can reorder, remove, and vote on tracks. A 4-tier sort system promotes highly-voted songs and demotes disliked ones.
