@@ -14,11 +14,14 @@ steps:
       - grype oci-archive:jukevox.tar --fail-on critical
 
   - name: push
-    image: woodpeckerci/plugin-docker-buildx
+    image: woodpeckerci/plugin-docker-buildx:4-insecure
     settings:
       dockerfile: Dockerfile
       registry: REDACTED_REGISTRY
       repo: REDACTED_REGISTRY/jukevox
+      buildkit_config: |
+        [registry."REDACTED_REGISTRY"]
+          http = true
       tags:
         - ${CI_COMMIT_SHA:0:8}
         - latest
