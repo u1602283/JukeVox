@@ -6,7 +6,7 @@ steps:
       STORAGE_DRIVER: vfs
     settings:
       containerfile: Dockerfile
-      repo: REDACTED_REGISTRY/jukevox
+      repo: jukevox
       registry: REDACTED_REGISTRY
       tags: "${CI_COMMIT_SHA:0:8},latest"
 
