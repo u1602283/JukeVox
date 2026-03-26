@@ -45,7 +45,8 @@ public class HostCredentialService
     {
         _logger = logger;
         _serverDomain = fido2Config.ServerDomain;
-        _credentialFilePath = Path.Combine(env.ContentRootPath, "host-credential.json");
+        var dataDir = Environment.GetEnvironmentVariable("DATA_DIR") ?? env.ContentRootPath;
+        _credentialFilePath = Path.Combine(dataDir, "host-credential.json");
         LoadCredential();
     }
 

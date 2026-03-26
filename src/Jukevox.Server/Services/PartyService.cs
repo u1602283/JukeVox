@@ -19,7 +19,8 @@ public class PartyService : IPartyService
     public PartyService(IWebHostEnvironment env, ILogger<PartyService> logger)
     {
         _logger = logger;
-        _stateFilePath = Path.Combine(env.ContentRootPath, "party-state.json");
+        var dataDir = Environment.GetEnvironmentVariable("DATA_DIR") ?? env.ContentRootPath;
+        _stateFilePath = Path.Combine(dataDir, "party-state.json");
         LoadState();
     }
 
