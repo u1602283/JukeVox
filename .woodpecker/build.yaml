@@ -15,16 +15,18 @@ steps:
 
   - name: push
     image: woodpeckerci/plugin-docker-buildx:6-insecure
-    settings:
-      dockerfile: Dockerfile
-      registry: REDACTED_REGISTRY
-      repo: REDACTED_REGISTRY/jukevox
-      buildkit_config: |
+    commands:
+      - mkdir -p /etc/buildkit
+      - |
+        cat > /etc/buildkit/buildkitd.toml << 'TOML'
         [registry."REDACTED_REGISTRY"]
           http = true
-      tags:
-        - "${CI_COMMIT_SHA:0:8}"
-        - latest
+          insecure = true
+        TOML
+      - dockerd --data-root /var/lib/docker --host=unix:///var/run/docker.sock &
+      - sleep 3
+      - docker buildx create --name pusher --use --buildkitd-config /etc/buildkit/buildkitd.toml
+      - docker buildx build --rm=true -f Dockerfile . --pull=true --output type=image,push=true -t REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} -t REDACTED_REGISTRY/jukevox:latest
 
   - name: cleanup-vulnerable-image
     image: alpine:3
