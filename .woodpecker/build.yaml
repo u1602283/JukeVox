@@ -1,23 +1,30 @@
 steps:
-  - name: build-and-push
-    image: quay.io/buildah/stable
-    environment:
-      BUILDAH_ISOLATION: chroot
-      STORAGE_DRIVER: vfs
-    commands:
-      - mkdir -p $HOME/.config/containers
-      - printf '[storage]\ndriver = "vfs"\n' > $HOME/.config/containers/storage.conf
-      - buildah bud -t REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} -f Dockerfile .
-      - buildah tag REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} REDACTED_REGISTRY/jukevox:latest
-      - buildah push --tls-verify=false REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8}
-      - buildah push --tls-verify=false REDACTED_REGISTRY/jukevox:latest
+  - name: build
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      dockerfile: Dockerfile
+      dry-run: true
+      output: type=oci,dest=jukevox.tar
 
   - name: scan
     image: alpine:3
     commands:
       - apk add --no-cache curl
       - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
-      - grype registry:REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} --fail-on critical
+      - grype oci-archive:jukevox.tar --fail-on critical
+
+  - name: push
+    image: woodpeckerci/plugin-docker-buildx:6-insecure
+    settings:
+      dockerfile: Dockerfile
+      registry: REDACTED_REGISTRY
+      repo: jukevox
+      buildkit_config: |
+        [registry."REDACTED_REGISTRY"]
+          http = true
+      tags:
+        - ${CI_COMMIT_SHA:0:8}
+        - latest
 
   - name: cleanup-vulnerable-image
     image: alpine:3
