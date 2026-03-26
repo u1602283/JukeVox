@@ -2,6 +2,7 @@ clone:
   - name: clone
     image: woodpeckerci/plugin-git
     settings:
+      partial: false
       depth: 0
 
 steps:
