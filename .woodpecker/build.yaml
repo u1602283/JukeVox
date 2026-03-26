@@ -1,4 +1,9 @@
 steps:
+  - name: scan-deps
+    image: anchore/grype:latest
+    commands:
+      - grype dir:. --fail-on critical
+
   - name: build
     image: woodpeckerci/plugin-docker-buildx
     settings:
