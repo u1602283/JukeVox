@@ -22,4 +22,3 @@ when:
       include:
         - src/**
         - Dockerfile
-  - event: manual
