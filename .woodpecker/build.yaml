@@ -2,7 +2,7 @@ steps:
   - name: build
     image: gcr.io/kaniko-project/executor:debug
     commands:
-      - /kaniko/executor --context=dir:///woodpecker/src --dockerfile=Dockerfile --no-push --tar-path=/dev/null
+      - /kaniko/executor --context=$CI_WORKSPACE --dockerfile=Dockerfile --no-push --tar-path=/dev/null
   # Uncomment when local registry is available
   # - name: build-and-push
   #   image: gcr.io/kaniko-project/executor:debug
