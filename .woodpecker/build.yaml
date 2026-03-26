@@ -4,13 +4,14 @@ steps:
     image: docker:27
     commands:
       - docker build -t jukevox:${CI_COMMIT_SHA:0:8} .
-      # - name: push
-      #   image: docker:27
-      #   commands:
-      #     - docker tag jukevox:${CI_COMMIT_SHA:0:8} registry.home/jukevox:${CI_COMMIT_SHA:0:8}
-      #     - docker tag jukevox:${CI_COMMIT_SHA:0:8} registry.home/jukevox:latest
-      #     - docker push registry.home/jukevox:${CI_COMMIT_SHA:0:8}
-      #     - docker push registry.home/jukevox:latest
+  # Uncomment when local registry is available
+  # - name: push
+  #   image: docker:27
+  #   commands:
+  #     - docker tag jukevox:${CI_COMMIT_SHA:0:8} registry.home/jukevox:${CI_COMMIT_SHA:0:8}
+  #     - docker tag jukevox:${CI_COMMIT_SHA:0:8} registry.home/jukevox:latest
+  #     - docker push registry.home/jukevox:${CI_COMMIT_SHA:0:8}
+  #     - docker push registry.home/jukevox:latest
 
 when:
   - event: push
