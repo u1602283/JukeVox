@@ -19,7 +19,6 @@ steps:
       dockerfile: Dockerfile
       registry: REDACTED_REGISTRY
       repo: REDACTED_REGISTRY/jukevox
-      loosessl: true
       tags:
         - ${CI_COMMIT_SHA:0:8}
         - latest
