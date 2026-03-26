@@ -38,6 +38,24 @@ steps:
       - crane push jukevox.tar REDACTED_REGISTRY/jukevox:$VERSION --insecure
       - crane tag REDACTED_REGISTRY/jukevox:$VERSION latest --insecure
 
+  - name: prune-old-images
+    image: alpine:3
+    commands:
+      - apk add --no-cache curl jq
+      - "REGISTRY=http://REDACTED_REGISTRY"
+      - "REPO=jukevox"
+      - "KEEP=10"
+      - 'TAGS=$(curl -sf "$REGISTRY/v2/$REPO/tags/list" | jq -r ".tags[]" | grep -v "^latest$" | sort -t. -k1,1n -k2,2n -k3,3n)'
+      - 'COUNT=$(echo "$TAGS" | wc -l)'
+      - 'if [ "$COUNT" -le "$KEEP" ]; then echo "Only $COUNT tags, nothing to prune"; exit 0; fi'
+      - 'DELETE=$(echo "$TAGS" | head -n $(($COUNT - $KEEP)))'
+      - |
+        for TAG in $DELETE; do
+          DIGEST=$(curl -sf -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "$REGISTRY/v2/$REPO/manifests/$TAG" -o /dev/null -D - | grep -i docker-content-digest | tr -d "\r" | awk "{print \$2}")
+          echo "Deleting $REPO:$TAG (digest: $DIGEST)"
+          curl -sf -X DELETE "$REGISTRY/v2/$REPO/manifests/$DIGEST"
+        done
+
   - name: cleanup-vulnerable-image
     image: alpine:3
     commands:
