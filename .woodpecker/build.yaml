@@ -14,7 +14,7 @@ steps:
       - grype oci-archive:jukevox.tar --fail-on critical
 
   - name: push
-    image: woodpeckerci/plugin-docker-buildx:4-insecure
+    image: woodpeckerci/plugin-docker-buildx:6-insecure
     settings:
       dockerfile: Dockerfile
       registry: REDACTED_REGISTRY
