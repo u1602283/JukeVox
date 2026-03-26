@@ -9,18 +9,9 @@ steps:
   - name: scan
     image: anchore/grype:latest
     commands:
-      - grype oci-archive:jukevox.tar --fail-on critical
-
-  # Uncomment when local registry is available
-  # - name: push
-  #   image: woodpeckerci/plugin-docker-buildx
-  #   settings:
-  #     dockerfile: Dockerfile
-  #     registry: registry.home
-  #     repo: registry.home/jukevox
-  #     tags:
-  #       - ${CI_COMMIT_SHA:0:8}
-  #       - latest
+      - ls -la ${CI_WORKSPACE}/ || true
+      - find / -name "jukevox.tar" 2>/dev/null || true
+      - echo "workspace is ${CI_WORKSPACE}"
 
 when:
   - event: push
