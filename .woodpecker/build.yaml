@@ -7,11 +7,23 @@ steps:
       output: type=oci,dest=jukevox.tar
 
   - name: scan
-    image: anchore/grype:latest
+    image: alpine:3
     commands:
-      - ls -la ${CI_WORKSPACE}/ || true
-      - find / -name "jukevox.tar" 2>/dev/null || true
-      - echo "workspace is ${CI_WORKSPACE}"
+      - apk add --no-cache curl
+      - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+      - ls -la jukevox.tar || echo "tar not found"
+      - grype oci-archive:jukevox.tar --fail-on critical
+
+  # Uncomment when local registry is available
+  # - name: push
+  #   image: woodpeckerci/plugin-docker-buildx
+  #   settings:
+  #     dockerfile: Dockerfile
+  #     registry: registry.home
+  #     repo: registry.home/jukevox
+  #     tags:
+  #       - ${CI_COMMIT_SHA:0:8}
+  #       - latest
 
 when:
   - event: push
