@@ -1,6 +1,3 @@
-labels:
-  name: Deploy
-
 steps:
   - name: update-manifest
     image: alpine/git:latest
