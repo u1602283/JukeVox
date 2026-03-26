@@ -14,19 +14,10 @@ steps:
       - grype oci-archive:jukevox.tar --fail-on critical
 
   - name: push
-    image: woodpeckerci/plugin-docker-buildx:6-insecure
-    settings:
-      dockerfile: Dockerfile
-      registry: REDACTED_REGISTRY
-      repo: REDACTED_REGISTRY/jukevox
-      insecure: true
-      tags:
-        - "${CI_COMMIT_SHA:0:8}"
-        - latest
-      buildkit_config: |
-        [registry."REDACTED_REGISTRY"]
-          http = true
-          insecure = true
+    image: gcr.io/go-containerregistry/crane:debug
+    commands:
+      - crane push jukevox.tar REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} --insecure
+      - crane tag REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} latest --insecure
 
   - name: cleanup-vulnerable-image
     image: alpine:3
