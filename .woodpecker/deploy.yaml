@@ -1,7 +1,12 @@
-name: Deploy
+labels:
+  name: Deploy
+
 steps:
   - name: update-manifest
     image: alpine/git:latest
+    environment:
+      SSH_KEY:
+        from_secret: woodpecker-deploy-key
     commands:
       - apk add --no-cache sed openssh
       - mkdir -p ~/.ssh
@@ -16,9 +21,6 @@ steps:
       - git add .
       - git commit -m "Deploy jukevox:${CI_PIPELINE_ARG_TAG}"
       - git push
-    secrets:
-      - source: woodpecker-deploy-key
-        target: SSH_KEY
 
 when:
   - event: manual

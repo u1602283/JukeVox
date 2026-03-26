@@ -1,4 +1,6 @@
-name: Build
+labels:
+  name: Build
+
 steps:
   - name: build
     image: docker:27
