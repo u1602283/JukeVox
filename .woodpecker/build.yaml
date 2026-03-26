@@ -14,8 +14,10 @@ steps:
       - grype oci-archive:jukevox.tar --fail-on critical
 
   - name: push
-    image: gcr.io/go-containerregistry/crane:debug
+    image: alpine:3
     commands:
+      - apk add --no-cache curl
+      - curl -sL https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz | tar xz -C /usr/local/bin crane
       - crane push jukevox.tar REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} --insecure
       - crane tag REDACTED_REGISTRY/jukevox:${CI_COMMIT_SHA:0:8} latest --insecure
 
