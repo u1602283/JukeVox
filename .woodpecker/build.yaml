@@ -40,14 +40,14 @@ steps:
       - apk add --no-cache curl
       - curl -sL https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz | tar xz -C /usr/local/bin crane
       - VERSION=$(cat .version)
-      - crane push jukevox.tar REDACTED_REGISTRY/jukevox:$VERSION --insecure
-      - crane tag REDACTED_REGISTRY/jukevox:$VERSION latest --insecure
+      - crane push jukevox.tar distribution.registry.svc.cluster.local:5000/jukevox:$VERSION --insecure
+      - crane tag distribution.registry.svc.cluster.local:5000/jukevox:$VERSION latest --insecure
 
   - name: prune-old-images
     image: alpine:3
     commands:
       - apk add --no-cache curl jq
-      - "REGISTRY=http://REDACTED_REGISTRY"
+      - "REGISTRY=http://distribution.registry.svc.cluster.local:5000"
       - "REPO=jukevox"
       - "KEEP=10"
       - 'TAGS=$(curl -sf "$REGISTRY/v2/$REPO/tags/list" | jq -r ".tags[]" | grep -v "^latest$" | sort -t. -k1,1n -k2,2n -k3,3n)'
@@ -66,7 +66,7 @@ steps:
     commands:
       - apk add --no-cache curl jq
       - VERSION=$(cat .version)
-      - "REGISTRY=http://REDACTED_REGISTRY"
+      - "REGISTRY=http://distribution.registry.svc.cluster.local:5000"
       - "REPO=jukevox"
       - 'DIGEST=$(curl -sf -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "$REGISTRY/v2/$REPO/manifests/$VERSION" -o /dev/null -D - | grep -i docker-content-digest | tr -d "\r" | awk "{print \$2}")'
       - 'echo "Deleting $REPO:$VERSION (digest: $DIGEST)"'

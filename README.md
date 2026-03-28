@@ -187,25 +187,12 @@ In production, the backend serves the built React app as static files with SPA f
 
 The container runs as a non-root user (`jukevox`, UID 10000). The health endpoint is `GET /api/health`.
 
-### CI/CD (Woodpecker)
+### CI/CD
 
-Pipelines are in `.woodpecker/`. Woodpecker CI runs on the homelab K3s cluster.
+Pipelines are in `.woodpecker/`, running on a self-hosted [Woodpecker CI](https://woodpecker-ci.org/) instance.
 
-**Build pipeline** (`.woodpecker/build.yaml`) — triggers on push to `main` when `src/` or `Dockerfile` changes:
-
-1. **Build** — `plugin-docker-buildx` builds the image as a dry-run and exports a Docker-format tarball (`jukevox.tar`). This step runs privileged (Docker-in-Docker) because container image builds require kernel-level filesystem operations. The `WOODPECKER_PLUGINS_PRIVILEGED` server setting scopes this to only the buildx plugin image.
-2. **Scan** — [Grype](https://github.com/anchore/grype) scans the tarball for vulnerabilities. The pipeline fails on critical severity findings.
-3. **Push** — [crane](https://github.com/google/go-containerregistry) pushes the tarball to the internal Distribution registry at `REDACTED_REGISTRY`. Crane is used instead of buildx for the push because BuildKit's `buildkit_config` setting for HTTP registries does not propagate to the nested BuildKit container that buildx spawns. Crane is a simple CLI that talks directly to the registry API, avoiding this issue entirely. The `--insecure` flag allows plain HTTP since the registry is cluster-internal.
-4. **Cleanup** (on failure only) — if the scan fails, deletes the pushed image from the registry via the Distribution API to prevent deploying a vulnerable image.
-
-**Deploy pipeline** (`.woodpecker/deploy.yaml`) — manual trigger:
-
-- Clones `REDACTED_GITOPS_REPO`, updates the image tag in the Kubernetes deployment manifest, and pushes. ArgoCD syncs the change automatically.
-
-**Why this shape:**
-- The build and push are separate steps (not a single buildx build+push) because the scan needs to run between them, and because buildx cannot push to the internal HTTP registry due to BuildKit's nested container architecture ignoring registry config.
-- The tarball format is `type=docker` (not `type=oci`) because crane expects a `manifest.json` at the tar root, which is the Docker tar format. OCI tars use `index.json` instead.
-- Build pods are network-isolated via Kubernetes NetworkPolicy — they can only reach DNS, the internal registry (port 5000), and the public internet. All cluster-internal traffic (other namespaces, node IPs) is blocked.
+- **Build** — triggers on push to `main`. Builds the Docker image, scans it for vulnerabilities with [Grype](https://github.com/anchore/grype) (fails on critical findings), then pushes to an internal container registry.
+- **Deploy** — manual trigger. Updates the Kubernetes manifest in a separate GitOps repo, which ArgoCD syncs automatically.
 
 
 ## Persisted state

@@ -25,9 +25,9 @@ steps:
       - echo "$SSH_KEY" > ~/.ssh/id_ed25519
       - chmod 600 ~/.ssh/id_ed25519
       - ssh-keyscan github.com >> ~/.ssh/known_hosts
-      - git clone git@github.com:u1602283/REDACTED_GITOPS_REPO.git /tmp/REDACTED_GITOPS_REPO
-      - 'sed -i "s|image: REDACTED_REGISTRY/jukevox:.*|image: REDACTED_REGISTRY/jukevox:$TAG|" /tmp/REDACTED_GITOPS_REPO/manifests/jukevox/deployment.yaml'
-      - cd /tmp/REDACTED_GITOPS_REPO
+      - git clone git@github.com:u1602283/homelab-cd.git /tmp/homelab-cd
+      - 'sed -i "s|image: distribution.registry.svc.cluster.local:5000/jukevox:.*|image: distribution.registry.svc.cluster.local:5000/jukevox:$TAG|" /tmp/homelab-cd/manifests/jukevox/deployment.yaml'
+      - cd /tmp/homelab-cd
       - git config user.name "Woodpecker CI"
       - git config user.email "ci@woodpecker.local"
       - git add .
