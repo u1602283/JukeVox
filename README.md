@@ -111,6 +111,28 @@ Open https://jukevox-dev.scottp.dev:5173 in your browser. The Vite dev server pr
 
 The passkey credential is stored in `host-credential.json` (gitignored). Host auth cookies are ephemeral — they are invalidated when the server restarts, so you'll need to log in again after each restart.
 
+## Pre-commit hooks
+
+This project uses [pre-commit](https://pre-commit.com/) to catch issues before they're committed. Install the hooks after cloning:
+
+```sh
+pre-commit install
+```
+
+Hooks include:
+- **gitleaks** — scans for secrets, API keys, and tokens
+- **detect-private-key** — catches committed private keys
+- **trailing-whitespace / end-of-file-fixer** — file hygiene
+- **check-merge-conflict** — catches unresolved conflict markers
+- **check-added-large-files** — blocks files over 500KB
+- **check-json / check-yaml** — validates config syntax
+
+Run against all files manually:
+
+```sh
+pre-commit run --all-files
+```
+
 ## Running tests
 
 ```sh
