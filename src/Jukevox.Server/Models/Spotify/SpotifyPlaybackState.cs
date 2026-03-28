@@ -43,4 +43,3 @@ public class SpotifyDevicesResponse
     [JsonPropertyName("devices")]
     public List<SpotifyDevice> Devices { get; set; } = [];
 }
-
