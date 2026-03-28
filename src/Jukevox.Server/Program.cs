@@ -29,7 +29,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Auto-detect mkcert PEM files at project root for TLS
+// Auto-detect mkcert PEM files at project root for local TLS
 var certPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../../cert.pem"));
 var keyPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../../key.pem"));
 if (File.Exists(certPath) && File.Exists(keyPath))
