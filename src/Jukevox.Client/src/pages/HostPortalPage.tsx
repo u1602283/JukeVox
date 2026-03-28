@@ -31,7 +31,7 @@ export function HostPortalPage() {
 
   // Party creation state
   const [inviteCode, setInviteCode] = useState('');
-  const [defaultCredits, setDefaultCredits] = useState(5);
+  const [defaultCredits, setDefaultCredits] = useState('5');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [savedParty, setSavedParty] = useState<SavedPartySummary | null>(null);
@@ -98,9 +98,15 @@ export function HostPortalPage() {
     setCreating(true);
     setCreateError('');
     try {
+      const credits = parseInt(defaultCredits, 10);
+      if (!credits || credits < 1) {
+        setCreateError('Credits per guest must be at least 1');
+        setCreating(false);
+        return;
+      }
       const state = await api.createParty({
         inviteCode: inviteCode.trim() || undefined,
-        defaultCredits,
+        defaultCredits: credits,
       });
       setParty(state);
     } catch (err: unknown) {
@@ -215,7 +221,7 @@ export function HostPortalPage() {
                 min={1}
                 max={100}
                 value={defaultCredits}
-                onChange={(e) => setDefaultCredits(parseInt(e.target.value, 10) || 5)}
+                onChange={(e) => setDefaultCredits(e.target.value)}
                 className={`${styles.input} ${styles.creditsInput}`}
               />
             </div>

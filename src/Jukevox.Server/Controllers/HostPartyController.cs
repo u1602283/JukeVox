@@ -45,6 +45,9 @@ public class HostPartyController : ControllerBase
         if (!HttpContext.IsHostAuthenticated())
             return Unauthorized(new { error = "Host authentication required" });
 
+        if (request.DefaultCredits < 1)
+            return BadRequest(new { error = "Credits per guest must be at least 1" });
+
         var sessionId = HttpContext.GetSessionId();
         var inviteCode = request.InviteCode ?? GenerateInviteCode();
         var party = _partyService.CreateParty(sessionId, inviteCode, request.DefaultCredits);
@@ -112,6 +115,9 @@ public class HostPartyController : ControllerBase
     {
         if (!HttpContext.IsHostAuthenticated())
             return Unauthorized(new { error = "Host authentication required" });
+
+        if (request.DefaultCredits.HasValue && request.DefaultCredits.Value < 1)
+            return BadRequest(new { error = "Credits per guest must be at least 1" });
 
         _partyService.UpdateSettings(request.InviteCode, request.DefaultCredits);
         return Ok();
