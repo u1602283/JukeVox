@@ -105,6 +105,22 @@ export interface AddToQueueRequest {
 
 export interface HostStatus {
   authenticated: boolean;
+  hostId?: string;
+  isAdmin?: boolean;
   hasCredential: boolean;
   setupAvailable: boolean;
+}
+
+export interface PartySummary {
+  partyId: string;
+  inviteCode: string;
+  hostId: string;
+  queueCount: number;
+  guestCount: number;
+  createdAt: string;
+}
+
+export interface InviteCode {
+  code: string;
+  createdAt: string;
 }

@@ -1,5 +1,7 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using JukeVox.Server.Controllers;
@@ -13,6 +15,8 @@ namespace JukeVox.Server.Tests.Controllers;
 [TestFixture]
 public class HostPartyControllerTests
 {
+    private const string PartyId = "test1234";
+    private const string HostId = "test-host-id";
     private Mock<IPartyService> _partyService = null!;
     private Mock<IQueueService> _queueService = null!;
     private Mock<ISpotifyPlayerService> _playerService = null!;
@@ -20,6 +24,8 @@ public class HostPartyControllerTests
     private Mock<IPlaybackMonitorService> _monitorService = null!;
     private MockHubContext _hub = null!;
     private ConnectionMapping _connectionMapping = null!;
+    private HostCredentialService _credentialService = null!;
+    private string _tempDir = null!;
     private HostPartyController _controller = null!;
 
     [SetUp]
@@ -33,6 +39,12 @@ public class HostPartyControllerTests
         _hub = new MockHubContext();
         _connectionMapping = new ConnectionMapping();
 
+        _tempDir = Path.Combine(Path.GetTempPath(), $"jukevox-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_tempDir);
+        var env = new Mock<IWebHostEnvironment>();
+        env.Setup(e => e.ContentRootPath).Returns(_tempDir);
+        _credentialService = new HostCredentialService(env.Object, NullLogger<HostCredentialService>.Instance);
+
         _controller = new HostPartyController(
             _partyService.Object,
             _queueService.Object,
@@ -40,19 +52,33 @@ public class HostPartyControllerTests
             _playlistService.Object,
             _monitorService.Object,
             _hub.HubContext.Object,
-            _connectionMapping);
+            _connectionMapping,
+            _credentialService);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, true);
+    }
+
+    private void SetupActiveParty()
+    {
+        _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId);
     }
 
     [Test]
     public void GetGuests_AsHost_ReturnsGuestList()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext(hostId: HostId);
+        SetupActiveParty();
         var guests = new List<GuestSession>
         {
             new() { SessionId = "g1", DisplayName = "Alice", CreditsRemaining = 5 },
             new() { SessionId = "g2", DisplayName = "Bob", CreditsRemaining = 3 }
         };
-        _partyService.Setup(p => p.GetAllGuests()).Returns(guests);
+        _partyService.Setup(p => p.GetAllGuests(PartyId)).Returns(guests);
 
         var result = _controller.GetGuests();
 
@@ -76,9 +102,10 @@ public class HostPartyControllerTests
     [Test]
     public async Task SetGuestCredits_ValidGuest_ReturnsUpdatedGuest()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext(hostId: HostId);
+        SetupActiveParty();
         var guest = new GuestSession { SessionId = "g1", DisplayName = "Alice", CreditsRemaining = 10 };
-        _partyService.Setup(p => p.SetGuestCredits("g1", 10)).Returns(guest);
+        _partyService.Setup(p => p.SetGuestCredits(PartyId, "g1", 10)).Returns(guest);
 
         var result = await _controller.SetGuestCredits("g1", new AdjustCreditsRequest { Credits = 10 });
 
@@ -90,8 +117,9 @@ public class HostPartyControllerTests
     [Test]
     public async Task SetGuestCredits_UnknownGuest_ReturnsNotFound()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
-        _partyService.Setup(p => p.SetGuestCredits("nobody", 10)).Returns((GuestSession?)null);
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext(hostId: HostId);
+        SetupActiveParty();
+        _partyService.Setup(p => p.SetGuestCredits(PartyId, "nobody", 10)).Returns((GuestSession?)null);
 
         var result = await _controller.SetGuestCredits("nobody", new AdjustCreditsRequest { Credits = 10 });
 
@@ -101,9 +129,10 @@ public class HostPartyControllerTests
     [Test]
     public async Task SetGuestCredits_BroadcastsToConnectedGuest()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext(hostId: HostId);
+        SetupActiveParty();
         var guest = new GuestSession { SessionId = "g1", DisplayName = "Alice", CreditsRemaining = 7 };
-        _partyService.Setup(p => p.SetGuestCredits("g1", 7)).Returns(guest);
+        _partyService.Setup(p => p.SetGuestCredits(PartyId, "g1", 7)).Returns(guest);
 
         _connectionMapping.Add("g1", "conn-123");
         var mockClient = new Mock<Hubs.IPartyClient>();
@@ -118,13 +147,14 @@ public class HostPartyControllerTests
     [Test]
     public async Task AdjustAllCredits_ReturnsAllGuests()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext(hostId: HostId);
+        SetupActiveParty();
         var guests = new List<GuestSession>
         {
             new() { SessionId = "g1", DisplayName = "Alice", CreditsRemaining = 8 },
             new() { SessionId = "g2", DisplayName = "Bob", CreditsRemaining = 8 }
         };
-        _partyService.Setup(p => p.AdjustAllCredits(3)).Returns(guests);
+        _partyService.Setup(p => p.AdjustAllCredits(PartyId, 3)).Returns(guests);
 
         var result = await _controller.AdjustAllCredits(new BulkAdjustCreditsRequest { Credits = 3 });
 
@@ -136,26 +166,25 @@ public class HostPartyControllerTests
     [Test]
     public async Task EndParty_PausesAndBroadcastsAndClears()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
-        var party = new Party { HostSessionId = "host-session", InviteCode = "1234" };
-        _partyService.Setup(p => p.GetCurrentParty()).Returns(party);
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext(hostId: HostId);
+        SetupActiveParty();
         _playerService.Setup(p => p.PauseAsync()).ReturnsAsync(true);
         _hub.PartyClient.Setup(c => c.PartyEnded()).Returns(Task.CompletedTask);
-        _partyService.Setup(p => p.EndParty());
+        _partyService.Setup(p => p.EndParty(PartyId));
 
         var result = await _controller.EndParty();
 
         result.Should().BeOfType<OkObjectResult>();
         _playerService.Verify(p => p.PauseAsync(), Times.Once);
         _hub.PartyClient.Verify(c => c.PartyEnded(), Times.Once);
-        _partyService.Verify(p => p.EndParty(), Times.Once);
+        _partyService.Verify(p => p.EndParty(PartyId), Times.Once);
     }
 
     [Test]
     public async Task EndParty_NoActiveParty_ReturnsBadRequest()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
-        _partyService.Setup(p => p.GetCurrentParty()).Returns((Party?)null);
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext(hostId: HostId);
+        _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns((string?)null);
 
         var result = await _controller.EndParty();
 

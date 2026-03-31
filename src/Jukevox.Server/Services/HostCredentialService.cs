@@ -2,20 +2,20 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using DnsClient;
-using DnsClient.Protocol;
-using Fido2NetLib;
 using JukeVox.Server.Models;
 
 namespace JukeVox.Server.Services;
 
 public class HostCredentialService
 {
-    private readonly string _credentialFilePath;
-    private readonly string _serverDomain;
+    private readonly string _credentialsDir;
+    private readonly string _inviteCodesFilePath;
     private readonly ILogger<HostCredentialService> _logger;
     private readonly Lock _lock = new();
-    private HostCredential? _credential;
+
+    private readonly ConcurrentDictionary<string, HostCredential> _credentials = new();
+    private readonly ConcurrentDictionary<string, string> _credentialIdToHostId = new(new ByteArrayKeyComparer());
+    private readonly ConcurrentDictionary<string, DateTime> _inviteCodes = new();
     private string? _setupToken;
 
     // Temporary challenge storage for WebAuthn ceremonies
@@ -27,6 +27,7 @@ public class HostCredentialService
         "/usr/share/dict/british"
     ];
     private const string SpecialChars = "!@#$%^&*+=?~";
+    private static readonly TimeSpan InviteCodeTtl = TimeSpan.FromHours(24);
 
     private static readonly Lazy<string[]> DictionaryWords = new(() =>
     {
@@ -41,68 +42,141 @@ public class HostCredentialService
             .ToArray();
     });
 
-    public HostCredentialService(IWebHostEnvironment env, ILogger<HostCredentialService> logger, Fido2Configuration fido2Config)
+    public HostCredentialService(IWebHostEnvironment env, ILogger<HostCredentialService> logger)
     {
         _logger = logger;
-        _serverDomain = fido2Config.ServerDomain;
         var dataDir = Environment.GetEnvironmentVariable("DATA_DIR") ?? env.ContentRootPath;
-        _credentialFilePath = Path.Combine(dataDir, "host-credential.json");
-        LoadCredential();
+        _credentialsDir = Path.Combine(dataDir, "host-credentials");
+        _inviteCodesFilePath = Path.Combine(_credentialsDir, "_invite-codes.json");
+        Directory.CreateDirectory(_credentialsDir);
+        LoadCredentials();
+        MigrateLegacyCredential(dataDir);
+        LoadInviteCodes();
     }
 
-    public bool HasCredential
+    public bool HasAnyCredential => !_credentials.IsEmpty;
+
+    public bool IsSetupAvailable => !HasAnyCredential && _setupToken != null;
+
+    public HostCredential? GetCredential(string hostId)
     {
-        get { lock (_lock) { return _credential != null; } }
+        _credentials.TryGetValue(hostId, out var credential);
+        return credential;
     }
 
-    public bool IsSetupAvailable => !HasCredential && _setupToken != null;
-
-    public HostCredential? GetCredential()
+    public HostCredential? GetCredentialByCredentialId(byte[] credentialId)
     {
-        lock (_lock) { return _credential; }
+        var key = Convert.ToBase64String(credentialId);
+        if (_credentialIdToHostId.TryGetValue(key, out var hostId))
+            return GetCredential(hostId);
+        return null;
+    }
+
+    public HostCredential? GetCredentialByCredentialIdString(string credentialIdBase64)
+    {
+        // Fido2 v4 uses base64url strings for credential IDs — normalize to standard base64 for lookup
+        var normalized = Convert.ToBase64String(Convert.FromBase64String(
+            credentialIdBase64.Replace('-', '+').Replace('_', '/').PadRight(
+                credentialIdBase64.Length + (4 - credentialIdBase64.Length % 4) % 4, '=')));
+        if (_credentialIdToHostId.TryGetValue(normalized, out var hostId))
+            return GetCredential(hostId);
+        return null;
+    }
+
+    public List<HostCredential> GetAllCredentials()
+    {
+        return [.. _credentials.Values];
     }
 
     public bool IsSetupTokenValid(string token)
     {
         if (_setupToken == null) return false;
         return CryptographicOperations.FixedTimeEquals(
-            System.Text.Encoding.UTF8.GetBytes(token),
-            System.Text.Encoding.UTF8.GetBytes(_setupToken));
+            Encoding.UTF8.GetBytes(token),
+            Encoding.UTF8.GetBytes(_setupToken));
     }
 
-    public string SaveCredential(HostCredential credential)
+    public void SaveCredential(HostCredential credential)
     {
         lock (_lock)
         {
-            _credential = credential;
-            _setupToken = null; // Registration complete — clear the token
+            _credentials[credential.HostId] = credential;
+            _credentialIdToHostId[Convert.ToBase64String(credential.CredentialId)] = credential.HostId;
+
+            if (credential.IsAdmin)
+                _setupToken = null;
 
             var json = JsonSerializer.Serialize(new HostCredentialJson
             {
+                HostId = credential.HostId,
+                DisplayName = credential.DisplayName,
                 CredentialId = Convert.ToBase64String(credential.CredentialId),
                 PublicKey = Convert.ToBase64String(credential.PublicKey),
-                SignCount = credential.SignCount
+                SignCount = credential.SignCount,
+                IsAdmin = credential.IsAdmin
             }, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_credentialFilePath, json);
-            _logger.LogInformation("Host credential saved to {Path}. Setup token cleared.", _credentialFilePath);
 
-            // Return DNS TXT record value for display
-            var credIdB64Url = Base64UrlEncode(credential.CredentialId);
-            var pubKeyB64Url = Base64UrlEncode(credential.PublicKey);
-            return $"v=jukevox1;credId={credIdB64Url};pubKey={pubKeyB64Url};sigCount={credential.SignCount}";
+            var filePath = Path.Combine(_credentialsDir, $"{credential.HostId}.json");
+            File.WriteAllText(filePath, json);
+            _logger.LogInformation("Host credential saved for {HostId} ({DisplayName})", credential.HostId, credential.DisplayName);
         }
     }
 
-    public void UpdateSignCount(uint newSignCount)
+    public void UpdateSignCount(string hostId, uint newSignCount)
     {
+        var credential = GetCredential(hostId);
+        if (credential == null) return;
+
         lock (_lock)
         {
-            if (_credential == null) return;
-            _credential.SignCount = newSignCount;
+            credential.SignCount = newSignCount;
         }
-        // Re-save outside the main lock (SaveCredential acquires its own lock)
-        if (_credential != null) SaveCredential(_credential);
+        SaveCredential(credential);
     }
+
+    public bool IsAdmin(string hostId)
+    {
+        return _credentials.TryGetValue(hostId, out var cred) && cred.IsAdmin;
+    }
+
+    // --- Invite codes ---
+
+    public string GenerateInviteCode()
+    {
+        CleanupExpiredInviteCodes();
+
+        const string alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        var code = new char[8];
+        for (var i = 0; i < code.Length; i++)
+            code[i] = alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)];
+
+        var codeStr = new string(code);
+        _inviteCodes[codeStr] = DateTime.UtcNow;
+        PersistInviteCodes();
+        _logger.LogInformation("Generated host invite code: {Code}", codeStr);
+        return codeStr;
+    }
+
+    public bool ValidateAndConsumeInviteCode(string code)
+    {
+        code = code.ToUpperInvariant();
+        if (!_inviteCodes.TryRemove(code, out var created))
+            return false;
+
+        if (DateTime.UtcNow - created > InviteCodeTtl)
+            return false;
+
+        PersistInviteCodes();
+        return true;
+    }
+
+    public List<(string Code, DateTime Created)> GetActiveInviteCodes()
+    {
+        CleanupExpiredInviteCodes();
+        return _inviteCodes.Select(kv => (kv.Key, kv.Value)).ToList();
+    }
+
+    // --- Challenge storage ---
 
     public void StorePendingChallenge(string sessionId, object options)
     {
@@ -120,6 +194,8 @@ public class HostCredentialService
         return null;
     }
 
+    // --- Private ---
+
     private void CleanupExpiredChallenges()
     {
         var cutoff = DateTime.UtcNow.AddMinutes(-5);
@@ -130,44 +206,131 @@ public class HostCredentialService
         }
     }
 
-    private void LoadCredential()
+    private void CleanupExpiredInviteCodes()
     {
-        // Try local file
-        if (File.Exists(_credentialFilePath))
+        var cutoff = DateTime.UtcNow - InviteCodeTtl;
+        foreach (var kv in _inviteCodes)
+        {
+            if (kv.Value < cutoff)
+                _inviteCodes.TryRemove(kv.Key, out _);
+        }
+    }
+
+    private void LoadCredentials()
+    {
+        var files = Directory.GetFiles(_credentialsDir, "*.json")
+            .Where(f => !Path.GetFileName(f).StartsWith('_'));
+
+        foreach (var file in files)
         {
             try
             {
-                var json = File.ReadAllText(_credentialFilePath);
+                var json = File.ReadAllText(file);
                 var data = JsonSerializer.Deserialize<HostCredentialJson>(json);
                 if (data != null)
                 {
-                    _credential = new HostCredential
+                    var credential = new HostCredential
                     {
+                        HostId = data.HostId,
+                        DisplayName = data.DisplayName,
                         CredentialId = Convert.FromBase64String(data.CredentialId),
                         PublicKey = Convert.FromBase64String(data.PublicKey),
-                        SignCount = data.SignCount
+                        SignCount = data.SignCount,
+                        IsAdmin = data.IsAdmin
                     };
-                    _logger.LogInformation("Loaded host credential from file");
-                    return;
+                    _credentials[credential.HostId] = credential;
+                    _credentialIdToHostId[Convert.ToBase64String(credential.CredentialId)] = credential.HostId;
+                    _logger.LogInformation("Loaded host credential: {HostId} ({DisplayName})", credential.HostId, credential.DisplayName);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load host credential from {Path}", _credentialFilePath);
+                _logger.LogError(ex, "Failed to load host credential from {Path}", file);
             }
         }
 
-        // Try DNS TXT record
-        if (TryLoadFromDns())
+        if (_credentials.IsEmpty)
+        {
+            _setupToken = GeneratePassphrase();
+            _logger.LogWarning("No host credentials found. Setup mode active.");
+            _logger.LogWarning("Register your passkey at /host/setup using this token:");
+            _logger.LogWarning("");
+            _logger.LogWarning("    {Token}", _setupToken);
+            _logger.LogWarning("");
+        }
+        else
+        {
+            _logger.LogInformation("Loaded {Count} host credential(s)", _credentials.Count);
+        }
+    }
+
+    private void MigrateLegacyCredential(string dataDir)
+    {
+        var legacyPath = Path.Combine(dataDir, "host-credential.json");
+        if (!File.Exists(legacyPath) || HasAnyCredential)
             return;
 
-        // No credential found — generate a setup token for first-time registration
-        _setupToken = GeneratePassphrase();
-        _logger.LogWarning("No host credential found. Setup mode active.");
-        _logger.LogWarning("Register your passkey at /host/setup using this token:");
-        _logger.LogWarning("");
-        _logger.LogWarning("    {Token}", _setupToken);
-        _logger.LogWarning("");
+        try
+        {
+            var json = File.ReadAllText(legacyPath);
+            var data = JsonSerializer.Deserialize<LegacyHostCredentialJson>(json);
+            if (data != null)
+            {
+                var hostId = Guid.NewGuid().ToString("N")[..8];
+                var credential = new HostCredential
+                {
+                    HostId = hostId,
+                    DisplayName = "Admin",
+                    CredentialId = Convert.FromBase64String(data.CredentialId),
+                    PublicKey = Convert.FromBase64String(data.PublicKey),
+                    SignCount = data.SignCount,
+                    IsAdmin = true
+                };
+                SaveCredential(credential);
+                File.Move(legacyPath, legacyPath + ".migrated");
+                _setupToken = null;
+                _logger.LogInformation("Migrated legacy host credential to multi-host format (hostId: {HostId})", hostId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to migrate legacy host credential from {Path}", legacyPath);
+        }
+    }
+
+    private void LoadInviteCodes()
+    {
+        if (!File.Exists(_inviteCodesFilePath))
+            return;
+
+        try
+        {
+            var json = File.ReadAllText(_inviteCodesFilePath);
+            var codes = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(json);
+            if (codes != null)
+            {
+                foreach (var kv in codes)
+                    _inviteCodes[kv.Key] = kv.Value;
+            }
+            CleanupExpiredInviteCodes();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load invite codes");
+        }
+    }
+
+    private void PersistInviteCodes()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(_inviteCodes.ToDictionary(kv => kv.Key, kv => kv.Value));
+            File.WriteAllText(_inviteCodesFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist invite codes");
+        }
     }
 
     private string GeneratePassphrase()
@@ -181,8 +344,6 @@ public class HostCredentialService
             return Convert.ToHexString(RandomNumberGenerator.GetBytes(20));
         }
 
-        // Format: word<0-99><symbol> x4, e.g. "humble67#forest29!ocean41=bright93?"
-        // Entropy: ~(words^4) * (100^4) * (13^4) — well over 100 bits with a standard dictionary
         var sb = new StringBuilder();
         for (var i = 0; i < 4; i++)
         {
@@ -193,88 +354,29 @@ public class HostCredentialService
         return sb.ToString();
     }
 
-    private bool TryLoadFromDns()
-    {
-        var recordName = $"_jukevox-auth.{_serverDomain}";
-        try
-        {
-            var lookup = new LookupClient();
-            var result = lookup.Query(recordName, QueryType.TXT);
-
-            foreach (var txt in result.Answers.TxtRecords())
-            {
-                var value = string.Join("", txt.Text);
-                if (TryParseCredentialRecord(value, out var credential))
-                {
-                    _credential = credential;
-                    _logger.LogInformation("Loaded host credential from DNS TXT record ({Record})", recordName);
-                    return true;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "DNS TXT record lookup failed for {Record}", recordName);
-        }
-        return false;
-    }
-
-    private static bool TryParseCredentialRecord(string value, out HostCredential? credential)
-    {
-        credential = null;
-        if (!value.StartsWith("v=jukevox1;"))
-            return false;
-
-        var parts = value.Split(';')
-            .Select(p => p.Split('=', 2))
-            .Where(p => p.Length == 2)
-            .ToDictionary(p => p[0], p => p[1]);
-
-        if (!parts.TryGetValue("credId", out var credId) ||
-            !parts.TryGetValue("pubKey", out var pubKey) ||
-            !parts.TryGetValue("sigCount", out var sigCountStr) ||
-            !uint.TryParse(sigCountStr, out var sigCount))
-            return false;
-
-        try
-        {
-            credential = new HostCredential
-            {
-                CredentialId = Base64UrlDecode(credId),
-                PublicKey = Base64UrlDecode(pubKey),
-                SignCount = sigCount
-            };
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static string Base64UrlEncode(byte[] data)
-    {
-        return Convert.ToBase64String(data)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-    }
-
-    private static byte[] Base64UrlDecode(string base64Url)
-    {
-        var base64 = base64Url.Replace('-', '+').Replace('_', '/');
-        switch (base64.Length % 4)
-        {
-            case 2: base64 += "=="; break;
-            case 3: base64 += "="; break;
-        }
-        return Convert.FromBase64String(base64);
-    }
-
     private class HostCredentialJson
+    {
+        public string HostId { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string CredentialId { get; set; } = "";
+        public string PublicKey { get; set; } = "";
+        public uint SignCount { get; set; }
+        public bool IsAdmin { get; set; }
+    }
+
+    private class LegacyHostCredentialJson
     {
         public string CredentialId { get; set; } = "";
         public string PublicKey { get; set; } = "";
         public uint SignCount { get; set; }
+    }
+
+    /// <summary>
+    /// Comparer for using base64-encoded byte arrays as dictionary keys.
+    /// </summary>
+    private class ByteArrayKeyComparer : IEqualityComparer<string>
+    {
+        public bool Equals(string? x, string? y) => string.Equals(x, y, StringComparison.Ordinal);
+        public int GetHashCode(string obj) => obj.GetHashCode(StringComparison.Ordinal);
     }
 }

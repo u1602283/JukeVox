@@ -9,7 +9,7 @@ public static class TestHttpContext
     private static readonly IDataProtectionProvider DataProtectionProvider =
         new EphemeralDataProtectionProvider();
 
-    public static HttpContext CreateHostContext(string sessionId = "host-session")
+    public static HttpContext CreateHostContext(string sessionId = "host-session", string hostId = "test-host-id")
     {
         var context = CreateBaseContext(sessionId);
 
@@ -17,7 +17,7 @@ public static class TestHttpContext
         var protector = DataProtectionProvider
             .CreateProtector("JukeVox.HostAuth")
             .ToTimeLimitedDataProtector();
-        var token = protector.Protect("host", TimeSpan.FromHours(24));
+        var token = protector.Protect(hostId, TimeSpan.FromHours(24));
         context.Request.Headers.Cookie = $"JukeVox.HostAuth={token}";
 
         return context;

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using JukeVox.Server.Extensions;
 using JukeVox.Server.Middleware;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
@@ -32,7 +31,8 @@ public class PartyController : ControllerBase
         if (guest == null)
             return BadRequest(new { error = "Invalid invite code or no active party" });
 
-        var party = _partyService.GetCurrentParty()!;
+        var partyId = _partyService.GetPartyIdForSession(sessionId)!;
+        var party = _partyService.GetParty(partyId)!;
         return Ok(new PartyStateDto
         {
             PartyId = party.Id,
@@ -42,10 +42,10 @@ public class PartyController : ControllerBase
             CreditsRemaining = guest.CreditsRemaining,
             DisplayName = guest.DisplayName,
             DefaultCredits = party.DefaultCredits,
-            Queue = _queueService.GetQueue(),
+            Queue = _queueService.GetQueue(partyId),
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
-            UserVotes = _queueService.GetUserVotes(sessionId)
+            UserVotes = _queueService.GetUserVotes(partyId, sessionId)
         });
     }
 
@@ -53,17 +53,21 @@ public class PartyController : ControllerBase
     public IActionResult GetState()
     {
         var sessionId = HttpContext.GetSessionId();
-        var party = _partyService.GetCurrentParty();
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null)
+            return Ok(new { hasParty = false });
+
+        var party = _partyService.GetParty(partyId);
         if (party == null)
             return Ok(new { hasParty = false });
 
-        var isHost = HttpContext.IsHostAuthenticated();
-        var isGuest = _partyService.GetGuest(sessionId) != null;
+        var isHost = _partyService.IsHost(partyId, sessionId);
+        var isGuest = _partyService.GetGuest(partyId, sessionId) != null;
 
         if (!isHost && !isGuest)
             return Ok(new { hasParty = false });
 
-        var guest = isHost ? null : _partyService.GetGuest(sessionId);
+        var guest = isHost ? null : _partyService.GetGuest(partyId, sessionId);
 
         return Ok(new PartyStateDto
         {
@@ -74,11 +78,11 @@ public class PartyController : ControllerBase
             CreditsRemaining = guest?.CreditsRemaining,
             DisplayName = guest?.DisplayName,
             DefaultCredits = party.DefaultCredits,
-            Queue = _queueService.GetQueue(),
-            NowPlaying = _monitorService.GetCachedPlaybackState(),
+            Queue = _queueService.GetQueue(partyId),
+            NowPlaying = _monitorService.GetCachedPlaybackState(partyId),
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
-            UserVotes = _queueService.GetUserVotes(sessionId)
+            UserVotes = _queueService.GetUserVotes(partyId, sessionId)
         });
     }
 }

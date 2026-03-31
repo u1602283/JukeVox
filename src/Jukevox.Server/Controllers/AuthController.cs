@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using JukeVox.Server.Extensions;
+using JukeVox.Server.Middleware;
 using JukeVox.Server.Services;
 
 namespace JukeVox.Server.Controllers;
@@ -27,7 +28,14 @@ public class AuthController : ControllerBase
         if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
-        var state = Guid.NewGuid().ToString("N");
+        var sessionId = HttpContext.GetSessionId();
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null)
+            return BadRequest(new { error = "No active party" });
+
+        var nonce = Guid.NewGuid().ToString("N");
+        var state = $"{partyId}:{nonce}";
+
         Response.Cookies.Append(OAuthStateCookie, state, new CookieOptions
         {
             HttpOnly = true,
@@ -37,7 +45,7 @@ public class AuthController : ControllerBase
             Path = "/api/auth/callback"
         });
 
-        var url = _authService.GetAuthorizeUrl(state);
+        var url = _authService.GetAuthorizeUrl(partyId, state);
         return Redirect(url);
     }
 
@@ -50,7 +58,13 @@ public class AuthController : ControllerBase
         if (string.IsNullOrEmpty(storedState) || storedState != state)
             return BadRequest("Invalid OAuth state");
 
-        var tokens = await _authService.ExchangeCodeAsync(code);
+        // Parse partyId from state: "{partyId}:{nonce}"
+        var colonIndex = state.IndexOf(':');
+        if (colonIndex < 0)
+            return BadRequest("Invalid OAuth state format");
+        var partyId = state[..colonIndex];
+
+        var tokens = await _authService.ExchangeCodeAsync(code, partyId);
         if (tokens == null)
             return BadRequest("Failed to exchange authorization code");
 
@@ -60,7 +74,12 @@ public class AuthController : ControllerBase
     [HttpGet("status")]
     public IActionResult Status()
     {
-        var party = _partyService.GetCurrentParty();
+        var sessionId = HttpContext.GetSessionId();
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null)
+            return Ok(new { connected = false, isExpired = true });
+
+        var party = _partyService.GetParty(partyId);
         return Ok(new
         {
             connected = party?.SpotifyTokens != null,

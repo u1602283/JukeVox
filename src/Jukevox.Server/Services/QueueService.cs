@@ -6,283 +6,248 @@ namespace JukeVox.Server.Services;
 public class QueueService : IQueueService
 {
     private readonly IPartyService _partyService;
-    private readonly Lock _lock = new();
 
     public QueueService(IPartyService partyService)
     {
         _partyService = partyService;
     }
 
-    public (QueueItem? Item, string? Error) AddToQueue(string sessionId, AddToQueueRequest request, bool isHost = false)
+    public (QueueItem? Item, string? Error) AddToQueue(string partyId, string sessionId, AddToQueueRequest request, bool isHost = false)
     {
-        lock (_lock)
+        var party = _partyService.GetParty(partyId);
+        if (party == null) return (null, "No active party");
+
+        isHost = isHost || party.HostSessionId == sessionId;
+        string addedByName = "Host";
+
+        if (!isHost)
         {
-            var party = _partyService.GetCurrentParty();
-            if (party == null) return (null, "No active party");
+            if (!party.Guests.TryGetValue(sessionId, out var guest))
+                return (null, "Not a party participant");
 
-            isHost = isHost || party.HostSessionId == sessionId;
-            string addedByName = "Host";
+            if (guest.CreditsRemaining <= 0)
+                return (null, "No credits remaining");
 
-            if (!isHost)
-            {
-                if (!party.Guests.TryGetValue(sessionId, out var guest))
-                    return (null, "Not a party participant");
-
-                if (guest.CreditsRemaining <= 0)
-                    return (null, "No credits remaining");
-
-                guest.CreditsRemaining--;
-                addedByName = guest.DisplayName;
-            }
-
-            var item = new QueueItem
-            {
-                TrackUri = request.TrackUri,
-                TrackName = request.TrackName,
-                ArtistName = request.ArtistName,
-                AlbumName = request.AlbumName,
-                AlbumImageUrl = request.AlbumImageUrl,
-                DurationMs = request.DurationMs,
-                AddedBySessionId = sessionId,
-                AddedByName = addedByName,
-                InsertionOrder = party.NextInsertionOrder++
-            };
-
-            // Remove matching base playlist items (promotes the track to a manual request)
-            party.Queue.RemoveAll(q => q.IsFromBasePlaylist && TracksMatch(q, item));
-
-            // Insert before base playlist items so manual requests take priority
-            var insertIndex = party.Queue.FindIndex(q => q.IsFromBasePlaylist);
-            if (insertIndex >= 0)
-                party.Queue.Insert(insertIndex, item);
-            else
-                party.Queue.Add(item);
-
-            SortQueue(party);
-            _partyService.PersistState();
-            return (item, null);
+            guest.CreditsRemaining--;
+            addedByName = guest.DisplayName;
         }
+
+        var item = new QueueItem
+        {
+            TrackUri = request.TrackUri,
+            TrackName = request.TrackName,
+            ArtistName = request.ArtistName,
+            AlbumName = request.AlbumName,
+            AlbumImageUrl = request.AlbumImageUrl,
+            DurationMs = request.DurationMs,
+            AddedBySessionId = sessionId,
+            AddedByName = addedByName,
+            InsertionOrder = party.NextInsertionOrder++
+        };
+
+        // Remove matching base playlist items (promotes the track to a manual request)
+        party.Queue.RemoveAll(q => q.IsFromBasePlaylist && TracksMatch(q, item));
+
+        // Insert before base playlist items so manual requests take priority
+        var insertIndex = party.Queue.FindIndex(q => q.IsFromBasePlaylist);
+        if (insertIndex >= 0)
+            party.Queue.Insert(insertIndex, item);
+        else
+            party.Queue.Add(item);
+
+        SortQueue(party);
+        _partyService.PersistState(partyId);
+        return (item, null);
     }
 
-    public bool RemoveFromQueue(string itemId)
+    public bool RemoveFromQueue(string partyId, string itemId)
     {
-        lock (_lock)
-        {
-            var party = _partyService.GetCurrentParty();
-            if (party == null) return false;
-            var removed = party.Queue.RemoveAll(q => q.Id == itemId) > 0;
-            if (removed) _partyService.PersistState();
-            return removed;
-        }
+        var party = _partyService.GetParty(partyId);
+        if (party == null) return false;
+        var removed = party.Queue.RemoveAll(q => q.Id == itemId) > 0;
+        if (removed) _partyService.PersistState(partyId);
+        return removed;
     }
 
-    public bool Reorder(List<string> orderedIds)
+    public bool Reorder(string partyId, List<string> orderedIds)
     {
-        lock (_lock)
+        var party = _partyService.GetParty(partyId);
+        if (party == null) return false;
+
+        var lookup = party.Queue.ToDictionary(q => q.Id);
+        var reordered = new List<QueueItem>();
+
+        foreach (var id in orderedIds)
         {
-            var party = _partyService.GetCurrentParty();
-            if (party == null) return false;
-
-            var lookup = party.Queue.ToDictionary(q => q.Id);
-            var reordered = new List<QueueItem>();
-
-            foreach (var id in orderedIds)
-            {
-                if (lookup.TryGetValue(id, out var item))
-                    reordered.Add(item);
-            }
-
-            // Append any items not in the ordered list (safety)
-            foreach (var item in party.Queue)
-            {
-                if (!orderedIds.Contains(item.Id))
-                    reordered.Add(item);
-            }
-
-            party.Queue.Clear();
-            party.Queue.AddRange(reordered);
-
-            // Reassign insertion orders to reflect the host's chosen order
-            for (int i = 0; i < party.Queue.Count; i++)
-            {
-                party.Queue[i].InsertionOrder = i;
-            }
-            party.NextInsertionOrder = party.Queue.Count;
-            _partyService.PersistState();
-            return true;
+            if (lookup.TryGetValue(id, out var item))
+                reordered.Add(item);
         }
+
+        // Append any items not in the ordered list (safety)
+        foreach (var item in party.Queue)
+        {
+            if (!orderedIds.Contains(item.Id))
+                reordered.Add(item);
+        }
+
+        party.Queue.Clear();
+        party.Queue.AddRange(reordered);
+
+        // Reassign insertion orders to reflect the host's chosen order
+        for (int i = 0; i < party.Queue.Count; i++)
+        {
+            party.Queue[i].InsertionOrder = i;
+        }
+        party.NextInsertionOrder = party.Queue.Count;
+        _partyService.PersistState(partyId);
+        return true;
     }
 
-    public QueueItem? Dequeue()
+    public QueueItem? Dequeue(string partyId)
     {
-        lock (_lock)
+        var party = _partyService.GetParty(partyId);
+        if (party == null || party.Queue.Count == 0) return null;
+
+        var next = party.Queue[0];
+        party.Queue.RemoveAt(0);
+
+        if (party.CurrentTrack != null)
+            party.PlaybackHistory.Add(party.CurrentTrack);
+        party.CurrentTrack = next;
+
+        // Auto-refill when queue is empty and a base playlist is configured
+        if (party.Queue.Count == 0 && party.BasePlaylistTracks.Count > 0)
         {
-            var party = _partyService.GetCurrentParty();
-            if (party == null || party.Queue.Count == 0) return null;
-
-            var next = party.Queue[0];
-            party.Queue.RemoveAt(0);
-
-            if (party.CurrentTrack != null)
-                party.PlaybackHistory.Add(party.CurrentTrack);
-            party.CurrentTrack = next;
-
-            // Auto-refill when queue is empty and a base playlist is configured
-            if (party.Queue.Count == 0 && party.BasePlaylistTracks.Count > 0)
-            {
-                RefillFromBasePlaylist(party);
-            }
-
-            _partyService.PersistState();
-            return next;
-        }
-    }
-
-    /// <summary>
-    /// Returns the previously played track and requeues the currently playing track
-    /// at the front of the queue. Returns null if there is no history.
-    /// </summary>
-    public QueueItem? SkipToPrevious()
-    {
-        lock (_lock)
-        {
-            var party = _partyService.GetCurrentParty();
-            if (party == null || party.PlaybackHistory.Count == 0) return null;
-
-            // Put the current track back at the front of the queue
-            if (party.CurrentTrack != null)
-            {
-                party.CurrentTrack.Id = Guid.NewGuid().ToString("N")[..8];
-                party.Queue.Insert(0, party.CurrentTrack);
-            }
-
-            var prev = party.PlaybackHistory[^1];
-            party.PlaybackHistory.RemoveAt(party.PlaybackHistory.Count - 1);
-            party.CurrentTrack = prev;
-
-            _partyService.PersistState();
-            return prev;
-        }
-    }
-
-    public void SetBasePlaylist(List<BasePlaylistTrack> tracks, string playlistId, string playlistName)
-    {
-        lock (_lock)
-        {
-            var party = _partyService.GetCurrentParty();
-            if (party == null) return;
-
-            // Remove existing base playlist items from queue
-            party.Queue.RemoveAll(q => q.IsFromBasePlaylist);
-
-            party.BasePlaylistId = playlistId;
-            party.BasePlaylistName = playlistName;
-            party.BasePlaylistTracks = tracks;
-
             RefillFromBasePlaylist(party);
-            _partyService.PersistState();
         }
+
+        _partyService.PersistState(partyId);
+        return next;
     }
 
-    public void ClearBasePlaylist()
+    public QueueItem? SkipToPrevious(string partyId)
     {
-        lock (_lock)
+        var party = _partyService.GetParty(partyId);
+        if (party == null || party.PlaybackHistory.Count == 0) return null;
+
+        // Put the current track back at the front of the queue
+        if (party.CurrentTrack != null)
         {
-            var party = _partyService.GetCurrentParty();
-            if (party == null) return;
-
-            party.Queue.RemoveAll(q => q.IsFromBasePlaylist);
-            party.BasePlaylistId = null;
-            party.BasePlaylistName = null;
-            party.BasePlaylistTracks = [];
-
-            _partyService.PersistState();
+            party.CurrentTrack.Id = Guid.NewGuid().ToString("N")[..8];
+            party.Queue.Insert(0, party.CurrentTrack);
         }
+
+        var prev = party.PlaybackHistory[^1];
+        party.PlaybackHistory.RemoveAt(party.PlaybackHistory.Count - 1);
+        party.CurrentTrack = prev;
+
+        _partyService.PersistState(partyId);
+        return prev;
     }
 
-    public List<QueueItemDto> GetQueue()
+    public void SetBasePlaylist(string partyId, List<BasePlaylistTrack> tracks, string playlistId, string playlistName)
     {
-        lock (_lock)
-        {
-            var party = _partyService.GetCurrentParty();
-            if (party == null) return [];
+        var party = _partyService.GetParty(partyId);
+        if (party == null) return;
 
-            MigrateInsertionOrders(party);
+        // Remove existing base playlist items from queue
+        party.Queue.RemoveAll(q => q.IsFromBasePlaylist);
 
-            return party.Queue.Select(q => new QueueItemDto
-            {
-                Id = q.Id,
-                TrackUri = q.TrackUri,
-                TrackName = q.TrackName,
-                ArtistName = q.ArtistName,
-                AlbumName = q.AlbumName,
-                AlbumImageUrl = q.AlbumImageUrl,
-                DurationMs = q.DurationMs,
-                AddedByName = q.AddedByName,
-                AddedAt = q.AddedAt,
-                IsFromBasePlaylist = q.IsFromBasePlaylist,
-                Score = q.Score
-            }).ToList();
-        }
+        party.BasePlaylistId = playlistId;
+        party.BasePlaylistName = playlistName;
+        party.BasePlaylistTracks = tracks;
+
+        RefillFromBasePlaylist(party);
+        _partyService.PersistState(partyId);
     }
 
-    public (bool Success, string? Error) Vote(string sessionId, string itemId, int vote, bool isHost = false)
+    public void ClearBasePlaylist(string partyId)
     {
-        lock (_lock)
-        {
-            var party = _partyService.GetCurrentParty();
-            if (party == null) return (false, "No active party");
+        var party = _partyService.GetParty(partyId);
+        if (party == null) return;
 
-            if (vote is not (-1 or 0 or 1))
-                return (false, "Vote must be -1, 0, or 1");
+        party.Queue.RemoveAll(q => q.IsFromBasePlaylist);
+        party.BasePlaylistId = null;
+        party.BasePlaylistName = null;
+        party.BasePlaylistTracks = [];
 
-            isHost = isHost || party.HostSessionId == sessionId;
-            if (!isHost && !party.Guests.ContainsKey(sessionId))
-                return (false, "Not a party participant");
-
-            var item = party.Queue.Find(q => q.Id == itemId);
-            if (item == null) return (false, "Item not found");
-
-            bool wasPromoted = item.Score >= 3;
-
-            if (vote == 0)
-                item.Votes.Remove(sessionId);
-            else
-                item.Votes[sessionId] = vote;
-
-            bool isPromoted = item.Score >= 3;
-
-            // Auto-remove items at -3 or below
-            if (item.Score <= -3)
-            {
-                party.Queue.Remove(item);
-            }
-            else if (wasPromoted != isPromoted)
-            {
-                // Only re-sort when crossing the promotion threshold
-                SortQueue(party);
-            }
-
-            _partyService.PersistState();
-            return (true, null);
-        }
+        _partyService.PersistState(partyId);
     }
 
-    public Dictionary<string, int> GetUserVotes(string sessionId)
+    public List<QueueItemDto> GetQueue(string partyId)
     {
-        lock (_lock)
-        {
-            var party = _partyService.GetCurrentParty();
-            if (party == null) return new();
+        var party = _partyService.GetParty(partyId);
+        if (party == null) return [];
 
-            var votes = new Dictionary<string, int>();
-            foreach (var item in party.Queue)
-            {
-                if (item.Votes.TryGetValue(sessionId, out var v))
-                    votes[item.Id] = v;
-            }
-            return votes;
+        MigrateInsertionOrders(party);
+
+        return party.Queue.Select(q => new QueueItemDto
+        {
+            Id = q.Id,
+            TrackUri = q.TrackUri,
+            TrackName = q.TrackName,
+            ArtistName = q.ArtistName,
+            AlbumName = q.AlbumName,
+            AlbumImageUrl = q.AlbumImageUrl,
+            DurationMs = q.DurationMs,
+            AddedByName = q.AddedByName,
+            AddedAt = q.AddedAt,
+            IsFromBasePlaylist = q.IsFromBasePlaylist,
+            Score = q.Score
+        }).ToList();
+    }
+
+    public (bool Success, string? Error) Vote(string partyId, string sessionId, string itemId, int vote, bool isHost = false)
+    {
+        var party = _partyService.GetParty(partyId);
+        if (party == null) return (false, "No active party");
+
+        if (vote is not (-1 or 0 or 1))
+            return (false, "Vote must be -1, 0, or 1");
+
+        isHost = isHost || party.HostSessionId == sessionId;
+        if (!isHost && !party.Guests.ContainsKey(sessionId))
+            return (false, "Not a party participant");
+
+        var item = party.Queue.Find(q => q.Id == itemId);
+        if (item == null) return (false, "Item not found");
+
+        bool wasPromoted = item.Score >= 3;
+
+        if (vote == 0)
+            item.Votes.Remove(sessionId);
+        else
+            item.Votes[sessionId] = vote;
+
+        bool isPromoted = item.Score >= 3;
+
+        // Auto-remove items at -3 or below
+        if (item.Score <= -3)
+        {
+            party.Queue.Remove(item);
         }
+        else if (wasPromoted != isPromoted)
+        {
+            // Only re-sort when crossing the promotion threshold
+            SortQueue(party);
+        }
+
+        _partyService.PersistState(partyId);
+        return (true, null);
+    }
+
+    public Dictionary<string, int> GetUserVotes(string partyId, string sessionId)
+    {
+        var party = _partyService.GetParty(partyId);
+        if (party == null) return new();
+
+        var votes = new Dictionary<string, int>();
+        foreach (var item in party.Queue)
+        {
+            if (item.Votes.TryGetValue(sessionId, out var v))
+                votes[item.Id] = v;
+        }
+        return votes;
     }
 
     private static bool TracksMatch(QueueItem a, QueueItem b)
@@ -298,9 +263,6 @@ public class QueueService : IQueueService
 
         sorted.Sort((a, b) =>
         {
-            // Tier 0: promoted (3+ votes) — top of queue
-            // Tier 1: regular queued items (not base playlist)
-            // Tier 2: base playlist items (always bottom)
             static int Tier(QueueItem x)
             {
                 if (x.Score >= 3) return 0;
@@ -311,14 +273,12 @@ public class QueueService : IQueueService
             var tierCmp = Tier(a).CompareTo(Tier(b));
             if (tierCmp != 0) return tierCmp;
 
-            // Promoted tier: higher score first, then earlier insertion wins
             if (Tier(a) == 0)
             {
                 if (a.Score != b.Score) return b.Score.CompareTo(a.Score);
                 return a.InsertionOrder.CompareTo(b.InsertionOrder);
             }
 
-            // All other tiers: FIFO by InsertionOrder
             return a.InsertionOrder.CompareTo(b.InsertionOrder);
         });
 
@@ -331,7 +291,6 @@ public class QueueService : IQueueService
         if (party.Queue.Count <= 1) return;
         if (party.Queue.Any(q => q.InsertionOrder != 0)) return;
 
-        // All items have InsertionOrder == 0 — backfill from list position
         for (int i = 0; i < party.Queue.Count; i++)
             party.Queue[i].InsertionOrder = i;
         party.NextInsertionOrder = party.Queue.Count;

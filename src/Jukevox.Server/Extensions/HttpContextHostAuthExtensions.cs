@@ -7,11 +7,11 @@ public static class HttpContextHostAuthExtensions
     private const string CookieName = "JukeVox.HostAuth";
     private const string Purpose = "JukeVox.HostAuth";
 
-    public static bool IsHostAuthenticated(this HttpContext context)
+    public static string? GetAuthenticatedHostId(this HttpContext context)
     {
         if (!context.Request.Cookies.TryGetValue(CookieName, out var cookie) ||
             string.IsNullOrEmpty(cookie))
-            return false;
+            return null;
 
         var protector = context.RequestServices
             .GetRequiredService<IDataProtectionProvider>()
@@ -21,22 +21,30 @@ public static class HttpContextHostAuthExtensions
         try
         {
             var value = protector.Unprotect(cookie);
-            return value == "host";
+            // Legacy cookies contain just "host" — treat as unauthenticated
+            if (value == "host")
+                return null;
+            return value;
         }
         catch
         {
-            return false;
+            return null;
         }
     }
 
-    public static void SetHostAuthCookie(this HttpContext context)
+    public static bool IsHostAuthenticated(this HttpContext context)
+    {
+        return context.GetAuthenticatedHostId() != null;
+    }
+
+    public static void SetHostAuthCookie(this HttpContext context, string hostId)
     {
         var protector = context.RequestServices
             .GetRequiredService<IDataProtectionProvider>()
             .CreateProtector(Purpose)
             .ToTimeLimitedDataProtector();
 
-        var token = protector.Protect("host", TimeSpan.FromHours(24));
+        var token = protector.Protect(hostId, TimeSpan.FromHours(24));
 
         context.Response.Cookies.Append(CookieName, token, new CookieOptions
         {

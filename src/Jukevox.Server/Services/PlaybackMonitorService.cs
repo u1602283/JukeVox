@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Models.Dto;
@@ -8,17 +9,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PlaybackMonitorService> _logger;
-
-    private string? _lastTrackUri;
-    private string? _lastDeviceId;
-    private bool _wasPlaying;
-    private int _lastProgressMs;
-    private int _lastDurationMs;
-    private bool _weStartedCurrentTrack;
-    private bool _idleWatching;
-    private DateTime _trackStartedAt = DateTime.MinValue;
-    private volatile PlaybackStateDto? _cachedPlaybackState;
-    private long _cachedAtTicks;
+    private readonly ConcurrentDictionary<string, PartyPlaybackState> _partyStates = new();
 
     public PlaybackMonitorService(
         IServiceProvider serviceProvider,
@@ -28,17 +19,19 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         _logger = logger;
     }
 
-    public PlaybackStateDto? GetCachedPlaybackState()
+    public PlaybackStateDto? GetCachedPlaybackState(string partyId)
     {
-        var state = _cachedPlaybackState;
+        if (!_partyStates.TryGetValue(partyId, out var ps))
+            return null;
+
+        var state = ps.CachedPlaybackState;
         if (state == null) return null;
 
         if (!state.IsPlaying || state.DurationMs <= 0) return state;
 
-        var elapsedMs = (int)((DateTime.UtcNow.Ticks - _cachedAtTicks) / TimeSpan.TicksPerMillisecond);
+        var elapsedMs = (int)((DateTime.UtcNow.Ticks - ps.CachedAtTicks) / TimeSpan.TicksPerMillisecond);
         if (elapsedMs <= 0) return state;
 
-        // Return a copy with interpolated progress (don't mutate the cached instance)
         return new PlaybackStateDto
         {
             IsPlaying = state.IsPlaying,
@@ -58,17 +51,14 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         };
     }
 
-    /// <summary>
-    /// Called by PlaybackController when a track is played via the in-app skip button.
-    /// Updates internal state so the monitor doesn't misinterpret the track change.
-    /// </summary>
-    public void NotifyTrackStarted(string trackUri)
+    public void NotifyTrackStarted(string partyId, string trackUri)
     {
-        _lastTrackUri = trackUri;
-        _weStartedCurrentTrack = true;
-        _idleWatching = false;
-        _wasPlaying = true;
-        _trackStartedAt = DateTime.UtcNow;
+        var ps = GetOrCreateState(partyId);
+        ps.LastTrackUri = trackUri;
+        ps.WeStartedCurrentTrack = true;
+        ps.IdleWatching = false;
+        ps.WasPlaying = true;
+        ps.TrackStartedAt = DateTime.UtcNow;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -79,7 +69,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         {
             try
             {
-                await PollPlaybackAsync(stoppingToken);
+                await PollAllPartiesAsync(stoppingToken);
             }
             catch (Exception ex)
             {
@@ -90,109 +80,126 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         }
     }
 
-    private async Task PollPlaybackAsync(CancellationToken ct)
+    private async Task PollAllPartiesAsync(CancellationToken ct)
     {
         using var scope = _serviceProvider.CreateScope();
+        var partyService = scope.ServiceProvider.GetRequiredService<IPartyService>();
+
+        var parties = partyService.GetAllParties();
+
+        // Clean up state for parties that no longer exist
+        foreach (var partyId in _partyStates.Keys)
+        {
+            if (!parties.Any(p => p.Id == partyId))
+                _partyStates.TryRemove(partyId, out _);
+        }
+
+        foreach (var party in parties)
+        {
+            if (party.SpotifyTokens == null) continue;
+
+            try
+            {
+                await PollPartyPlaybackAsync(party.Id, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error polling playback for party {PartyId}", party.Id);
+            }
+        }
+    }
+
+    private async Task PollPartyPlaybackAsync(string partyId, CancellationToken ct)
+    {
+        using var scope = _serviceProvider.CreateScope();
+
+        // Set party context so Spotify services resolve the correct tokens
+        var accessor = scope.ServiceProvider.GetRequiredService<IPartyContextAccessor>();
+        accessor.PartyId = partyId;
+
         var partyService = scope.ServiceProvider.GetRequiredService<IPartyService>();
         var playerService = scope.ServiceProvider.GetRequiredService<ISpotifyPlayerService>();
         var queueService = scope.ServiceProvider.GetRequiredService<IQueueService>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<PartyHub, IPartyClient>>();
 
-        var party = partyService.GetCurrentParty();
+        var party = partyService.GetParty(partyId);
         if (party?.SpotifyTokens == null) return;
 
+        var ps = GetOrCreateState(partyId);
         var state = await playerService.GetPlaybackStateAsync();
 
         bool shouldAdvance = false;
 
         if (state == null || state.TrackName == null)
         {
-            // Spotify returned nothing — if we were playing, the track ended
-            if (_wasPlaying && !_idleWatching)
+            if (ps.WasPlaying && !ps.IdleWatching)
             {
-                _logger.LogInformation("Playback stopped (no state from Spotify), advancing queue");
+                _logger.LogInformation("[{PartyId}] Playback stopped, advancing queue", partyId);
                 shouldAdvance = true;
             }
-            // If idle watching and Spotify disappears, just stay idle — device went to sleep
         }
         else
         {
-            // Remember the last active device so we can target it later
             if (state.DeviceId != null)
-                _lastDeviceId = state.DeviceId;
+                ps.LastDeviceId = state.DeviceId;
 
-            // Detect track ended: was playing, now stopped on the same track.
-            // Spotify resets progress to 0 when a track finishes, so we check
-            // whether the *previous* poll's progress was near the end.
-            if (!shouldAdvance && _wasPlaying && !state.IsPlaying && state.TrackUri == _lastTrackUri)
+            if (!shouldAdvance && ps.WasPlaying && !state.IsPlaying && state.TrackUri == ps.LastTrackUri)
             {
-                bool prevWasNearEnd = _lastDurationMs > 0 &&
-                                      _lastProgressMs >= _lastDurationMs - 5000;
-                bool progressReset = state.ProgressMs < _lastProgressMs - 5000;
+                bool prevWasNearEnd = ps.LastDurationMs > 0 &&
+                                      ps.LastProgressMs >= ps.LastDurationMs - 5000;
+                bool progressReset = state.ProgressMs < ps.LastProgressMs - 5000;
 
                 if (prevWasNearEnd || progressReset)
                 {
-                    _logger.LogInformation(
-                        "Track finished (prev progress {PrevProgress}/{Duration}, now {Progress}), advancing queue",
-                        _lastProgressMs, _lastDurationMs, state.ProgressMs);
+                    _logger.LogInformation("[{PartyId}] Track finished, advancing queue", partyId);
                     shouldAdvance = true;
                 }
             }
 
-            // Grace period: after a controller-initiated track change, Spotify may
-            // briefly report the old track. Skip foreign-track detection during this window.
-            var inGracePeriod = (DateTime.UtcNow - _trackStartedAt).TotalSeconds < 5;
+            var inGracePeriod = (DateTime.UtcNow - ps.TrackStartedAt).TotalSeconds < 5;
 
-            // Detect Spotify moved to a different track (skip, auto-advance, etc.)
             if (!shouldAdvance && !inGracePeriod &&
-                (_weStartedCurrentTrack || _idleWatching) && _lastTrackUri != null &&
-                state.TrackUri != null && state.TrackUri != _lastTrackUri &&
+                (ps.WeStartedCurrentTrack || ps.IdleWatching) && ps.LastTrackUri != null &&
+                state.TrackUri != null && state.TrackUri != ps.LastTrackUri &&
                 state.IsPlaying)
             {
-                // Foreign track — take over if we have queue items
-                var peekQueue = queueService.GetQueue();
+                var peekQueue = queueService.GetQueue(partyId);
                 if (peekQueue.Count > 0)
                 {
-                    _logger.LogInformation("Spotify auto-advanced to foreign track, taking over");
+                    _logger.LogInformation("[{PartyId}] Spotify auto-advanced to foreign track, taking over", partyId);
                     shouldAdvance = true;
                 }
                 else
                 {
-                    _weStartedCurrentTrack = false;
+                    ps.WeStartedCurrentTrack = false;
                 }
             }
 
-            // Idle re-engagement: queue has items and Spotify stopped/paused
-            if (!shouldAdvance && _idleWatching && !_weStartedCurrentTrack && state != null)
+            if (!shouldAdvance && ps.IdleWatching && !ps.WeStartedCurrentTrack && state != null)
             {
-                var appQueue = queueService.GetQueue();
+                var appQueue = queueService.GetQueue(partyId);
                 if (appQueue.Count > 0 && !state.IsPlaying)
                 {
-                    _logger.LogInformation("Idle watching: queue has items and Spotify idle, advancing");
+                    _logger.LogInformation("[{PartyId}] Idle watching: advancing", partyId);
                     shouldAdvance = true;
                 }
             }
 
-            // Only broadcast state when we're NOT about to advance —
-            // otherwise clients briefly see the old track reset to 0.
-            // Also skip broadcasting during grace period if Spotify still reports
-            // the old track — the controller already sent the correct state.
             if (!shouldAdvance)
             {
-                bool staleDuringGrace = inGracePeriod && state!.TrackUri != _lastTrackUri;
+                bool staleDuringGrace = inGracePeriod && state!.TrackUri != ps.LastTrackUri;
                 if (!staleDuringGrace)
                 {
-                    // Enrich with current track attribution
                     if (party.CurrentTrack != null)
                     {
                         state!.AddedByName = party.CurrentTrack.AddedByName;
-                        state!.IsFromBasePlaylist = party.CurrentTrack.IsFromBasePlaylist;
+                        state.IsFromBasePlaylist = party.CurrentTrack.IsFromBasePlaylist;
                     }
 
-                    _cachedPlaybackState = state;
-                    _cachedAtTicks = DateTime.UtcNow.Ticks;
+                    ps.CachedPlaybackState = state;
+                    ps.CachedAtTicks = DateTime.UtcNow.Ticks;
 
-                    if (state!.TrackUri != _lastTrackUri)
+                    if (state!.TrackUri != ps.LastTrackUri)
                     {
                         await hubContext.Clients.Group(party.Id).NowPlayingChanged(state);
                     }
@@ -201,33 +208,30 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                 }
             }
 
-            // Clear grace period once Spotify reports the expected track
-            if (inGracePeriod && state!.TrackUri == _lastTrackUri)
-                _trackStartedAt = DateTime.MinValue;
+            if (inGracePeriod && state!.TrackUri == ps.LastTrackUri)
+                ps.TrackStartedAt = DateTime.MinValue;
 
-            _wasPlaying = state!.IsPlaying;
-            _lastProgressMs = state.ProgressMs;
-            _lastDurationMs = state.DurationMs;
-            _lastTrackUri = state.TrackUri;
+            ps.WasPlaying = state!.IsPlaying;
+            ps.LastProgressMs = state.ProgressMs;
+            ps.LastDurationMs = state.DurationMs;
+            ps.LastTrackUri = state.TrackUri;
         }
 
         if (shouldAdvance)
         {
-            _wasPlaying = false;
-            var next = queueService.Dequeue();
+            ps.WasPlaying = false;
+            var next = queueService.Dequeue(partyId);
             if (next != null)
             {
-                var played = await PlayWithDeviceFallback(playerService, next.TrackUri);
+                var played = await PlayWithDeviceFallback(playerService, next.TrackUri, ps);
                 if (played)
                 {
-                    _logger.LogInformation("Now playing from queue: {Track}", next.TrackName);
-                    _weStartedCurrentTrack = true;
-                    _idleWatching = false;
-                    _lastTrackUri = next.TrackUri;
-                    _wasPlaying = true;
+                    _logger.LogInformation("[{PartyId}] Now playing: {Track}", partyId, next.TrackName);
+                    ps.WeStartedCurrentTrack = true;
+                    ps.IdleWatching = false;
+                    ps.LastTrackUri = next.TrackUri;
+                    ps.WasPlaying = true;
 
-                    // Immediately tell clients about the new track so the UI
-                    // transitions instantly instead of waiting for the next poll
                     var nowPlayingDto = new PlaybackStateDto
                     {
                         IsPlaying = true,
@@ -240,63 +244,66 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                         DurationMs = next.DurationMs,
                         VolumePercent = state?.VolumePercent ?? 0,
                         SupportsVolume = state?.SupportsVolume ?? true,
-                        DeviceId = state?.DeviceId ?? _lastDeviceId,
+                        DeviceId = state?.DeviceId ?? ps.LastDeviceId,
                         DeviceName = state?.DeviceName,
                         AddedByName = next.AddedByName,
                         IsFromBasePlaylist = next.IsFromBasePlaylist
                     };
-                    _cachedPlaybackState = nowPlayingDto;
-                    _cachedAtTicks = DateTime.UtcNow.Ticks;
+                    ps.CachedPlaybackState = nowPlayingDto;
+                    ps.CachedAtTicks = DateTime.UtcNow.Ticks;
                     await hubContext.Clients.Group(party.Id).NowPlayingChanged(nowPlayingDto);
-
                 }
                 else
                 {
-                    _logger.LogWarning("Failed to play track: {Track}", next.TrackName);
+                    _logger.LogWarning("[{PartyId}] Failed to play track: {Track}", partyId, next.TrackName);
                 }
 
-                var queue = queueService.GetQueue();
+                var queue = queueService.GetQueue(partyId);
                 await hubContext.Clients.Group(party.Id).QueueUpdated(queue);
             }
             else
             {
-                _weStartedCurrentTrack = false;
-                _idleWatching = true;
-                _cachedPlaybackState = null;
-                _logger.LogInformation("Queue empty, entering idle watching mode");
+                ps.WeStartedCurrentTrack = false;
+                ps.IdleWatching = true;
+                ps.CachedPlaybackState = null;
+                _logger.LogInformation("[{PartyId}] Queue empty, entering idle watching mode", partyId);
             }
         }
     }
 
-    /// <summary>
-    /// Attempts to play a track, targeting the last known device.
-    /// If that fails (device went inactive), fetches the device list and retries
-    /// on the first available device.
-    /// </summary>
-    private async Task<bool> PlayWithDeviceFallback(ISpotifyPlayerService playerService, string trackUri)
+    private PartyPlaybackState GetOrCreateState(string partyId)
     {
-        // First attempt: target the last known device
-        if (await playerService.PlayTrackAsync(trackUri, _lastDeviceId))
+        return _partyStates.GetOrAdd(partyId, _ => new PartyPlaybackState());
+    }
+
+    private static async Task<bool> PlayWithDeviceFallback(ISpotifyPlayerService playerService, string trackUri, PartyPlaybackState ps)
+    {
+        if (await playerService.PlayTrackAsync(trackUri, ps.LastDeviceId))
             return true;
 
-        _logger.LogWarning("Play failed on last device {DeviceId}, searching for available devices", _lastDeviceId);
-
-        // Fallback: find any available device
         var devices = await playerService.GetDevicesAsync();
         if (devices.Count == 0)
-        {
-            _logger.LogWarning("No Spotify devices available");
             return false;
-        }
 
-        // Prefer the previously active device, then any active one, then the first device
-        var target = devices.FirstOrDefault(d => d.Id == _lastDeviceId)
+        var target = devices.FirstOrDefault(d => d.Id == ps.LastDeviceId)
                      ?? devices.FirstOrDefault(d => d.IsActive)
                      ?? devices[0];
 
-        _logger.LogInformation("Retrying play on device: {DeviceName} ({DeviceId})", target.Name, target.Id);
-        _lastDeviceId = target.Id;
-
+        ps.LastDeviceId = target.Id;
         return await playerService.PlayTrackAsync(trackUri, target.Id);
+    }
+
+    private class PartyPlaybackState
+    {
+        public string? LastTrackUri;
+        public string? LastDeviceId;
+        public bool WasPlaying;
+        public int LastProgressMs;
+        public int LastDurationMs;
+        public bool WeStartedCurrentTrack;
+        public bool IdleWatching;
+        public DateTime TrackStartedAt = DateTime.MinValue;
+        public volatile PlaybackStateDto? CachedPlaybackState;
+        public long CachedAtTicks;
     }
 }

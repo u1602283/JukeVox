@@ -45,10 +45,11 @@ public static class TestData
         DurationMs = 180000
     };
 
-    public static Party CreateParty(string hostSessionId = "host-session", string inviteCode = "1234") => new()
+    public static Party CreateParty(string hostSessionId = "host-session", string inviteCode = "1234", string hostId = "test-host-id") => new()
     {
         InviteCode = inviteCode,
         HostSessionId = hostSessionId,
+        HostId = hostId,
         DefaultCredits = 5
     };
 }

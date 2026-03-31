@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using JukeVox.Server.Models;
 
@@ -5,10 +6,11 @@ namespace JukeVox.Server.Services;
 
 public class PartyService : IPartyService
 {
-    private readonly Lock _lock = new();
-    private readonly string _stateFilePath;
+    private readonly ConcurrentDictionary<string, Party> _parties = new();
+    private readonly ConcurrentDictionary<string, string> _sessionToPartyId = new();
+    private readonly ConcurrentDictionary<string, Lock> _partyLocks = new();
+    private readonly string _partiesDir;
     private readonly ILogger<PartyService> _logger;
-    private Party? _currentParty;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -20,245 +22,346 @@ public class PartyService : IPartyService
     {
         _logger = logger;
         var dataDir = Environment.GetEnvironmentVariable("DATA_DIR") ?? env.ContentRootPath;
-        _stateFilePath = Path.Combine(dataDir, "party-state.json");
-        LoadState();
+        _partiesDir = Path.Combine(dataDir, "parties");
+        Directory.CreateDirectory(_partiesDir);
+        MigrateLegacyState(dataDir);
+        LoadAllParties();
     }
 
-    public Party? GetCurrentParty()
+    public Party? GetParty(string partyId)
     {
-        lock (_lock)
-        {
-            return _currentParty;
-        }
+        _parties.TryGetValue(partyId, out var party);
+        return party;
     }
 
-    public Party CreateParty(string hostSessionId, string inviteCode, int defaultCredits)
+    public string? GetPartyIdForSession(string sessionId)
     {
-        lock (_lock)
+        _sessionToPartyId.TryGetValue(sessionId, out var partyId);
+        return partyId;
+    }
+
+    public List<Party> GetAllParties()
+    {
+        return [.. _parties.Values];
+    }
+
+    public List<Party> GetPartiesForHost(string hostId)
+    {
+        return _parties.Values.Where(p => p.HostId == hostId).ToList();
+    }
+
+    public Party CreateParty(string hostSessionId, string hostId, string inviteCode, int defaultCredits)
+    {
+        var party = new Party
         {
-            _currentParty = new Party
-            {
-                InviteCode = inviteCode,
-                HostSessionId = hostSessionId,
-                DefaultCredits = defaultCredits
-            };
-            PersistStateInternal();
-            return _currentParty;
+            InviteCode = inviteCode,
+            HostSessionId = hostSessionId,
+            HostId = hostId,
+            DefaultCredits = defaultCredits
+        };
+
+        var partyLock = GetPartyLock(party.Id);
+        lock (partyLock)
+        {
+            _parties[party.Id] = party;
+            MapSession(hostSessionId, party.Id);
+            PersistStateInternal(party);
         }
+
+        _logger.LogInformation("Party created: {PartyId} (invite: {InviteCode}, host: {HostId})",
+            party.Id, inviteCode, hostId);
+        return party;
     }
 
     public GuestSession? JoinParty(string sessionId, string inviteCode, string displayName)
     {
-        lock (_lock)
-        {
-            if (_currentParty == null || _currentParty.InviteCode != inviteCode)
-                return null;
+        // Find party by invite code
+        var party = _parties.Values.FirstOrDefault(p => p.InviteCode == inviteCode);
+        if (party == null) return null;
 
-            if (_currentParty.Guests.TryGetValue(sessionId, out var existing))
+        var partyLock = GetPartyLock(party.Id);
+        lock (partyLock)
+        {
+            if (party.Guests.TryGetValue(sessionId, out var existing))
+            {
+                MapSession(sessionId, party.Id);
                 return existing;
+            }
 
             var guest = new GuestSession
             {
                 SessionId = sessionId,
                 DisplayName = displayName,
-                CreditsRemaining = _currentParty.DefaultCredits
+                CreditsRemaining = party.DefaultCredits
             };
-            _currentParty.Guests[sessionId] = guest;
-            PersistStateInternal();
+            party.Guests[sessionId] = guest;
+            MapSession(sessionId, party.Id);
+            PersistStateInternal(party);
             return guest;
         }
     }
 
-    public bool IsHost(string sessionId)
+    public bool IsHost(string partyId, string sessionId)
     {
-        lock (_lock)
+        var party = GetParty(partyId);
+        return party?.HostSessionId == sessionId;
+    }
+
+    public bool IsParticipant(string partyId, string sessionId)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return false;
+        return party.HostSessionId == sessionId || party.Guests.ContainsKey(sessionId);
+    }
+
+    public GuestSession? GetGuest(string partyId, string sessionId)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return null;
+        party.Guests.TryGetValue(sessionId, out var guest);
+        return guest;
+    }
+
+    public void UpdateSettings(string partyId, string? inviteCode, int? defaultCredits)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return;
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
         {
-            return _currentParty?.HostSessionId == sessionId;
+            if (inviteCode != null) party.InviteCode = inviteCode;
+            if (defaultCredits.HasValue) party.DefaultCredits = defaultCredits.Value;
+            PersistStateInternal(party);
         }
     }
 
-    public bool IsParticipant(string sessionId)
+    public void SetSpotifyTokens(string partyId, SpotifyTokens tokens)
     {
-        lock (_lock)
+        var party = GetParty(partyId);
+        if (party == null) return;
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
         {
-            if (_currentParty == null) return false;
-            return _currentParty.HostSessionId == sessionId ||
-                   _currentParty.Guests.ContainsKey(sessionId);
+            party.SpotifyTokens = tokens;
+            PersistStateInternal(party);
         }
     }
 
-    public GuestSession? GetGuest(string sessionId)
+    public SpotifyTokens? GetSpotifyTokens(string partyId)
     {
-        lock (_lock)
+        return GetParty(partyId)?.SpotifyTokens;
+    }
+
+    public List<(string PartyId, string InviteCode, string HostId, int QueueCount, int GuestCount, DateTime CreatedAt)> GetAllPartySummaries()
+    {
+        return _parties.Values.Select(p =>
+            (p.Id, p.InviteCode, p.HostId, p.Queue.Count, p.Guests.Count, p.CreatedAt)
+        ).ToList();
+    }
+
+    public Party? ResumeAsHost(string partyId, string newHostSessionId)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return null;
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
         {
-            if (_currentParty == null) return null;
-            _currentParty.Guests.TryGetValue(sessionId, out var guest);
-            return guest;
+            // Unmap old host session
+            if (!string.IsNullOrEmpty(party.HostSessionId))
+                _sessionToPartyId.TryRemove(party.HostSessionId, out _);
+
+            party.HostSessionId = newHostSessionId;
+            MapSession(newHostSessionId, partyId);
+            PersistStateInternal(party);
+            return party;
         }
     }
 
-    public void UpdateSettings(string? inviteCode, int? defaultCredits)
+    public List<GuestSession> GetAllGuests(string partyId)
     {
-        lock (_lock)
-        {
-            if (_currentParty == null) return;
-            if (inviteCode != null) _currentParty.InviteCode = inviteCode;
-            if (defaultCredits.HasValue) _currentParty.DefaultCredits = defaultCredits.Value;
-            PersistStateInternal();
-        }
+        var party = GetParty(partyId);
+        if (party == null) return [];
+        return party.Guests.Values.ToList();
     }
 
-    public void SetSpotifyTokens(SpotifyTokens tokens)
+    public GuestSession? SetGuestCredits(string partyId, string sessionId, int credits)
     {
-        lock (_lock)
-        {
-            if (_currentParty != null)
-            {
-                _currentParty.SpotifyTokens = tokens;
-                PersistStateInternal();
-            }
-        }
-    }
+        var party = GetParty(partyId);
+        if (party == null) return null;
 
-    public SpotifyTokens? GetSpotifyTokens()
-    {
-        lock (_lock)
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
         {
-            return _currentParty?.SpotifyTokens;
-        }
-    }
-
-    public bool HasSavedParty()
-    {
-        lock (_lock)
-        {
-            return _currentParty != null;
-        }
-    }
-
-    public (string InviteCode, int QueueCount, int GuestCount, DateTime CreatedAt)? GetSavedPartySummary()
-    {
-        lock (_lock)
-        {
-            if (_currentParty == null) return null;
-            return (_currentParty.InviteCode, _currentParty.Queue.Count,
-                    _currentParty.Guests.Count, _currentParty.CreatedAt);
-        }
-    }
-
-    public Party? ResumeAsHost(string newHostSessionId)
-    {
-        lock (_lock)
-        {
-            if (_currentParty == null) return null;
-            _currentParty.HostSessionId = newHostSessionId;
-            PersistStateInternal();
-            return _currentParty;
-        }
-    }
-
-    public List<GuestSession> GetAllGuests()
-    {
-        lock (_lock)
-        {
-            if (_currentParty == null) return [];
-            return _currentParty.Guests.Values.ToList();
-        }
-    }
-
-    public GuestSession? SetGuestCredits(string sessionId, int credits)
-    {
-        lock (_lock)
-        {
-            if (_currentParty == null) return null;
-            if (!_currentParty.Guests.TryGetValue(sessionId, out var guest)) return null;
+            if (!party.Guests.TryGetValue(sessionId, out var guest)) return null;
             guest.CreditsRemaining = Math.Max(0, credits);
-            PersistStateInternal();
+            PersistStateInternal(party);
             return guest;
         }
     }
 
-    public List<GuestSession> AdjustAllCredits(int delta)
+    public List<GuestSession> AdjustAllCredits(string partyId, int delta)
     {
-        lock (_lock)
+        var party = GetParty(partyId);
+        if (party == null) return [];
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
         {
-            if (_currentParty == null) return [];
-            foreach (var guest in _currentParty.Guests.Values)
+            foreach (var guest in party.Guests.Values)
             {
                 guest.CreditsRemaining = Math.Max(0, guest.CreditsRemaining + delta);
             }
-            PersistStateInternal();
-            return _currentParty.Guests.Values.ToList();
+            PersistStateInternal(party);
+            return party.Guests.Values.ToList();
         }
     }
 
-    public bool RemoveGuest(string sessionId)
+    public bool RemoveGuest(string partyId, string sessionId)
     {
-        lock (_lock)
+        var party = GetParty(partyId);
+        if (party == null) return false;
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
         {
-            if (_currentParty == null) return false;
-            if (!_currentParty.Guests.Remove(sessionId)) return false;
-            PersistStateInternal();
+            if (!party.Guests.Remove(sessionId)) return false;
+            _sessionToPartyId.TryRemove(sessionId, out _);
+            PersistStateInternal(party);
             return true;
         }
     }
 
-    public void EndParty()
+    public void EndParty(string partyId)
     {
-        lock (_lock)
+        if (!_parties.TryRemove(partyId, out _)) return;
+
+        // Clean up session mappings for this party
+        var sessionsToRemove = _sessionToPartyId
+            .Where(kv => kv.Value == partyId)
+            .Select(kv => kv.Key)
+            .ToList();
+        foreach (var sessionId in sessionsToRemove)
+            _sessionToPartyId.TryRemove(sessionId, out _);
+
+        _partyLocks.TryRemove(partyId, out _);
+
+        // Delete persistence file
+        var filePath = Path.Combine(_partiesDir, $"{partyId}.json");
+        try
         {
-            _currentParty = null;
-            PersistStateInternal();
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete party state file for {PartyId}", partyId);
+        }
+
+        _logger.LogInformation("Party ended: {PartyId}", partyId);
+    }
+
+    public void PersistState(string partyId)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return;
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
+        {
+            PersistStateInternal(party);
         }
     }
 
-    /// <summary>
-    /// Persist current party state to disk. Called by other services after mutations.
-    /// </summary>
-    public void PersistState()
+    // --- Private ---
+
+    private Lock GetPartyLock(string partyId)
     {
-        lock (_lock)
-        {
-            PersistStateInternal();
-        }
+        return _partyLocks.GetOrAdd(partyId, _ => new Lock());
     }
 
-    private void PersistStateInternal()
+    private void MapSession(string sessionId, string partyId)
+    {
+        // A session can only be in one party at a time
+        _sessionToPartyId[sessionId] = partyId;
+    }
+
+    private void PersistStateInternal(Party party)
     {
         try
         {
-            var json = _currentParty == null
-                ? "null"
-                : JsonSerializer.Serialize(_currentParty, JsonOptions);
-
-            // Write to a temp file then atomically rename to avoid corruption
-            // if the process crashes mid-write.
-            var tmpPath = _stateFilePath + ".tmp";
+            var json = JsonSerializer.Serialize(party, JsonOptions);
+            var filePath = Path.Combine(_partiesDir, $"{party.Id}.json");
+            var tmpPath = filePath + ".tmp";
             File.WriteAllText(tmpPath, json);
-            File.Move(tmpPath, _stateFilePath, overwrite: true);
+            File.Move(tmpPath, filePath, overwrite: true);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to persist party state to {Path}", _stateFilePath);
+            _logger.LogError(ex, "Failed to persist party state for {PartyId}", party.Id);
         }
     }
 
-    private void LoadState()
+    private void LoadAllParties()
     {
+        var files = Directory.GetFiles(_partiesDir, "*.json");
+        foreach (var file in files)
+        {
+            try
+            {
+                var json = File.ReadAllText(file);
+                var party = JsonSerializer.Deserialize<Party>(json, JsonOptions);
+                if (party == null) continue;
+
+                _parties[party.Id] = party;
+
+                // Rebuild session-to-party mappings
+                if (!string.IsNullOrEmpty(party.HostSessionId))
+                    _sessionToPartyId[party.HostSessionId] = party.Id;
+                foreach (var guestId in party.Guests.Keys)
+                    _sessionToPartyId[guestId] = party.Id;
+
+                _logger.LogInformation("Loaded party {PartyId} (invite: {Code}, queue: {Count} items)",
+                    party.Id, party.InviteCode, party.Queue.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load party state from {Path}", file);
+            }
+        }
+
+        if (_parties.Count > 0)
+            _logger.LogInformation("Loaded {Count} party/parties from disk", _parties.Count);
+    }
+
+    private void MigrateLegacyState(string dataDir)
+    {
+        var legacyPath = Path.Combine(dataDir, "party-state.json");
+        if (!File.Exists(legacyPath)) return;
+
         try
         {
-            if (!File.Exists(_stateFilePath)) return;
+            var json = File.ReadAllText(legacyPath);
+            if (json == "null" || string.IsNullOrWhiteSpace(json))
+            {
+                File.Move(legacyPath, legacyPath + ".migrated", overwrite: true);
+                return;
+            }
 
-            var json = File.ReadAllText(_stateFilePath);
-            _currentParty = JsonSerializer.Deserialize<Party>(json, JsonOptions);
-            if (_currentParty != null)
-                _logger.LogInformation("Loaded saved party state (invite code: {Code}, queue: {Count} items)",
-                    _currentParty.InviteCode, _currentParty.Queue.Count);
+            var party = JsonSerializer.Deserialize<Party>(json, JsonOptions);
+            if (party != null)
+            {
+                var newPath = Path.Combine(_partiesDir, $"{party.Id}.json");
+                File.WriteAllText(newPath, json);
+                _logger.LogInformation("Migrated legacy party-state.json to {Path}", newPath);
+            }
+            File.Move(legacyPath, legacyPath + ".migrated", overwrite: true);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load party state from {Path}", _stateFilePath);
-            _currentParty = null;
+            _logger.LogError(ex, "Failed to migrate legacy party state from {Path}", legacyPath);
         }
     }
 }

@@ -13,6 +13,7 @@ namespace JukeVox.Server.Tests.Controllers;
 [TestFixture]
 public class PartyControllerTests
 {
+    private const string PartyId = "test1234";
     private Mock<IPartyService> _partyService = null!;
     private Mock<IQueueService> _queueService = null!;
     private Mock<IPlaybackMonitorService> _monitorService = null!;
@@ -59,16 +60,18 @@ public class PartyControllerTests
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
         var guest = TestData.CreateGuestSession("guest-1", "Alice", 5);
         var party = TestData.CreateParty();
+        party.Id = PartyId;
         _partyService.Setup(p => p.JoinParty("guest-1", "1234", "Alice")).Returns(guest).Verifiable(Times.Once);
-        _partyService.Setup(p => p.GetCurrentParty()).Returns(party).Verifiable(Times.Once);
-        _queueService.Setup(q => q.GetQueue()).Returns([]).Verifiable(Times.Once);
-        _queueService.Setup(q => q.GetUserVotes("guest-1")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
+        _partyService.Setup(p => p.GetPartyIdForSession("guest-1")).Returns(PartyId).Verifiable(Times.Once);
+        _partyService.Setup(p => p.GetParty(PartyId)).Returns(party).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetQueue(PartyId)).Returns([]).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetUserVotes(PartyId, "guest-1")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
 
         var result = _controller.JoinParty(new JoinPartyRequest { InviteCode = "1234", DisplayName = "Alice" });
 
         var state = result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeOfType<PartyStateDto>().Subject;
-        state.PartyId.Should().Be(party.Id);
+        state.PartyId.Should().Be(PartyId);
         state.IsHost.Should().BeFalse();
         state.CreditsRemaining.Should().Be(5);
     }
@@ -77,7 +80,7 @@ public class PartyControllerTests
     public void GetState_NoParty_ReturnsHasPartyFalse()
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
-        _partyService.Setup(p => p.GetCurrentParty()).Returns((Party?)null).Verifiable(Times.Once);
+        _partyService.Setup(p => p.GetPartyIdForSession("guest-1")).Returns((string?)null).Verifiable(Times.Once);
 
         var result = _controller.GetState();
 
@@ -90,11 +93,14 @@ public class PartyControllerTests
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext("host-session");
         var party = TestData.CreateParty("host-session");
-        _partyService.Setup(p => p.GetCurrentParty()).Returns(party).Verifiable(Times.Once);
-        _partyService.Setup(p => p.GetGuest("host-session")).Returns((GuestSession?)null).Verifiable(Times.Once);
-        _queueService.Setup(q => q.GetQueue()).Returns([]).Verifiable(Times.Once);
-        _queueService.Setup(q => q.GetUserVotes("host-session")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
-        _monitorService.Setup(m => m.GetCachedPlaybackState()).Returns((PlaybackStateDto?)null).Verifiable(Times.Once);
+        party.Id = PartyId;
+        _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId).Verifiable(Times.Once);
+        _partyService.Setup(p => p.GetParty(PartyId)).Returns(party).Verifiable(Times.Once);
+        _partyService.Setup(p => p.IsHost(PartyId, "host-session")).Returns(true).Verifiable(Times.Once);
+        _partyService.Setup(p => p.GetGuest(PartyId, "host-session")).Returns((GuestSession?)null).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetQueue(PartyId)).Returns([]).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetUserVotes(PartyId, "host-session")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
+        _monitorService.Setup(m => m.GetCachedPlaybackState(PartyId)).Returns((PlaybackStateDto?)null).Verifiable(Times.Once);
 
         var result = _controller.GetState();
 
@@ -108,8 +114,11 @@ public class PartyControllerTests
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("stranger");
         var party = TestData.CreateParty();
-        _partyService.Setup(p => p.GetCurrentParty()).Returns(party).Verifiable(Times.Once);
-        _partyService.Setup(p => p.GetGuest("stranger")).Returns((GuestSession?)null).Verifiable(Times.Once);
+        party.Id = PartyId;
+        _partyService.Setup(p => p.GetPartyIdForSession("stranger")).Returns(PartyId).Verifiable(Times.Once);
+        _partyService.Setup(p => p.GetParty(PartyId)).Returns(party).Verifiable(Times.Once);
+        _partyService.Setup(p => p.IsHost(PartyId, "stranger")).Returns(false).Verifiable(Times.Once);
+        _partyService.Setup(p => p.GetGuest(PartyId, "stranger")).Returns((GuestSession?)null).Verifiable(Times.Once);
 
         var result = _controller.GetState();
 

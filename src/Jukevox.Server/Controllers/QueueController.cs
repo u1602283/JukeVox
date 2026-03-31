@@ -36,14 +36,17 @@ public class QueueController : ControllerBase
     public IActionResult GetQueue()
     {
         var sessionId = HttpContext.GetSessionId();
-        var isHost = HttpContext.IsHostAuthenticated();
-        if (!isHost && !_partyService.IsParticipant(sessionId))
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null) return Unauthorized();
+
+        var isHost = _partyService.IsHost(partyId, sessionId);
+        if (!isHost && !_partyService.IsParticipant(partyId, sessionId))
             return Unauthorized();
 
         return Ok(new
         {
-            queue = _queueService.GetQueue(),
-            userVotes = _queueService.GetUserVotes(sessionId)
+            queue = _queueService.GetQueue(partyId),
+            userVotes = _queueService.GetUserVotes(partyId, sessionId)
         });
     }
 
@@ -51,41 +54,41 @@ public class QueueController : ControllerBase
     public async Task<IActionResult> AddToQueue([FromBody] AddToQueueRequest request)
     {
         var sessionId = HttpContext.GetSessionId();
-        var isHost = HttpContext.IsHostAuthenticated();
-        if (!isHost && !_partyService.IsParticipant(sessionId))
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null) return Unauthorized();
+
+        var isHost = _partyService.IsHost(partyId, sessionId);
+        if (!isHost && !_partyService.IsParticipant(partyId, sessionId))
             return Unauthorized();
 
-        var (item, error) = _queueService.AddToQueue(sessionId, request, isHost);
+        var (item, error) = _queueService.AddToQueue(partyId, sessionId, request, isHost);
         if (item == null)
             return BadRequest(new { error });
 
-        var party = _partyService.GetCurrentParty()!;
-        var queue = _queueService.GetQueue();
+        var party = _partyService.GetParty(partyId)!;
+        var queue = _queueService.GetQueue(partyId);
 
-        // Broadcast queue update to all clients
         await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
 
-        // If this is the first song in the queue, try to start playback immediately
         if (queue.Count == 1 && party.SpotifyTokens != null)
         {
-            var cachedPlayback = _monitorService.GetCachedPlaybackState();
+            var cachedPlayback = _monitorService.GetCachedPlaybackState(partyId);
             if (cachedPlayback == null || !cachedPlayback.IsPlaying)
             {
-                var next = _queueService.Dequeue();
+                var next = _queueService.Dequeue(partyId);
                 if (next != null)
                 {
                     await _playerService.PlayTrackAsync(next.TrackUri);
-                    _monitorService.NotifyTrackStarted(next.TrackUri);
-                    queue = _queueService.GetQueue();
+                    _monitorService.NotifyTrackStarted(partyId, next.TrackUri);
+                    queue = _queueService.GetQueue(partyId);
                     await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
                 }
             }
         }
 
-        // Send credits update to the guest who added the song
         if (!isHost)
         {
-            var guest = _partyService.GetGuest(sessionId);
+            var guest = _partyService.GetGuest(partyId, sessionId);
             if (guest != null)
             {
                 return Ok(new { queue, creditsRemaining = guest.CreditsRemaining });
@@ -101,12 +104,15 @@ public class QueueController : ControllerBase
         if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
-        if (!_queueService.RemoveFromQueue(id))
+        var sessionId = HttpContext.GetSessionId();
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null) return BadRequest(new { error = "No active party" });
+
+        if (!_queueService.RemoveFromQueue(partyId, id))
             return NotFound();
 
-        var party = _partyService.GetCurrentParty()!;
-        var queue = _queueService.GetQueue();
-        await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
+        var queue = _queueService.GetQueue(partyId);
+        await _hubContext.Clients.Group(partyId).QueueUpdated(queue);
 
         return Ok(queue);
     }
@@ -117,12 +123,15 @@ public class QueueController : ControllerBase
         if (!HttpContext.IsHostAuthenticated())
             return Forbid();
 
-        if (!_queueService.Reorder(request.OrderedIds))
+        var sessionId = HttpContext.GetSessionId();
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null) return BadRequest(new { error = "No active party" });
+
+        if (!_queueService.Reorder(partyId, request.OrderedIds))
             return BadRequest();
 
-        var party = _partyService.GetCurrentParty()!;
-        var queue = _queueService.GetQueue();
-        await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
+        var queue = _queueService.GetQueue(partyId);
+        await _hubContext.Clients.Group(partyId).QueueUpdated(queue);
 
         return Ok(queue);
     }
@@ -131,20 +140,21 @@ public class QueueController : ControllerBase
     public async Task<IActionResult> Vote(string id, [FromBody] VoteRequest request)
     {
         var sessionId = HttpContext.GetSessionId();
-        var isHost = HttpContext.IsHostAuthenticated();
-        if (!isHost && !_partyService.IsParticipant(sessionId))
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null) return Unauthorized();
+
+        var isHost = _partyService.IsHost(partyId, sessionId);
+        if (!isHost && !_partyService.IsParticipant(partyId, sessionId))
             return Unauthorized();
 
-        var (success, error) = _queueService.Vote(sessionId, id, request.Vote, isHost);
+        var (success, error) = _queueService.Vote(partyId, sessionId, id, request.Vote, isHost);
         if (!success)
             return BadRequest(new { error });
 
-        var party = _partyService.GetCurrentParty()!;
-        var queue = _queueService.GetQueue();
-        await _hubContext.Clients.Group(party.Id).QueueUpdated(queue);
+        var queue = _queueService.GetQueue(partyId);
+        await _hubContext.Clients.Group(partyId).QueueUpdated(queue);
 
-        // Return the user's vote for this item (0 if removed)
-        var userVotes = _queueService.GetUserVotes(sessionId);
+        var userVotes = _queueService.GetUserVotes(partyId, sessionId);
         userVotes.TryGetValue(id, out var userVote);
 
         return Ok(new { queue, userVote });

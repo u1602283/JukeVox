@@ -17,6 +17,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPartyService, PartyService>();
         services.AddSingleton<IQueueService, QueueService>();
         services.AddSingleton<ConnectionMapping>();
+        services.AddScoped<IPartyContextAccessor, PartyContextAccessor>();
 
         services.AddHttpClient<ISpotifyAuthService, SpotifyAuthService>();
         services.AddHttpClient<ISpotifySearchService, SpotifySearchService>();

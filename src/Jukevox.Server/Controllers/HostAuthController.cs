@@ -26,10 +26,13 @@ public class HostAuthController : ControllerBase
     [HttpGet("status")]
     public IActionResult GetStatus()
     {
+        var hostId = HttpContext.GetAuthenticatedHostId();
         return Ok(new
         {
-            authenticated = HttpContext.IsHostAuthenticated(),
-            hasCredential = _credentialService.HasCredential,
+            authenticated = hostId != null,
+            hostId,
+            isAdmin = hostId != null && _credentialService.IsAdmin(hostId),
+            hasCredential = _credentialService.HasAnyCredential,
             setupAvailable = _credentialService.IsSetupAvailable
         });
     }
@@ -40,6 +43,8 @@ public class HostAuthController : ControllerBase
         return Ok(new { available = _credentialService.IsSetupAvailable });
     }
 
+    // --- First-time setup (creates admin) ---
+
     [HttpPost("setup/begin")]
     public IActionResult SetupBegin([FromBody] SetupBeginRequest request)
     {
@@ -49,12 +54,12 @@ public class HostAuthController : ControllerBase
         if (!_credentialService.IsSetupTokenValid(request.Token))
             return Unauthorized(new { error = "Invalid setup token" });
 
-        var serverName = _fido2Config.ServerName;
+        var hostId = Guid.NewGuid().ToString("N")[..8];
         var user = new Fido2User
         {
-            Id = System.Text.Encoding.UTF8.GetBytes($"{serverName}-host"),
-            Name = serverName,
-            DisplayName = serverName
+            Id = System.Text.Encoding.UTF8.GetBytes($"host-{hostId}"),
+            Name = request.DisplayName ?? _fido2Config.ServerName,
+            DisplayName = request.DisplayName ?? _fido2Config.ServerName
         };
 
         var options = _fido2.RequestNewCredential(new RequestNewCredentialParams
@@ -70,7 +75,10 @@ public class HostAuthController : ControllerBase
         });
 
         var sessionId = HttpContext.GetSessionId();
-        _credentialService.StorePendingChallenge(sessionId, options);
+        _credentialService.StorePendingChallenge(sessionId, new PendingRegistration
+        {
+            Options = options, HostId = hostId, IsAdmin = true, DisplayName = request.DisplayName ?? "Admin"
+        });
 
         return Ok(options);
     }
@@ -78,44 +86,122 @@ public class HostAuthController : ControllerBase
     [HttpPost("setup/complete")]
     public async Task<IActionResult> SetupComplete([FromBody] AuthenticatorAttestationRawResponse attestation)
     {
-        if (_credentialService.HasCredential)
-            return BadRequest(new { error = "Host credential already registered" });
+        if (_credentialService.HasAnyCredential)
+            return BadRequest(new { error = "Setup already completed. Use invite codes to register new hosts." });
 
         var sessionId = HttpContext.GetSessionId();
-        var options = _credentialService.GetPendingChallenge<CredentialCreateOptions>(sessionId);
-        if (options == null)
+        var pending = _credentialService.GetPendingChallenge<PendingRegistration>(sessionId);
+        if (pending == null)
             return BadRequest(new { error = "No pending registration challenge. Please start setup again." });
 
         var result = await _fido2.MakeNewCredentialAsync(new MakeNewCredentialParams
         {
             AttestationResponse = attestation,
-            OriginalOptions = options,
+            OriginalOptions = pending.Options,
             IsCredentialIdUniqueToUserCallback = async (_, _) => true
         }, HttpContext.RequestAborted);
 
-        var dnsRecord = _credentialService.SaveCredential(new HostCredential
+        _credentialService.SaveCredential(new HostCredential
         {
+            HostId = pending.HostId,
+            DisplayName = pending.DisplayName,
             CredentialId = result.Id,
             PublicKey = result.PublicKey,
-            SignCount = result.SignCount
+            SignCount = result.SignCount,
+            IsAdmin = pending.IsAdmin
         });
 
-        // Auto-authenticate after registration
-        HttpContext.SetHostAuthCookie();
+        HttpContext.SetHostAuthCookie(pending.HostId);
 
-        return Ok(new { success = true, dnsRecord });
+        return Ok(new { success = true, hostId = pending.HostId });
     }
+
+    // --- Registration via invite code ---
+
+    [HttpPost("register/begin")]
+    public IActionResult RegisterBegin([FromBody] RegisterBeginRequest request)
+    {
+        if (!_credentialService.HasAnyCredential)
+            return BadRequest(new { error = "No admin exists yet. Use /host/setup first." });
+
+        if (!_credentialService.ValidateAndConsumeInviteCode(request.InviteCode))
+            return Unauthorized(new { error = "Invalid or expired invite code" });
+
+        var hostId = Guid.NewGuid().ToString("N")[..8];
+        var user = new Fido2User
+        {
+            Id = System.Text.Encoding.UTF8.GetBytes($"host-{hostId}"),
+            Name = request.DisplayName,
+            DisplayName = request.DisplayName
+        };
+
+        var options = _fido2.RequestNewCredential(new RequestNewCredentialParams
+        {
+            User = user,
+            ExcludeCredentials = [],
+            AttestationPreference = AttestationConveyancePreference.None,
+            AuthenticatorSelection = new AuthenticatorSelection
+            {
+                UserVerification = UserVerificationRequirement.Preferred,
+                ResidentKey = ResidentKeyRequirement.Preferred
+            }
+        });
+
+        var sessionId = HttpContext.GetSessionId();
+        _credentialService.StorePendingChallenge(sessionId, new PendingRegistration
+        {
+            Options = options, HostId = hostId, IsAdmin = false, DisplayName = request.DisplayName
+        });
+
+        return Ok(options);
+    }
+
+    [HttpPost("register/complete")]
+    public async Task<IActionResult> RegisterComplete([FromBody] AuthenticatorAttestationRawResponse attestation)
+    {
+        var sessionId = HttpContext.GetSessionId();
+        var pending = _credentialService.GetPendingChallenge<PendingRegistration>(sessionId);
+        if (pending == null)
+            return BadRequest(new { error = "No pending registration challenge. Please start again." });
+
+        var result = await _fido2.MakeNewCredentialAsync(new MakeNewCredentialParams
+        {
+            AttestationResponse = attestation,
+            OriginalOptions = pending.Options,
+            IsCredentialIdUniqueToUserCallback = async (_, _) => true
+        }, HttpContext.RequestAborted);
+
+        _credentialService.SaveCredential(new HostCredential
+        {
+            HostId = pending.HostId,
+            DisplayName = pending.DisplayName,
+            CredentialId = result.Id,
+            PublicKey = result.PublicKey,
+            SignCount = result.SignCount,
+            IsAdmin = pending.IsAdmin
+        });
+
+        HttpContext.SetHostAuthCookie(pending.HostId);
+
+        return Ok(new { success = true, hostId = pending.HostId });
+    }
+
+    // --- Login (works for any registered host) ---
 
     [HttpPost("login/begin")]
     public IActionResult LoginBegin()
     {
-        var credential = _credentialService.GetCredential();
-        if (credential == null)
-            return BadRequest(new { error = "No host credential registered" });
+        var credentials = _credentialService.GetAllCredentials();
+        if (credentials.Count == 0)
+            return BadRequest(new { error = "No host credentials registered" });
+
+        var allowedCredentials = credentials
+            .Select(c => new PublicKeyCredentialDescriptor(c.CredentialId))
+            .ToList();
 
         var options = _fido2.GetAssertionOptions(new GetAssertionOptionsParams
         {
-            AllowedCredentials = [new PublicKeyCredentialDescriptor(credential.CredentialId)],
+            AllowedCredentials = allowedCredentials,
             UserVerification = UserVerificationRequirement.Preferred
         });
 
@@ -128,14 +214,15 @@ public class HostAuthController : ControllerBase
     [HttpPost("login/complete")]
     public async Task<IActionResult> LoginComplete([FromBody] AuthenticatorAssertionRawResponse assertion)
     {
-        var credential = _credentialService.GetCredential();
-        if (credential == null)
-            return BadRequest(new { error = "No host credential registered" });
-
         var sessionId = HttpContext.GetSessionId();
         var options = _credentialService.GetPendingChallenge<AssertionOptions>(sessionId);
         if (options == null)
             return BadRequest(new { error = "No pending login challenge. Please try again." });
+
+        // Find which host credential matches
+        var credential = _credentialService.GetCredentialByCredentialIdString(assertion.Id);
+        if (credential == null)
+            return BadRequest(new { error = "Unknown credential" });
 
         var result = await _fido2.MakeAssertionAsync(new MakeAssertionParams
         {
@@ -146,11 +233,39 @@ public class HostAuthController : ControllerBase
             IsUserHandleOwnerOfCredentialIdCallback = async (_, _) => true
         }, HttpContext.RequestAborted);
 
-        _credentialService.UpdateSignCount(result.SignCount);
-        HttpContext.SetHostAuthCookie();
+        _credentialService.UpdateSignCount(credential.HostId, result.SignCount);
+        HttpContext.SetHostAuthCookie(credential.HostId);
 
-        return Ok(new { success = true });
+        return Ok(new { success = true, hostId = credential.HostId, isAdmin = credential.IsAdmin });
     }
+
+    // --- Invite codes (admin only) ---
+
+    [HttpPost("invite-codes")]
+    public IActionResult GenerateInviteCode()
+    {
+        var hostId = HttpContext.GetAuthenticatedHostId();
+        if (hostId == null || !_credentialService.IsAdmin(hostId))
+            return Forbid();
+
+        var code = _credentialService.GenerateInviteCode();
+        return Ok(new { code });
+    }
+
+    [HttpGet("invite-codes")]
+    public IActionResult GetInviteCodes()
+    {
+        var hostId = HttpContext.GetAuthenticatedHostId();
+        if (hostId == null || !_credentialService.IsAdmin(hostId))
+            return Forbid();
+
+        var codes = _credentialService.GetActiveInviteCodes()
+            .Select(c => new { code = c.Code, createdAt = c.Created })
+            .ToList();
+        return Ok(codes);
+    }
+
+    // --- Logout ---
 
     [HttpPost("logout")]
     public IActionResult Logout()
@@ -163,4 +278,19 @@ public class HostAuthController : ControllerBase
 public class SetupBeginRequest
 {
     public required string Token { get; set; }
+    public string? DisplayName { get; set; }
+}
+
+public class RegisterBeginRequest
+{
+    public required string InviteCode { get; set; }
+    public required string DisplayName { get; set; }
+}
+
+public class PendingRegistration
+{
+    public required CredentialCreateOptions Options { get; set; }
+    public required string HostId { get; set; }
+    public required bool IsAdmin { get; set; }
+    public required string DisplayName { get; set; }
 }

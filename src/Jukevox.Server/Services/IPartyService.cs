@@ -4,22 +4,24 @@ namespace JukeVox.Server.Services;
 
 public interface IPartyService
 {
-    Party? GetCurrentParty();
-    Party CreateParty(string hostSessionId, string inviteCode, int defaultCredits);
+    Party? GetParty(string partyId);
+    string? GetPartyIdForSession(string sessionId);
+    List<Party> GetAllParties();
+    List<Party> GetPartiesForHost(string hostId);
+    Party CreateParty(string hostSessionId, string hostId, string inviteCode, int defaultCredits);
     GuestSession? JoinParty(string sessionId, string inviteCode, string displayName);
-    bool IsHost(string sessionId);
-    bool IsParticipant(string sessionId);
-    GuestSession? GetGuest(string sessionId);
-    void UpdateSettings(string? inviteCode, int? defaultCredits);
-    void SetSpotifyTokens(SpotifyTokens tokens);
-    SpotifyTokens? GetSpotifyTokens();
-    bool HasSavedParty();
-    (string InviteCode, int QueueCount, int GuestCount, DateTime CreatedAt)? GetSavedPartySummary();
-    Party? ResumeAsHost(string newHostSessionId);
-    void PersistState();
-    List<GuestSession> GetAllGuests();
-    GuestSession? SetGuestCredits(string sessionId, int credits);
-    List<GuestSession> AdjustAllCredits(int delta);
-    bool RemoveGuest(string sessionId);
-    void EndParty();
+    bool IsHost(string partyId, string sessionId);
+    bool IsParticipant(string partyId, string sessionId);
+    GuestSession? GetGuest(string partyId, string sessionId);
+    void UpdateSettings(string partyId, string? inviteCode, int? defaultCredits);
+    void SetSpotifyTokens(string partyId, SpotifyTokens tokens);
+    SpotifyTokens? GetSpotifyTokens(string partyId);
+    List<(string PartyId, string InviteCode, string HostId, int QueueCount, int GuestCount, DateTime CreatedAt)> GetAllPartySummaries();
+    Party? ResumeAsHost(string partyId, string newHostSessionId);
+    void PersistState(string partyId);
+    List<GuestSession> GetAllGuests(string partyId);
+    GuestSession? SetGuestCredits(string partyId, string sessionId, int credits);
+    List<GuestSession> AdjustAllCredits(string partyId, int delta);
+    bool RemoveGuest(string partyId, string sessionId);
+    void EndParty(string partyId);
 }

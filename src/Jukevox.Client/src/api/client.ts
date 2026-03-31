@@ -10,6 +10,8 @@ import type {
   SavedPartySummary,
   HostStatus,
   GuestInfo,
+  PartySummary,
+  InviteCode,
 } from '../types';
 
 const BASE = '/api';
@@ -45,14 +47,26 @@ export const api = {
   hostSetupStatus: () =>
     request<{ available: boolean }>(`${BASE}/host/setup/status`),
 
-  hostSetupBegin: (token: string) =>
+  hostSetupBegin: (token: string, displayName?: string) =>
     request<Record<string, unknown>>(`${BASE}/host/setup/begin`, {
       method: 'POST',
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, displayName }),
     }),
 
   hostSetupComplete: (attestation: unknown) =>
-    request<{ success: boolean; dnsRecord: string }>(`${BASE}/host/setup/complete`, {
+    request<{ success: boolean; hostId: string }>(`${BASE}/host/setup/complete`, {
+      method: 'POST',
+      body: JSON.stringify(attestation),
+    }),
+
+  hostRegisterBegin: (inviteCode: string, displayName: string) =>
+    request<Record<string, unknown>>(`${BASE}/host/register/begin`, {
+      method: 'POST',
+      body: JSON.stringify({ inviteCode, displayName }),
+    }),
+
+  hostRegisterComplete: (attestation: unknown) =>
+    request<{ success: boolean; hostId: string }>(`${BASE}/host/register/complete`, {
       method: 'POST',
       body: JSON.stringify(attestation),
     }),
@@ -61,13 +75,27 @@ export const api = {
     request<Record<string, unknown>>(`${BASE}/host/login/begin`, { method: 'POST' }),
 
   hostLoginComplete: (assertion: unknown) =>
-    request<{ success: boolean }>(`${BASE}/host/login/complete`, {
+    request<{ success: boolean; hostId: string; isAdmin: boolean }>(`${BASE}/host/login/complete`, {
       method: 'POST',
       body: JSON.stringify(assertion),
     }),
 
   hostLogout: () =>
     request<{ success: boolean }>(`${BASE}/host/logout`, { method: 'POST' }),
+
+  // Host invite codes (admin only)
+  generateInviteCode: () =>
+    request<{ code: string }>(`${BASE}/host/invite-codes`, { method: 'POST' }),
+
+  getInviteCodes: () =>
+    request<InviteCode[]>(`${BASE}/host/invite-codes`),
+
+  // Multi-party management
+  getParties: () =>
+    request<PartySummary[]>(`${BASE}/host/parties`),
+
+  selectParty: (partyId: string) =>
+    request<PartyState>(`${BASE}/host/parties/${encodeURIComponent(partyId)}/select`, { method: 'POST' }),
 
   // Host party management
   createParty: (data: CreatePartyRequest) =>

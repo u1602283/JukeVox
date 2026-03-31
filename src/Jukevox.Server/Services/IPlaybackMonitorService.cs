@@ -4,6 +4,6 @@ namespace JukeVox.Server.Services;
 
 public interface IPlaybackMonitorService
 {
-    void NotifyTrackStarted(string trackUri);
-    PlaybackStateDto? GetCachedPlaybackState();
+    void NotifyTrackStarted(string partyId, string trackUri);
+    PlaybackStateDto? GetCachedPlaybackState(string partyId);
 }

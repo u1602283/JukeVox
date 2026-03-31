@@ -6,6 +6,7 @@ import { api } from './api/client';
 import { GuestLandingPage } from './pages/GuestLandingPage';
 import { PartyPage } from './pages/PartyPage';
 import { HostSetupPage } from './pages/HostSetupPage';
+import { HostRegisterPage } from './pages/HostRegisterPage';
 import { HostPortalPage } from './pages/HostPortalPage';
 
 function GuestRoute() {
@@ -34,6 +35,7 @@ function App() {
         <Routes>
           <Route path="/" element={<GuestRoute />} />
           <Route path="/host/setup" element={<HostSetupPage />} />
+          <Route path="/host/register" element={<HostRegisterPage />} />
           <Route path="/host" element={<HostPortalPage />} />
         </Routes>
       </PartyProvider>

@@ -1,27 +1,60 @@
 namespace JukeVox.Server.Middleware;
 
+using Microsoft.AspNetCore.DataProtection;
+
 public class PartySessionMiddleware
 {
     private const string SessionCookieName = "JukeVox.SessionId";
     private readonly RequestDelegate _next;
+    private readonly IDataProtector _protector;
+    private static readonly TimeSpan SessionTtl = TimeSpan.FromHours(24);
 
-    public PartySessionMiddleware(RequestDelegate next)
+    public PartySessionMiddleware(RequestDelegate next, IDataProtectionProvider dataProtectionProvider)
     {
         _next = next;
+        _protector = dataProtectionProvider.CreateProtector("JukeVox.SessionId");
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (!context.Request.Cookies.TryGetValue(SessionCookieName, out var sessionId) ||
-            string.IsNullOrEmpty(sessionId))
+        string? sessionId = null;
+        bool valid = false;
+
+        if (context.Request.Cookies.TryGetValue(SessionCookieName, out var protectedSessionId) && !string.IsNullOrEmpty(protectedSessionId))
         {
-            sessionId = Guid.NewGuid().ToString("N");
-            context.Response.Cookies.Append(SessionCookieName, sessionId, new CookieOptions
+            try
+            {
+                // Unprotect and parse the session ID
+                var unprotected = _protector.Unprotect(protectedSessionId);
+                var parts = unprotected.Split('|');
+                if (parts.Length == 2 && Guid.TryParse(parts[0], out var guid) && long.TryParse(parts[1], out var ticks))
+                {
+                    var issued = new DateTimeOffset(ticks, TimeSpan.Zero);
+                    if (DateTimeOffset.UtcNow - issued < SessionTtl)
+                    {
+                        sessionId = guid.ToString("N");
+                        valid = true;
+                    }
+                }
+            }
+            catch
+            {
+                // Tampered or expired cookie, fall through to generate new
+            }
+        }
+
+        if (!valid)
+        {
+            var guid = Guid.NewGuid();
+            sessionId = guid.ToString("N");
+            var payload = $"{guid}|{DateTimeOffset.UtcNow.UtcTicks}";
+            var protectedPayload = _protector.Protect(payload);
+            context.Response.Cookies.Append(SessionCookieName, protectedPayload, new CookieOptions
             {
                 HttpOnly = true,
                 SameSite = SameSiteMode.Lax,
                 Secure = context.Request.IsHttps,
-                MaxAge = TimeSpan.FromHours(24)
+                MaxAge = SessionTtl
             });
         }
 

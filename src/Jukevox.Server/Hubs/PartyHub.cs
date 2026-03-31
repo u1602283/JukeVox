@@ -17,8 +17,8 @@ public class PartyHub : Hub<IPartyClient>
 
     public async Task JoinPartyGroup(string partyId)
     {
-        var party = _partyService.GetCurrentParty();
-        if (party != null && party.Id == partyId)
+        var party = _partyService.GetParty(partyId);
+        if (party != null)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, partyId);
         }
@@ -31,8 +31,8 @@ public class PartyHub : Hub<IPartyClient>
 
         if (!string.IsNullOrEmpty(partyId))
         {
-            var party = _partyService.GetCurrentParty();
-            if (party != null && party.Id == partyId)
+            var party = _partyService.GetParty(partyId);
+            if (party != null)
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, partyId);
             }

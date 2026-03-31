@@ -1,5 +1,5 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
-using System.Text.Json;
 using Microsoft.Extensions.Options;
 using JukeVox.Server.Configuration;
 using JukeVox.Server.Models;
@@ -12,8 +12,9 @@ public class SpotifyAuthService : ISpotifyAuthService
     private readonly SpotifyOptions _options;
     private readonly HttpClient _httpClient;
     private readonly IPartyService _partyService;
+    private readonly IPartyContextAccessor _partyContextAccessor;
     private readonly ILogger<SpotifyAuthService> _logger;
-    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> RefreshLocks = new();
 
     private static readonly string[] Scopes =
     [
@@ -28,15 +29,17 @@ public class SpotifyAuthService : ISpotifyAuthService
         IOptions<SpotifyOptions> options,
         HttpClient httpClient,
         IPartyService partyService,
+        IPartyContextAccessor partyContextAccessor,
         ILogger<SpotifyAuthService> logger)
     {
         _options = options.Value;
         _httpClient = httpClient;
         _partyService = partyService;
+        _partyContextAccessor = partyContextAccessor;
         _logger = logger;
     }
 
-    public string GetAuthorizeUrl(string state)
+    public string GetAuthorizeUrl(string partyId, string state)
     {
         var scope = string.Join(" ", Scopes);
         return $"https://accounts.spotify.com/authorize?" +
@@ -47,7 +50,7 @@ public class SpotifyAuthService : ISpotifyAuthService
                $"state={Uri.EscapeDataString(state)}";
     }
 
-    public async Task<SpotifyTokens?> ExchangeCodeAsync(string code)
+    public async Task<SpotifyTokens?> ExchangeCodeAsync(string code, string partyId)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "https://accounts.spotify.com/api/token")
         {
@@ -79,36 +82,39 @@ public class SpotifyAuthService : ISpotifyAuthService
             ExpiresAt = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
         };
 
-        _partyService.SetSpotifyTokens(tokens);
+        _partyService.SetSpotifyTokens(partyId, tokens);
         return tokens;
     }
 
     public async Task<string?> GetValidAccessTokenAsync()
     {
-        var tokens = _partyService.GetSpotifyTokens();
+        var partyId = _partyContextAccessor.PartyId;
+        if (partyId == null) return null;
+
+        var tokens = _partyService.GetSpotifyTokens(partyId);
         if (tokens == null) return null;
 
         if (!tokens.IsExpired)
             return tokens.AccessToken;
 
-        // Serialize concurrent refresh attempts to avoid thundering herd
-        await _refreshLock.WaitAsync();
+        // Per-party refresh lock to avoid thundering herd
+        var refreshLock = RefreshLocks.GetOrAdd(partyId, _ => new SemaphoreSlim(1, 1));
+        await refreshLock.WaitAsync();
         try
         {
-            // Re-check after acquiring — another caller may have already refreshed
-            tokens = _partyService.GetSpotifyTokens();
+            tokens = _partyService.GetSpotifyTokens(partyId);
             if (tokens == null) return null;
             if (!tokens.IsExpired) return tokens.AccessToken;
 
-            return await RefreshTokenAsync(tokens);
+            return await RefreshTokenAsync(partyId, tokens);
         }
         finally
         {
-            _refreshLock.Release();
+            refreshLock.Release();
         }
     }
 
-    private async Task<string?> RefreshTokenAsync(SpotifyTokens tokens)
+    private async Task<string?> RefreshTokenAsync(string partyId, SpotifyTokens tokens)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "https://accounts.spotify.com/api/token")
         {
@@ -136,7 +142,7 @@ public class SpotifyAuthService : ISpotifyAuthService
         if (tokenResponse.RefreshToken != null)
             tokens.RefreshToken = tokenResponse.RefreshToken;
 
-        _partyService.SetSpotifyTokens(tokens);
+        _partyService.SetSpotifyTokens(partyId, tokens);
         return tokens.AccessToken;
     }
 

@@ -16,7 +16,7 @@ import { ManagePanel } from '../components/ManagePanel';
 import { ShareOverlay } from '../components/ShareOverlay';
 import { PartyLayout } from '../components/PartyLayout';
 import type { PanelDefinition } from '../components/PartyLayout';
-import type { HostStatus, SavedPartySummary } from '../types';
+import type { HostStatus, PartySummary } from '../types';
 import styles from './HostPortalPage.module.css';
 import partyStyles from './PartyPage.module.css';
 
@@ -34,8 +34,12 @@ export function HostPortalPage() {
   const [defaultCredits, setDefaultCredits] = useState('5');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
-  const [savedParty, setSavedParty] = useState<SavedPartySummary | null>(null);
-  const [resuming, setResuming] = useState(false);
+  const [parties, setParties] = useState<PartySummary[]>([]);
+  const [selectingPartyId, setSelectingPartyId] = useState<string | null>(null);
+
+  // Admin invite code state
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [generatingCode, setGeneratingCode] = useState(false);
 
   // Active party UI state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -51,9 +55,9 @@ export function HostPortalPage() {
         if ('hasParty' in state && !state.hasParty) {
           setParty(null);
           try {
-            const saved = await api.getSavedParty();
-            if (saved.exists) setSavedParty(saved);
-          } catch { /* no saved party */ }
+            const partyList = await api.getParties();
+            setParties(partyList);
+          } catch { /* no parties */ }
         } else {
           setParty(state);
         }
@@ -116,16 +120,28 @@ export function HostPortalPage() {
     }
   };
 
-  const handleResume = async () => {
-    setResuming(true);
+  const handleSelectParty = async (partyId: string) => {
+    setSelectingPartyId(partyId);
     setCreateError('');
     try {
-      const state = await api.resumeParty();
+      const state = await api.selectParty(partyId);
       setParty(state);
     } catch (err: unknown) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to resume party');
+      setCreateError(err instanceof Error ? err.message : 'Failed to select party');
     } finally {
-      setResuming(false);
+      setSelectingPartyId(null);
+    }
+  };
+
+  const handleGenerateInviteCode = async () => {
+    setGeneratingCode(true);
+    try {
+      const result = await api.generateInviteCode();
+      setGeneratedCode(result.code);
+    } catch {
+      // ignore
+    } finally {
+      setGeneratingCode(false);
     }
   };
 
@@ -154,6 +170,9 @@ export function HostPortalPage() {
               {authenticating ? 'Authenticating...' : 'Login with Passkey'}
             </button>
             {authError && <p className={styles.error}>{authError}</p>}
+            <Link to="/host/register" className={styles.bottomLink} style={{ marginTop: '1rem', display: 'block', textAlign: 'center' }}>
+              Have an invite code? Register
+            </Link>
           </div>
         ) : status?.setupAvailable ? (
           <div className={styles.panel}>
@@ -189,17 +208,25 @@ export function HostPortalPage() {
         <h1 className={styles.title}>JukeVox</h1>
         <p className={styles.subtitle}>Host Portal</p>
 
-        {savedParty && (
-          <div className={styles.resumeCard}>
-            <h2 className={styles.resumeTitle}>You have an existing party</h2>
-            <div className={styles.resumeDetails}>
-              <span>Party ID: <strong>{savedParty.inviteCode}</strong></span>
-              <span>{savedParty.queueCount} song{savedParty.queueCount !== 1 ? 's' : ''} in queue</span>
-              <span>{savedParty.guestCount} guest{savedParty.guestCount !== 1 ? 's' : ''}</span>
-            </div>
-            <button className={styles.resumeBtn} onClick={handleResume} disabled={resuming}>
-              {resuming ? 'Resuming...' : 'Resume Party'}
-            </button>
+        {parties.length > 0 && (
+          <div className={styles.panel}>
+            <h2 className={styles.panelTitle}>Your Parties</h2>
+            {parties.map((p) => (
+              <div key={p.partyId} className={styles.resumeCard} style={{ marginBottom: '0.5rem' }}>
+                <div className={styles.resumeDetails}>
+                  <span>Code: <strong>{p.inviteCode}</strong></span>
+                  <span>{p.queueCount} song{p.queueCount !== 1 ? 's' : ''}</span>
+                  <span>{p.guestCount} guest{p.guestCount !== 1 ? 's' : ''}</span>
+                </div>
+                <button
+                  className={styles.resumeBtn}
+                  onClick={() => handleSelectParty(p.partyId)}
+                  disabled={selectingPartyId === p.partyId}
+                >
+                  {selectingPartyId === p.partyId ? 'Loading...' : 'Manage'}
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -231,6 +258,28 @@ export function HostPortalPage() {
             {createError && <p className={styles.error}>{createError}</p>}
           </form>
         </div>
+
+        {status?.isAdmin && (
+          <div className={styles.panel}>
+            <h2 className={styles.panelTitle}>Admin: Invite Codes</h2>
+            <p className={styles.panelText}>
+              Generate invite codes for other hosts to register.
+            </p>
+            <button
+              className={styles.primaryBtn}
+              onClick={handleGenerateInviteCode}
+              disabled={generatingCode}
+              style={{ marginBottom: generatedCode ? '0.75rem' : 0 }}
+            >
+              {generatingCode ? 'Generating...' : 'Generate Invite Code'}
+            </button>
+            {generatedCode && (
+              <div style={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '0.15em', fontFamily: 'monospace' }}>
+                {generatedCode}
+              </div>
+            )}
+          </div>
+        )}
 
         <button className={styles.bottomLink} onClick={handleLogout}>
           Logout
