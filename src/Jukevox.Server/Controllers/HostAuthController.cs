@@ -239,6 +239,37 @@ public class HostAuthController : ControllerBase
         return Ok(new { success = true, hostId = credential.HostId, isAdmin = credential.IsAdmin });
     }
 
+    // --- Host management (admin only) ---
+
+    [HttpGet("hosts")]
+    public IActionResult GetHosts()
+    {
+        var hostId = HttpContext.GetAuthenticatedHostId();
+        if (hostId == null || !_credentialService.IsAdmin(hostId))
+            return Forbid();
+
+        var hosts = _credentialService.GetAllCredentials()
+            .Select(c => new { hostId = c.HostId, displayName = c.DisplayName, isAdmin = c.IsAdmin, createdAt = c.CreatedAt })
+            .ToList();
+        return Ok(hosts);
+    }
+
+    [HttpDelete("hosts/{targetHostId}")]
+    public IActionResult DeleteHost(string targetHostId)
+    {
+        var hostId = HttpContext.GetAuthenticatedHostId();
+        if (hostId == null || !_credentialService.IsAdmin(hostId))
+            return Forbid();
+
+        if (targetHostId == hostId)
+            return BadRequest(new { error = "Cannot delete your own credential" });
+
+        if (!_credentialService.DeleteCredential(targetHostId))
+            return NotFound(new { error = "Host not found" });
+
+        return NoContent();
+    }
+
     // --- Invite codes (admin only) ---
 
     [HttpPost("invite-codes")]
@@ -250,19 +281,6 @@ public class HostAuthController : ControllerBase
 
         var code = _credentialService.GenerateInviteCode();
         return Ok(new { code });
-    }
-
-    [HttpGet("invite-codes")]
-    public IActionResult GetInviteCodes()
-    {
-        var hostId = HttpContext.GetAuthenticatedHostId();
-        if (hostId == null || !_credentialService.IsAdmin(hostId))
-            return Forbid();
-
-        var codes = _credentialService.GetActiveInviteCodes()
-            .Select(c => new { code = c.Code, createdAt = c.Created })
-            .ToList();
-        return Ok(codes);
     }
 
     // --- Logout ---

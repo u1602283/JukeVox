@@ -37,10 +37,6 @@ export function HostPortalPage() {
   const [parties, setParties] = useState<PartySummary[]>([]);
   const [selectingPartyId, setSelectingPartyId] = useState<string | null>(null);
 
-  // Admin invite code state
-  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
-  const [generatingCode, setGeneratingCode] = useState(false);
-
   // Active party UI state
   const [searchOpen, setSearchOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
@@ -133,18 +129,6 @@ export function HostPortalPage() {
     }
   };
 
-  const handleGenerateInviteCode = async () => {
-    setGeneratingCode(true);
-    try {
-      const result = await api.generateInviteCode();
-      setGeneratedCode(result.code);
-    } catch {
-      // ignore
-    } finally {
-      setGeneratingCode(false);
-    }
-  };
-
   if (checkingStatus) {
     return <div className="loading">Loading...</div>;
   }
@@ -208,9 +192,9 @@ export function HostPortalPage() {
         <h1 className={styles.title}>JukeVox</h1>
         <p className={styles.subtitle}>Host Portal</p>
 
-        {parties.length > 0 && (
+        {parties.length > 0 ? (
           <div className={styles.panel}>
-            <h2 className={styles.panelTitle}>Your Parties</h2>
+            <h2 className={styles.panelTitle}>Your Party</h2>
             {parties.map((p) => (
               <div key={p.partyId} className={styles.resumeCard} style={{ marginBottom: '0.5rem' }}>
                 <div className={styles.resumeDetails}>
@@ -223,62 +207,46 @@ export function HostPortalPage() {
                   onClick={() => handleSelectParty(p.partyId)}
                   disabled={selectingPartyId === p.partyId}
                 >
-                  {selectingPartyId === p.partyId ? 'Loading...' : 'Manage'}
+                  {selectingPartyId === p.partyId ? 'Loading...' : 'Resume'}
                 </button>
               </div>
             ))}
           </div>
+        ) : (
+          <div className={styles.panel}>
+            <form onSubmit={handleCreate}>
+              <h2 className={styles.panelTitle}>Create a Party</h2>
+              <input
+                type="text"
+                placeholder="Party ID (optional, auto-generated)"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                maxLength={10}
+                className={styles.input}
+              />
+              <div className={styles.creditsRow}>
+                <label className={styles.creditsLabel}>Credits per guest</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={defaultCredits}
+                  onChange={(e) => setDefaultCredits(e.target.value)}
+                  className={`${styles.input} ${styles.creditsInput}`}
+                />
+              </div>
+              <button type="submit" disabled={creating} className={styles.primaryBtn}>
+                {creating ? 'Creating...' : 'Create Party'}
+              </button>
+              {createError && <p className={styles.error}>{createError}</p>}
+            </form>
+          </div>
         )}
 
-        <div className={styles.panel}>
-          <form onSubmit={handleCreate}>
-            <h2 className={styles.panelTitle}>Create a Party</h2>
-            <input
-              type="text"
-              placeholder="Party ID (optional, auto-generated)"
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              maxLength={10}
-              className={styles.input}
-            />
-            <div className={styles.creditsRow}>
-              <label className={styles.creditsLabel}>Credits per guest</label>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={defaultCredits}
-                onChange={(e) => setDefaultCredits(e.target.value)}
-                className={`${styles.input} ${styles.creditsInput}`}
-              />
-            </div>
-            <button type="submit" disabled={creating} className={styles.primaryBtn}>
-              {creating ? 'Creating...' : 'Create Party'}
-            </button>
-            {createError && <p className={styles.error}>{createError}</p>}
-          </form>
-        </div>
-
         {status?.isAdmin && (
-          <div className={styles.panel}>
-            <h2 className={styles.panelTitle}>Admin: Invite Codes</h2>
-            <p className={styles.panelText}>
-              Generate invite codes for other hosts to register.
-            </p>
-            <button
-              className={styles.primaryBtn}
-              onClick={handleGenerateInviteCode}
-              disabled={generatingCode}
-              style={{ marginBottom: generatedCode ? '0.75rem' : 0 }}
-            >
-              {generatingCode ? 'Generating...' : 'Generate Invite Code'}
-            </button>
-            {generatedCode && (
-              <div style={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '0.15em', fontFamily: 'monospace' }}>
-                {generatedCode}
-              </div>
-            )}
-          </div>
+          <Link to="/host/admin" className={styles.bottomLink}>
+            Admin Settings
+          </Link>
         )}
 
         <button className={styles.bottomLink} onClick={handleLogout}>
@@ -332,6 +300,9 @@ export function HostPortalPage() {
       }
       headerRight={
         <>
+          {status?.isAdmin && (
+            <Link to="/host/admin" className={partyStyles.logoutBtn}>Admin</Link>
+          )}
           <button className={partyStyles.logoutBtn} onClick={handleLogout}>
             Logout
           </button>

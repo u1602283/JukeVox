@@ -113,7 +113,8 @@ public class HostCredentialService
                 CredentialId = Convert.ToBase64String(credential.CredentialId),
                 PublicKey = Convert.ToBase64String(credential.PublicKey),
                 SignCount = credential.SignCount,
-                IsAdmin = credential.IsAdmin
+                IsAdmin = credential.IsAdmin,
+                CreatedAt = credential.CreatedAt
             }, new JsonSerializerOptions { WriteIndented = true });
 
             var filePath = Path.Combine(_credentialsDir, $"{credential.HostId}.json");
@@ -139,27 +140,47 @@ public class HostCredentialService
         return _credentials.TryGetValue(hostId, out var cred) && cred.IsAdmin;
     }
 
+    public bool DeleteCredential(string hostId)
+    {
+        lock (_lock)
+        {
+            if (!_credentials.TryRemove(hostId, out var credential))
+                return false;
+
+            _credentialIdToHostId.TryRemove(Convert.ToBase64String(credential.CredentialId), out _);
+
+            var filePath = Path.Combine(_credentialsDir, $"{hostId}.json");
+            try
+            {
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete credential file for {HostId}", hostId);
+            }
+
+            _logger.LogInformation("Host credential deleted: {HostId} ({DisplayName})", hostId, credential.DisplayName);
+            return true;
+        }
+    }
+
     // --- Invite codes ---
 
     public string GenerateInviteCode()
     {
-        CleanupExpiredInviteCodes();
+        // Only one invite code valid at a time — clear any existing
+        _inviteCodes.Clear();
 
-        const string alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-        var code = new char[8];
-        for (var i = 0; i < code.Length; i++)
-            code[i] = alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)];
-
-        var codeStr = new string(code);
-        _inviteCodes[codeStr] = DateTime.UtcNow;
+        var code = Guid.NewGuid().ToString("N")[..16];
+        _inviteCodes[code] = DateTime.UtcNow;
         PersistInviteCodes();
-        _logger.LogInformation("Generated host invite code: {Code}", codeStr);
-        return codeStr;
+        _logger.LogInformation("Generated host invite code");
+        return code;
     }
 
     public bool ValidateAndConsumeInviteCode(string code)
     {
-        code = code.ToUpperInvariant();
         if (!_inviteCodes.TryRemove(code, out var created))
             return false;
 
@@ -168,12 +189,6 @@ public class HostCredentialService
 
         PersistInviteCodes();
         return true;
-    }
-
-    public List<(string Code, DateTime Created)> GetActiveInviteCodes()
-    {
-        CleanupExpiredInviteCodes();
-        return _inviteCodes.Select(kv => (kv.Key, kv.Value)).ToList();
     }
 
     // --- Challenge storage ---
@@ -206,16 +221,6 @@ public class HostCredentialService
         }
     }
 
-    private void CleanupExpiredInviteCodes()
-    {
-        var cutoff = DateTime.UtcNow - InviteCodeTtl;
-        foreach (var kv in _inviteCodes)
-        {
-            if (kv.Value < cutoff)
-                _inviteCodes.TryRemove(kv.Key, out _);
-        }
-    }
-
     private void LoadCredentials()
     {
         var files = Directory.GetFiles(_credentialsDir, "*.json")
@@ -236,7 +241,8 @@ public class HostCredentialService
                         CredentialId = Convert.FromBase64String(data.CredentialId),
                         PublicKey = Convert.FromBase64String(data.PublicKey),
                         SignCount = data.SignCount,
-                        IsAdmin = data.IsAdmin
+                        IsAdmin = data.IsAdmin,
+                        CreatedAt = data.CreatedAt ?? DateTime.UtcNow
                     };
                     _credentials[credential.HostId] = credential;
                     _credentialIdToHostId[Convert.ToBase64String(credential.CredentialId)] = credential.HostId;
@@ -309,10 +315,13 @@ public class HostCredentialService
             var codes = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(json);
             if (codes != null)
             {
+                var cutoff = DateTime.UtcNow - InviteCodeTtl;
                 foreach (var kv in codes)
-                    _inviteCodes[kv.Key] = kv.Value;
+                {
+                    if (kv.Value >= cutoff)
+                        _inviteCodes[kv.Key] = kv.Value;
+                }
             }
-            CleanupExpiredInviteCodes();
         }
         catch (Exception ex)
         {
@@ -362,6 +371,7 @@ public class HostCredentialService
         public string PublicKey { get; set; } = "";
         public uint SignCount { get; set; }
         public bool IsAdmin { get; set; }
+        public DateTime? CreatedAt { get; set; }
     }
 
     private class LegacyHostCredentialJson

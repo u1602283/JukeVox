@@ -11,7 +11,7 @@ import type {
   HostStatus,
   GuestInfo,
   PartySummary,
-  InviteCode,
+  HostInfo,
 } from '../types';
 
 const BASE = '/api';
@@ -83,12 +83,15 @@ export const api = {
   hostLogout: () =>
     request<{ success: boolean }>(`${BASE}/host/logout`, { method: 'POST' }),
 
-  // Host invite codes (admin only)
+  // Host management (admin only)
+  getHosts: () =>
+    request<HostInfo[]>(`${BASE}/host/hosts`),
+
+  deleteHost: (hostId: string) =>
+    request<void>(`${BASE}/host/hosts/${encodeURIComponent(hostId)}`, { method: 'DELETE' }),
+
   generateInviteCode: () =>
     request<{ code: string }>(`${BASE}/host/invite-codes`, { method: 'POST' }),
-
-  getInviteCodes: () =>
-    request<InviteCode[]>(`${BASE}/host/invite-codes`),
 
   // Multi-party management
   getParties: () =>
@@ -183,7 +186,7 @@ export const api = {
     }),
 
   removeFromQueue: (id: string) =>
-    request<QueueItem[]>(`${BASE}/queue/${id}`, { method: 'DELETE' }),
+    request<QueueItem[]>(`${BASE}/queue/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   reorderQueue: (orderedIds: string[]) =>
     request<QueueItem[]>(`${BASE}/queue/reorder`, {

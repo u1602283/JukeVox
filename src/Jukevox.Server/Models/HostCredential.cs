@@ -8,4 +8,5 @@ public class HostCredential
     public required byte[] PublicKey { get; set; }
     public uint SignCount { get; set; }
     public bool IsAdmin { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

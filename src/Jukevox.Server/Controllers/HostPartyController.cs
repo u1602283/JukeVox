@@ -65,6 +65,9 @@ public class HostPartyController : ControllerBase
         if (request.DefaultCredits < 1)
             return BadRequest(new { error = "Credits per guest must be at least 1" });
 
+        if (_partyService.GetPartiesForHost(hostId).Count > 0)
+            return Conflict(new { error = "You already have an active party" });
+
         var sessionId = HttpContext.GetSessionId();
         var inviteCode = request.InviteCode ?? GenerateInviteCode();
         var party = _partyService.CreateParty(sessionId, hostId, inviteCode, request.DefaultCredits);

@@ -120,7 +120,9 @@ export interface PartySummary {
   createdAt: string;
 }
 
-export interface InviteCode {
-  code: string;
+export interface HostInfo {
+  hostId: string;
+  displayName: string;
+  isAdmin: boolean;
   createdAt: string;
 }

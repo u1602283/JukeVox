@@ -1,0 +1,64 @@
+.codeDisplay {
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  font-family: monospace;
+  padding: 12px;
+  background: var(--bg-recessed);
+  border-radius: var(--radius-md);
+  word-break: break-all;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 0 10px;
+}
+
+.table td {
+  padding: 10px 0;
+  border-top: 1px solid var(--border-primary);
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+.datecell {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.actionCell {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.removeBtn {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--danger);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--danger);
+  background: transparent;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.removeBtn:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+}
+
+.removeBtn:disabled {
+  opacity: 0.5;
+}

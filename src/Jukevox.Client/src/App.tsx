@@ -8,6 +8,7 @@ import { PartyPage } from './pages/PartyPage';
 import { HostSetupPage } from './pages/HostSetupPage';
 import { HostRegisterPage } from './pages/HostRegisterPage';
 import { HostPortalPage } from './pages/HostPortalPage';
+import { HostAdminPage } from './pages/HostAdminPage';
 
 function GuestRoute() {
   const { party, loading } = useParty();
@@ -36,6 +37,7 @@ function App() {
           <Route path="/" element={<GuestRoute />} />
           <Route path="/host/setup" element={<HostSetupPage />} />
           <Route path="/host/register" element={<HostRegisterPage />} />
+          <Route path="/host/admin" element={<HostAdminPage />} />
           <Route path="/host" element={<HostPortalPage />} />
         </Routes>
       </PartyProvider>
