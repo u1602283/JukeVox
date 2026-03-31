@@ -5,7 +5,6 @@ namespace JukeVox.Server.Hubs;
 
 public class PartyHub : Hub<IPartyClient>
 {
-    private const string SessionCookieName = "JukeVox.SessionId";
     private readonly IPartyService _partyService;
     private readonly ConnectionMapping _connectionMapping;
 
@@ -17,15 +16,10 @@ public class PartyHub : Hub<IPartyClient>
 
     public async Task JoinPartyGroup(string partyId)
     {
-        var httpContext = Context.GetHttpContext();
-        var sessionId = httpContext?.Request.Cookies[SessionCookieName];
+        var sessionId = Context.GetHttpContext()?.Items["SessionId"] as string;
         if (!string.IsNullOrEmpty(sessionId) && _partyService.IsParticipant(partyId, sessionId))
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, partyId);
-        }
-        else
-        {
-            Context.Abort();
         }
     }
 
@@ -33,7 +27,7 @@ public class PartyHub : Hub<IPartyClient>
     {
         var httpContext = Context.GetHttpContext();
         var partyId = httpContext?.Request.Query["partyId"].ToString();
-        var sessionId = httpContext?.Request.Cookies[SessionCookieName];
+        var sessionId = httpContext?.Items["SessionId"] as string;
 
         if (!string.IsNullOrEmpty(partyId) && !string.IsNullOrEmpty(sessionId) && _partyService.IsParticipant(partyId, sessionId))
         {
