@@ -6,15 +6,15 @@ import styles from './ShareOverlay.module.css';
 interface ShareOverlayProps {
   open: boolean;
   onClose: () => void;
-  inviteCode: string;
+  joinToken: string;
 }
 
-export function ShareOverlay({ open, onClose, inviteCode }: ShareOverlayProps) {
+export function ShareOverlay({ open, onClose, joinToken }: ShareOverlayProps) {
   const [copied, setCopied] = useState(false);
 
   if (!open) return null;
 
-  const joinUrl = `${window.location.origin}/?code=${inviteCode}`;
+  const joinUrl = `${window.location.origin}/join/${joinToken}`;
 
   const handleCopy = async () => {
     try {
@@ -38,7 +38,6 @@ export function ShareOverlay({ open, onClose, inviteCode }: ShareOverlayProps) {
     try {
       await navigator.share({
         title: 'Join my JukeVox party',
-        text: `Join with code ${inviteCode}`,
         url: joinUrl,
       });
     } catch {
@@ -67,8 +66,6 @@ export function ShareOverlay({ open, onClose, inviteCode }: ShareOverlayProps) {
         </div>
 
         <p className={styles.label}>Scan to join</p>
-
-        <div className={styles.code}>{inviteCode}</div>
 
         <div className={styles.actions}>
           <button className={styles.actionBtn} onClick={handleCopy}>

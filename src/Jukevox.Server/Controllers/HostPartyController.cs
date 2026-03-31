@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using JukeVox.Server.Extensions;
@@ -69,13 +68,12 @@ public class HostPartyController : ControllerBase
             return Conflict(new { error = "You already have an active party" });
 
         var sessionId = HttpContext.GetSessionId();
-        var inviteCode = request.InviteCode ?? GenerateInviteCode();
-        var party = _partyService.CreateParty(sessionId, hostId, inviteCode, request.DefaultCredits);
+        var party = _partyService.CreateParty(sessionId, hostId, request.DefaultCredits);
 
         return Ok(new PartyStateDto
         {
             PartyId = party.Id,
-            InviteCode = party.InviteCode,
+            JoinToken = party.JoinToken,
             IsHost = true,
             SpotifyConnected = false,
             DefaultCredits = party.DefaultCredits,
@@ -101,7 +99,7 @@ public class HostPartyController : ControllerBase
         var result = summaries.Select(s => new
         {
             partyId = s.PartyId,
-            inviteCode = s.InviteCode,
+            joinToken = s.JoinToken,
             hostId = s.HostId,
             queueCount = s.QueueCount,
             guestCount = s.GuestCount,
@@ -133,7 +131,7 @@ public class HostPartyController : ControllerBase
         return Ok(new PartyStateDto
         {
             PartyId = party.Id,
-            InviteCode = party.InviteCode,
+            JoinToken = party.JoinToken,
             IsHost = true,
             SpotifyConnected = party.SpotifyTokens != null,
             DefaultCredits = party.DefaultCredits,
@@ -164,7 +162,7 @@ public class HostPartyController : ControllerBase
         return Ok(new PartyStateDto
         {
             PartyId = party.Id,
-            InviteCode = party.InviteCode,
+            JoinToken = party.JoinToken,
             IsHost = true,
             SpotifyConnected = party.SpotifyTokens != null,
             DefaultCredits = party.DefaultCredits,
@@ -190,7 +188,7 @@ public class HostPartyController : ControllerBase
         return Ok(new SavedPartySummaryDto
         {
             Exists = true,
-            InviteCode = p.InviteCode,
+            JoinToken = p.JoinToken,
             QueueCount = p.Queue.Count,
             GuestCount = p.Guests.Count,
             CreatedAt = p.CreatedAt
@@ -210,7 +208,7 @@ public class HostPartyController : ControllerBase
         if (request.DefaultCredits.HasValue && request.DefaultCredits.Value < 1)
             return BadRequest(new { error = "Credits per guest must be at least 1" });
 
-        _partyService.UpdateSettings(partyId, request.InviteCode, request.DefaultCredits);
+        _partyService.UpdateSettings(partyId, request.DefaultCredits);
         return Ok();
     }
 
@@ -411,15 +409,4 @@ public class HostPartyController : ControllerBase
         return Ok(new { ended = true });
     }
 
-    private static string GenerateInviteCode()
-    {
-        const string chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-        return string.Create(6, chars, static (span, chars) =>
-        {
-            Span<byte> bytes = stackalloc byte[6];
-            RandomNumberGenerator.Fill(bytes);
-            for (var i = 0; i < span.Length; i++)
-                span[i] = chars[bytes[i] % chars.Length];
-        });
-    }
 }

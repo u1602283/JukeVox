@@ -124,6 +124,29 @@
   color: var(--text-primary);
 }
 
+.leaveBtn {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-primary);
+  background: none;
+  cursor: pointer;
+  transition: color var(--duration-fast), border-color var(--duration-fast);
+}
+
+.leaveBtn:hover {
+  color: var(--error, #ef4444);
+  border-color: var(--error, #ef4444);
+}
+
+.leaveBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

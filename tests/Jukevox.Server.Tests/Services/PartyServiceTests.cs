@@ -46,34 +46,34 @@ public class PartyServiceTests
     [Test]
     public void CreateParty_ReturnsPartyWithCorrectValues()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
         party.Should().NotBeNull();
         party.Should().BeEquivalentTo(new
         {
-            InviteCode = "1234",
             HostSessionId = "host-1",
             HostId,
             DefaultCredits = 5
-        });
+        }, options => options.ExcludingMissingMembers());
+        party.JoinToken.Should().NotBeNullOrEmpty().And.HaveLength(32);
     }
 
     [Test]
     public void GetParty_AfterCreate_ReturnsParty()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
         var retrieved = _service.GetParty(party.Id);
         retrieved.Should().NotBeNull();
-        retrieved.InviteCode.Should().Be("1234");
+        retrieved.JoinToken.Should().Be(party.JoinToken);
     }
 
     [Test]
     public void JoinParty_CorrectCode_ReturnsGuestSession()
     {
-        _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
-        var guest = _service.JoinParty("guest-1", "1234", "Alice");
+        var guest = _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         guest.Should().NotBeNull();
         guest.Should().BeEquivalentTo(new
@@ -87,17 +87,17 @@ public class PartyServiceTests
     [Test]
     public void JoinParty_WrongCode_ReturnsNull()
     {
-        _service.CreateParty("host-1", HostId, "1234", 5);
+        _service.CreateParty("host-1", HostId, 5);
 
-        _service.JoinParty("guest-1", "9999", "Alice").Should().BeNull();
+        _service.JoinParty("guest-1", "invalid-token", "Alice").Should().BeNull();
     }
 
     [Test]
     public void JoinParty_IdempotentRejoin_ReturnsSameGuest()
     {
-        _service.CreateParty("host-1", HostId, "1234", 5);
-        var guest1 = _service.JoinParty("guest-1", "1234", "Alice");
-        var guest2 = _service.JoinParty("guest-1", "1234", "Alice");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        var guest1 = _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        var guest2 = _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         guest2.Should().BeSameAs(guest1);
     }
@@ -105,7 +105,7 @@ public class PartyServiceTests
     [Test]
     public void IsHost_HostSessionId_ReturnsTrue()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
         _service.IsHost(party.Id, "host-1").Should().BeTrue();
         _service.IsHost(party.Id, "guest-1").Should().BeFalse();
@@ -114,8 +114,8 @@ public class PartyServiceTests
     [Test]
     public void IsParticipant_HostAndGuest_ReturnTrue()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
-        _service.JoinParty("guest-1", "1234", "Alice");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         _service.IsParticipant(party.Id, "host-1").Should().BeTrue();
         _service.IsParticipant(party.Id, "guest-1").Should().BeTrue();
@@ -123,21 +123,20 @@ public class PartyServiceTests
     }
 
     [Test]
-    public void UpdateSettings_ChangesInviteCodeAndCredits()
+    public void UpdateSettings_ChangesCredits()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
-        _service.UpdateSettings(party.Id, "5678", 10);
+        _service.UpdateSettings(party.Id, 10);
 
         var retrieved = _service.GetParty(party.Id)!;
-        retrieved.InviteCode.Should().Be("5678");
         retrieved.DefaultCredits.Should().Be(10);
     }
 
     [Test]
     public void SpotifyTokens_RoundTrip()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
         var tokens = new SpotifyTokens
         {
@@ -156,7 +155,7 @@ public class PartyServiceTests
     [Test]
     public void ResumeAsHost_UpdatesHostSessionId()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
         var resumed = _service.ResumeAsHost(party.Id, "host-2");
 
@@ -169,23 +168,23 @@ public class PartyServiceTests
     [Test]
     public void Persistence_SurvivesNewInstance()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
-        _service.JoinParty("guest-1", "1234", "Alice");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var newService = CreateService(_tempDir);
 
         var retrieved = newService.GetParty(party.Id);
         retrieved.Should().NotBeNull();
-        retrieved.InviteCode.Should().Be("1234");
+        retrieved.JoinToken.Should().Be(party.JoinToken);
         retrieved.Guests.Should().ContainKey("guest-1");
     }
 
     [Test]
     public void GetAllGuests_ReturnsAllJoinedGuests()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
-        _service.JoinParty("guest-1", "1234", "Alice");
-        _service.JoinParty("guest-2", "1234", "Bob");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        _service.JoinParty("guest-2", party.JoinToken, "Bob");
 
         var guests = _service.GetAllGuests(party.Id);
 
@@ -202,8 +201,8 @@ public class PartyServiceTests
     [Test]
     public void SetGuestCredits_SetsAbsoluteValue()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
-        _service.JoinParty("guest-1", "1234", "Alice");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var guest = _service.SetGuestCredits(party.Id, "guest-1", 10);
 
@@ -214,8 +213,8 @@ public class PartyServiceTests
     [Test]
     public void SetGuestCredits_ClampsToZero()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
-        _service.JoinParty("guest-1", "1234", "Alice");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var guest = _service.SetGuestCredits(party.Id, "guest-1", -3);
 
@@ -225,7 +224,7 @@ public class PartyServiceTests
     [Test]
     public void SetGuestCredits_UnknownGuest_ReturnsNull()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
         _service.SetGuestCredits(party.Id, "nobody", 10).Should().BeNull();
     }
@@ -233,9 +232,9 @@ public class PartyServiceTests
     [Test]
     public void AdjustAllCredits_AddsDelta()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
-        _service.JoinParty("guest-1", "1234", "Alice");
-        _service.JoinParty("guest-2", "1234", "Bob");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        _service.JoinParty("guest-2", party.JoinToken, "Bob");
 
         var guests = _service.AdjustAllCredits(party.Id, 3);
 
@@ -246,8 +245,8 @@ public class PartyServiceTests
     [Test]
     public void AdjustAllCredits_NegativeDelta_ClampsToZero()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
-        _service.JoinParty("guest-1", "1234", "Alice");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var guests = _service.AdjustAllCredits(party.Id, -10);
 
@@ -258,8 +257,8 @@ public class PartyServiceTests
     [Test]
     public void EndParty_ClearsCurrentParty()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
-        _service.JoinParty("guest-1", "1234", "Alice");
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         _service.EndParty(party.Id);
 
@@ -270,7 +269,7 @@ public class PartyServiceTests
     [Test]
     public void EndParty_DeletesStateFile()
     {
-        var party = _service.CreateParty("host-1", HostId, "1234", 5);
+        var party = _service.CreateParty("host-1", HostId, 5);
 
         _service.EndParty(party.Id);
 

@@ -3,7 +3,7 @@ namespace JukeVox.Server.Models.Dto;
 public class PartyStateDto
 {
     public required string PartyId { get; set; }
-    public required string InviteCode { get; set; }
+    public required string JoinToken { get; set; }
     public bool IsHost { get; set; }
     public bool SpotifyConnected { get; set; }
     public int? CreditsRemaining { get; set; }

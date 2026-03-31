@@ -49,7 +49,7 @@ public class PartyControllerTests
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
         _partyService.Setup(p => p.JoinParty("guest-1", "9999", "Alice")).Returns((GuestSession?)null).Verifiable(Times.Once);
 
-        var result = _controller.JoinParty(new JoinPartyRequest { InviteCode = "9999", DisplayName = "Alice" });
+        var result = _controller.JoinParty(new JoinPartyRequest { JoinToken = "9999", DisplayName = "Alice" });
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -67,13 +67,51 @@ public class PartyControllerTests
         _queueService.Setup(q => q.GetQueue(PartyId)).Returns([]).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetUserVotes(PartyId, "guest-1")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
 
-        var result = _controller.JoinParty(new JoinPartyRequest { InviteCode = "1234", DisplayName = "Alice" });
+        var result = _controller.JoinParty(new JoinPartyRequest { JoinToken = "1234", DisplayName = "Alice" });
 
         var state = result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeOfType<PartyStateDto>().Subject;
         state.PartyId.Should().Be(PartyId);
         state.IsHost.Should().BeFalse();
         state.CreditsRemaining.Should().Be(5);
+    }
+
+    [Test]
+    public void LeaveParty_NotInParty_ReturnsLeftFalse()
+    {
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
+        _partyService.Setup(p => p.GetPartyIdForSession("guest-1")).Returns((string?)null).Verifiable(Times.Once);
+
+        var result = _controller.LeaveParty();
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeEquivalentTo(new { left = false });
+    }
+
+    [Test]
+    public void LeaveParty_AsHost_ReturnsBadRequest()
+    {
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext("host-session");
+        _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId).Verifiable(Times.Once);
+        _partyService.Setup(p => p.IsHost(PartyId, "host-session")).Returns(true).Verifiable(Times.Once);
+
+        var result = _controller.LeaveParty();
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Test]
+    public void LeaveParty_AsGuest_RemovesAndReturnsLeftTrue()
+    {
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
+        _partyService.Setup(p => p.GetPartyIdForSession("guest-1")).Returns(PartyId).Verifiable(Times.Once);
+        _partyService.Setup(p => p.IsHost(PartyId, "guest-1")).Returns(false).Verifiable(Times.Once);
+        _partyService.Setup(p => p.RemoveGuest(PartyId, "guest-1")).Returns(true).Verifiable(Times.Once);
+
+        var result = _controller.LeaveParty();
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeEquivalentTo(new { left = true });
     }
 
     [Test]

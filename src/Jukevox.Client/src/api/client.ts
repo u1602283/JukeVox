@@ -113,7 +113,7 @@ export const api = {
   getSavedParty: () =>
     request<SavedPartySummary>(`${BASE}/host/party/saved`),
 
-  updateSettings: (data: { inviteCode?: string; defaultCredits?: number }) =>
+  updateSettings: (data: { defaultCredits?: number }) =>
     request<void>(`${BASE}/host/party/settings`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -158,6 +158,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  leaveParty: () =>
+    request<{ left: boolean }>(`${BASE}/party/leave`, { method: 'POST' }),
 
   getPartyState: () =>
     request<PartyState & { hasParty?: boolean }>(`${BASE}/party/state`),

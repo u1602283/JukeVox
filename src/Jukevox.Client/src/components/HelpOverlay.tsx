@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
+import { api } from '../api/client';
+import { useParty } from '../hooks/useParty';
 import styles from './HelpOverlay.module.css';
 
 interface HelpOverlayProps {
@@ -7,7 +10,22 @@ interface HelpOverlayProps {
 }
 
 export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
+  const { setParty } = useParty();
+  const [leaving, setLeaving] = useState(false);
+
   if (!open) return null;
+
+  const handleLeave = async () => {
+    if (!confirm('Leave this party? You can rejoin with the same link.')) return;
+    setLeaving(true);
+    try {
+      await api.leaveParty();
+      setParty(null);
+      window.location.href = '/';
+    } catch {
+      setLeaving(false);
+    }
+  };
 
   return (
     <>
@@ -67,6 +85,16 @@ export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
               and that overrides everything. Benevolent dictatorship with
               democratic characteristics.
             </p>
+          </section>
+
+          <section className={styles.section}>
+            <button
+              className={styles.leaveBtn}
+              onClick={handleLeave}
+              disabled={leaving}
+            >
+              {leaving ? 'Leaving...' : 'Leave Party'}
+            </button>
           </section>
         </div>
       </div>

@@ -15,12 +15,14 @@ public class HostAuthController : ControllerBase
     private readonly Fido2 _fido2;
     private readonly Fido2Configuration _fido2Config;
     private readonly HostCredentialService _credentialService;
+    private readonly IPartyService _partyService;
 
-    public HostAuthController(Fido2 fido2, Fido2Configuration fido2Config, HostCredentialService credentialService)
+    public HostAuthController(Fido2 fido2, Fido2Configuration fido2Config, HostCredentialService credentialService, IPartyService partyService)
     {
         _fido2 = fido2;
         _fido2Config = fido2Config;
         _credentialService = credentialService;
+        _partyService = partyService;
     }
 
     [HttpGet("status")]
@@ -288,6 +290,8 @@ public class HostAuthController : ControllerBase
     [HttpPost("logout")]
     public IActionResult Logout()
     {
+        var sessionId = HttpContext.GetSessionId();
+        _partyService.UnmapSession(sessionId);
         HttpContext.ClearHostAuthCookie();
         return Ok(new { success = true });
     }

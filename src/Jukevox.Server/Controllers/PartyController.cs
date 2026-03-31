@@ -27,16 +27,16 @@ public class PartyController : ControllerBase
     public IActionResult JoinParty([FromBody] JoinPartyRequest request)
     {
         var sessionId = HttpContext.GetSessionId();
-        var guest = _partyService.JoinParty(sessionId, request.InviteCode, request.DisplayName);
+        var guest = _partyService.JoinParty(sessionId, request.JoinToken, request.DisplayName);
         if (guest == null)
-            return BadRequest(new { error = "Invalid invite code or no active party" });
+            return BadRequest(new { error = "Invalid join link or no active party" });
 
         var partyId = _partyService.GetPartyIdForSession(sessionId)!;
         var party = _partyService.GetParty(partyId)!;
         return Ok(new PartyStateDto
         {
             PartyId = party.Id,
-            InviteCode = party.InviteCode,
+            JoinToken = party.JoinToken,
             IsHost = false,
             SpotifyConnected = party.SpotifyTokens != null,
             CreditsRemaining = guest.CreditsRemaining,
@@ -47,6 +47,21 @@ public class PartyController : ControllerBase
             BasePlaylistName = party.BasePlaylistName,
             UserVotes = _queueService.GetUserVotes(partyId, sessionId)
         });
+    }
+
+    [HttpPost("leave")]
+    public IActionResult LeaveParty()
+    {
+        var sessionId = HttpContext.GetSessionId();
+        var partyId = _partyService.GetPartyIdForSession(sessionId);
+        if (partyId == null)
+            return Ok(new { left = false });
+
+        if (_partyService.IsHost(partyId, sessionId))
+            return BadRequest(new { error = "Host cannot leave their own party" });
+
+        _partyService.RemoveGuest(partyId, sessionId);
+        return Ok(new { left = true });
     }
 
     [HttpGet("state")]
@@ -72,7 +87,7 @@ public class PartyController : ControllerBase
         return Ok(new PartyStateDto
         {
             PartyId = party.Id,
-            InviteCode = party.InviteCode,
+            JoinToken = party.JoinToken,
             IsHost = isHost,
             SpotifyConnected = party.SpotifyTokens != null,
             CreditsRemaining = guest?.CreditsRemaining,

@@ -1,6 +1,6 @@
 export interface PartyState {
   partyId: string;
-  inviteCode: string;
+  joinToken: string;
   isHost: boolean;
   spotifyConnected: boolean;
   creditsRemaining?: number;
@@ -63,18 +63,17 @@ export interface SpotifyDevice {
 }
 
 export interface CreatePartyRequest {
-  inviteCode?: string;
   defaultCredits: number;
 }
 
 export interface JoinPartyRequest {
-  inviteCode: string;
+  joinToken: string;
   displayName: string;
 }
 
 export interface SavedPartySummary {
   exists: boolean;
-  inviteCode?: string;
+  joinToken?: string;
   queueCount: number;
   guestCount: number;
   createdAt?: string;
@@ -113,7 +112,7 @@ export interface HostStatus {
 
 export interface PartySummary {
   partyId: string;
-  inviteCode: string;
+  joinToken: string;
   hostId: string;
   queueCount: number;
   guestCount: number;

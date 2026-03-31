@@ -3,7 +3,7 @@ namespace JukeVox.Server.Models;
 public class Party
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
-    public required string InviteCode { get; set; }
+    public string JoinToken { get; set; } = Guid.NewGuid().ToString("N");
     public string HostSessionId { get; set; } = string.Empty;
     public string HostId { get; set; } = string.Empty;
     public int DefaultCredits { get; set; } = 5;

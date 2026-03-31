@@ -45,9 +45,12 @@ export function PartyPage() {
             <span className={styles.spotifyStatus}>Connected</span>
           )}
           <div className={styles.headerIcons}>
-            <button className={styles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
-              <span className={styles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
-              <span className={styles.inviteCodeCompact}><Share2 size={18} /></span>
+            <button
+              className={styles.searchToggle}
+              onClick={() => setShareOpen(true)}
+              aria-label="Share join link"
+            >
+              <Share2 size={22} />
             </button>
             {!party.isHost && (
               <button
@@ -72,7 +75,7 @@ export function PartyPage() {
       overlays={
         <>
           <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
-          <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} inviteCode={party.inviteCode} />
+          <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} joinToken={party.joinToken} />
           <SearchOverlay
             open={searchOpen}
             onClose={handleCloseSearch}

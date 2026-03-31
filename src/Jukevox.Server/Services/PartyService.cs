@@ -50,11 +50,10 @@ public class PartyService : IPartyService
         return _parties.Values.Where(p => p.HostId == hostId).ToList();
     }
 
-    public Party CreateParty(string hostSessionId, string hostId, string inviteCode, int defaultCredits)
+    public Party CreateParty(string hostSessionId, string hostId, int defaultCredits)
     {
         var party = new Party
         {
-            InviteCode = inviteCode,
             HostSessionId = hostSessionId,
             HostId = hostId,
             DefaultCredits = defaultCredits
@@ -68,20 +67,21 @@ public class PartyService : IPartyService
             PersistStateInternal(party);
         }
 
-        _logger.LogInformation("Party created: {PartyId} (invite: {InviteCode}, host: {HostId})",
-            party.Id, inviteCode, hostId);
+        _logger.LogInformation("Party created: {PartyId} (host: {HostId})", party.Id, hostId);
         return party;
     }
 
-    public GuestSession? JoinParty(string sessionId, string inviteCode, string displayName)
+    public GuestSession? JoinParty(string sessionId, string joinToken, string displayName)
     {
-        // Find party by invite code
-        var party = _parties.Values.FirstOrDefault(p => p.InviteCode == inviteCode);
+        var party = _parties.Values.FirstOrDefault(p => p.JoinToken == joinToken);
         if (party == null) return null;
 
         var partyLock = GetPartyLock(party.Id);
         lock (partyLock)
         {
+            if (party.HostSessionId == sessionId)
+                return null;
+
             if (party.Guests.TryGetValue(sessionId, out var existing))
             {
                 MapSession(sessionId, party.Id);
@@ -122,7 +122,7 @@ public class PartyService : IPartyService
         return guest;
     }
 
-    public void UpdateSettings(string partyId, string? inviteCode, int? defaultCredits)
+    public void UpdateSettings(string partyId, int? defaultCredits)
     {
         var party = GetParty(partyId);
         if (party == null) return;
@@ -130,7 +130,6 @@ public class PartyService : IPartyService
         var partyLock = GetPartyLock(partyId);
         lock (partyLock)
         {
-            if (inviteCode != null) party.InviteCode = inviteCode;
             if (defaultCredits.HasValue) party.DefaultCredits = defaultCredits.Value;
             PersistStateInternal(party);
         }
@@ -154,10 +153,10 @@ public class PartyService : IPartyService
         return GetParty(partyId)?.SpotifyTokens;
     }
 
-    public List<(string PartyId, string InviteCode, string HostId, int QueueCount, int GuestCount, DateTime CreatedAt)> GetAllPartySummaries()
+    public List<(string PartyId, string JoinToken, string HostId, int QueueCount, int GuestCount, DateTime CreatedAt)> GetAllPartySummaries()
     {
         return _parties.Values.Select(p =>
-            (p.Id, p.InviteCode, p.HostId, p.Queue.Count, p.Guests.Count, p.CreatedAt)
+            (p.Id, p.JoinToken, p.HostId, p.Queue.Count, p.Guests.Count, p.CreatedAt)
         ).ToList();
     }
 
@@ -302,6 +301,11 @@ public class PartyService : IPartyService
         return _partyLocks.GetOrAdd(partyId, _ => new Lock());
     }
 
+    public void UnmapSession(string sessionId)
+    {
+        _sessionToPartyId.TryRemove(sessionId, out _);
+    }
+
     private void MapSession(string sessionId, string partyId)
     {
         // A session can only be in one party at a time
@@ -343,8 +347,8 @@ public class PartyService : IPartyService
                 foreach (var guestId in party.Guests.Keys)
                     _sessionToPartyId[guestId] = party.Id;
 
-                _logger.LogInformation("Loaded party {PartyId} (invite: {Code}, queue: {Count} items)",
-                    party.Id, party.InviteCode, party.Queue.Count);
+                _logger.LogInformation("Loaded party {PartyId} (queue: {Count} items)",
+                    party.Id, party.Queue.Count);
             }
             catch (Exception ex)
             {

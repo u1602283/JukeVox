@@ -4,26 +4,25 @@ import { useParty } from '../hooks/useParty';
 import styles from './JoinForm.module.css';
 
 interface JoinFormProps {
-  initialCode?: string;
+  token: string;
 }
 
-export function JoinForm({ initialCode = '' }: JoinFormProps) {
+export function JoinForm({ token }: JoinFormProps) {
   const { setParty, setQueue, setCredits } = useParty();
-  const [inviteCode, setInviteCode] = useState(initialCode);
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteCode.trim() || !displayName.trim()) return;
+    if (!displayName.trim()) return;
 
     setLoading(true);
     setError('');
 
     try {
       const state = await api.joinParty({
-        inviteCode: inviteCode.trim(),
+        joinToken: token,
         displayName: displayName.trim(),
       });
       setParty(state);
@@ -40,16 +39,7 @@ export function JoinForm({ initialCode = '' }: JoinFormProps) {
 
   return (
     <form onSubmit={handleJoin} className={styles.form}>
-      <h2 className={styles.title}>Join a Party</h2>
-      <input
-        type="text"
-        placeholder="Party ID"
-        value={inviteCode}
-        onChange={(e) => setInviteCode(e.target.value)}
-        maxLength={10}
-        required
-        className={styles.input}
-      />
+      <h2 className={styles.title}>Join Party</h2>
       <input
         type="text"
         placeholder="Your Name"

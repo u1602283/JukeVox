@@ -30,7 +30,6 @@ export function HostPortalPage() {
   const [checkingStatus, setCheckingStatus] = useState(true);
 
   // Party creation state
-  const [inviteCode, setInviteCode] = useState('');
   const [defaultCredits, setDefaultCredits] = useState('5');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
@@ -105,7 +104,6 @@ export function HostPortalPage() {
         return;
       }
       const state = await api.createParty({
-        inviteCode: inviteCode.trim() || undefined,
         defaultCredits: credits,
       });
       setParty(state);
@@ -198,7 +196,6 @@ export function HostPortalPage() {
             {parties.map((p) => (
               <div key={p.partyId} className={styles.resumeCard} style={{ marginBottom: '0.5rem' }}>
                 <div className={styles.resumeDetails}>
-                  <span>Code: <strong>{p.inviteCode}</strong></span>
                   <span>{p.queueCount} song{p.queueCount !== 1 ? 's' : ''}</span>
                   <span>{p.guestCount} guest{p.guestCount !== 1 ? 's' : ''}</span>
                 </div>
@@ -216,14 +213,6 @@ export function HostPortalPage() {
           <div className={styles.panel}>
             <form onSubmit={handleCreate}>
               <h2 className={styles.panelTitle}>Create a Party</h2>
-              <input
-                type="text"
-                placeholder="Party ID (optional, auto-generated)"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-                maxLength={10}
-                className={styles.input}
-              />
               <div className={styles.creditsRow}>
                 <label className={styles.creditsLabel}>Credits per guest</label>
                 <input
@@ -265,6 +254,7 @@ export function HostPortalPage() {
   const handlePartyEnded = () => {
     setManageOpen(false);
     setParty(null);
+    setParties([]);
   };
 
   const panels: PanelDefinition[] = [
@@ -317,9 +307,12 @@ export function HostPortalPage() {
             )}
             <DeviceSelector />
             <div className={partyStyles.headerIcons}>
-              <button className={partyStyles.inviteCode} onClick={() => setShareOpen(true)} aria-label="Share party code">
-                <span className={partyStyles.inviteCodeValue}>{party.inviteCode} <Share2 size={13} /></span>
-                <span className={partyStyles.inviteCodeCompact}><Share2 size={18} /></span>
+              <button
+                className={partyStyles.searchToggle}
+                onClick={() => setShareOpen(true)}
+                aria-label="Share join link"
+              >
+                <Share2 size={20} />
               </button>
               <button
                 className={partyStyles.searchToggle}
@@ -350,7 +343,7 @@ export function HostPortalPage() {
             results={results}
             loading={searchLoading}
           />
-          <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} inviteCode={party.inviteCode} />
+          <ShareOverlay open={shareOpen} onClose={() => setShareOpen(false)} joinToken={party.joinToken} />
           {manageOpen && (
             <ManagePanel
               mode="overlay"
