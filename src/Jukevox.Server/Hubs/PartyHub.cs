@@ -17,10 +17,15 @@ public class PartyHub : Hub<IPartyClient>
 
     public async Task JoinPartyGroup(string partyId)
     {
-        var party = _partyService.GetParty(partyId);
-        if (party != null)
+        var httpContext = Context.GetHttpContext();
+        var sessionId = httpContext?.Request.Cookies[SessionCookieName];
+        if (!string.IsNullOrEmpty(sessionId) && _partyService.IsParticipant(partyId, sessionId))
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, partyId);
+        }
+        else
+        {
+            Context.Abort();
         }
     }
 
@@ -28,18 +33,20 @@ public class PartyHub : Hub<IPartyClient>
     {
         var httpContext = Context.GetHttpContext();
         var partyId = httpContext?.Request.Query["partyId"].ToString();
+        var sessionId = httpContext?.Request.Cookies[SessionCookieName];
 
-        if (!string.IsNullOrEmpty(partyId))
+        if (!string.IsNullOrEmpty(partyId) && !string.IsNullOrEmpty(sessionId) && _partyService.IsParticipant(partyId, sessionId))
         {
-            var party = _partyService.GetParty(partyId);
-            if (party != null)
-            {
-                await Groups.AddToGroupAsync(Context.ConnectionId, partyId);
-            }
+            await Groups.AddToGroupAsync(Context.ConnectionId, partyId);
+        }
+        else if (!string.IsNullOrEmpty(partyId))
+        {
+            // Not a participant: disconnect
+            Context.Abort();
+            return;
         }
 
         // Map session cookie to connection ID for targeted broadcasts
-        var sessionId = httpContext?.Request.Cookies[SessionCookieName];
         if (!string.IsNullOrEmpty(sessionId))
         {
             _connectionMapping.Add(sessionId, Context.ConnectionId);
