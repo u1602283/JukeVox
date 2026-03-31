@@ -53,7 +53,7 @@ public class PartySessionMiddleware
             {
                 HttpOnly = true,
                 SameSite = SameSiteMode.Lax,
-                Secure = context.Request.IsHttps,
+                Secure = true,
                 MaxAge = SessionTtl
             });
         }

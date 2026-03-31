@@ -50,7 +50,7 @@ public static class HttpContextHostAuthExtensions
         {
             HttpOnly = true,
             SameSite = SameSiteMode.Lax,
-            Secure = context.Request.IsHttps,
+            Secure = true,
             MaxAge = TimeSpan.FromHours(24)
         });
     }
