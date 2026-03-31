@@ -25,7 +25,7 @@ Spotify credentials are provided via environment variables (`SPOTIFY__ClientId`,
 
 ## Architecture
 
-JukeVox is a collaborative Spotify queue app. A host creates a party, connects their Spotify account, and guests join via invite code to add songs.
+JukeVox is a collaborative Spotify queue app. A host creates a party, connects their Spotify account, and guests join via link/QR to add songs.
 
 **Backend:** .NET 10 ASP.NET Core Web API + SignalR (`src/JukeVox.Server/`)
 **Frontend:** React 19 + TypeScript + Vite (`src/JukeVox.Client/`)
@@ -33,27 +33,29 @@ JukeVox is a collaborative Spotify queue app. A host creates a party, connects t
 
 ### Backend request flow
 
-1. `PartySessionMiddleware` extracts/creates a session ID from the `JukeVox.SessionId` cookie, stores it in `HttpContext.Items["SessionId"]`
-2. Controllers access it via `HttpContext.GetSessionId()` extension method
-3. Controllers delegate to singleton services (`PartyService`, `QueueService`) for state mutations
-4. After mutations, controllers broadcast updates to clients via `IHubContext<PartyHub, IPartyClient>`
+1. `PartySessionMiddleware` extracts/creates an encrypted session ID from the `JukeVox.SessionId` cookie, stores it in `HttpContext.Items["SessionId"]`
+2. `PartyContextMiddleware` resolves the session's party ID (if any) and stores it in `IPartyContextAccessor` for downstream use
+3. Controllers access session ID via `HttpContext.GetSessionId()` extension method
+4. Controllers delegate to singleton services (`PartyService`, `QueueService`) for state mutations
+5. After mutations, controllers broadcast updates to clients via `IHubContext<PartyHub, IPartyClient>`
 
 ### Key services
 
-- **PartyService** — Singleton. Owns the single active `Party` object. All public methods acquire a `Lock` before reading/writing state. Persists state to `party-state.json` after every mutation.
-- **QueueService** — Singleton. Manages queue add/remove/reorder/dequeue. Also lock-synchronized. Injects `IHubContext` to broadcast `QueueUpdated` after changes.
+- **PartyService** — Singleton. Manages all active `Party` objects (one per host, keyed by party ID). Uses per-party `Lock` instances for concurrency. Persists each party to its own JSON file in `parties/` after every mutation.
+- **QueueService** — Singleton. Manages queue add/remove/reorder/dequeue. Uses per-party `Lock` instances (separate from `PartyService` locks). Injects `IHubContext` to broadcast `QueueUpdated` after changes.
 - **PlaybackMonitorService** — `BackgroundService` that polls Spotify every 2 seconds. See [Playback Monitor](#playback-monitor) section below.
 - **SpotifyAuthService** — Handles OAuth authorization code flow and token refresh. Tokens are stored in the `Party` model and auto-refreshed with a 1-minute expiry buffer.
 - **SpotifyPlayerService** — HTTP wrapper for Spotify Web API player endpoints. Retries on 429 with `Retry-After` header (recursive, no max depth).
+- **HostCredentialService** — Manages WebAuthn credentials for multiple hosts. First host registers via setup token; additional hosts register via admin-generated invite codes (one-time use). Stores credentials in `host-credentials/` directory. Tracks admin status (first registered host is admin).
 - **ConnectionMapping** — Bidirectional `ConcurrentDictionary` mapping session IDs ↔ SignalR connection IDs. Used for targeted broadcasts and cleanup on disconnect.
 
 ### Thread safety
 
-`PartyService` and `QueueService` are singletons using C# 13 `Lock` (not `object` locks). Every public method that touches state must acquire the lock.
+`PartyService` and `QueueService` are singletons using per-party C# 13 `Lock` instances (not `object` locks, not a single global lock). Each party has its own lock in both services, retrieved via `GetPartyLock(partyId)`. Every public method that touches party state must acquire the appropriate party lock.
 
 ### SignalR events
 
-`PartyHub` groups clients by party ID. Server-to-client messages defined in `IPartyClient`:
+`PartyHub` groups clients by party ID. On connection, `JoinPartyGroup` reads the encrypted session cookie from `HttpContext.Items["SessionId"]` (set by `PartySessionMiddleware`) and validates the caller is a participant before adding them to the SignalR group. Server-to-client messages defined in `IPartyClient`:
 
 | Event | Payload | Trigger |
 |---|---|---|
@@ -124,20 +126,30 @@ Key file: `Services/PlaybackMonitorService.cs`
 
 ### Guest sessions
 
-`PartySessionMiddleware` auto-creates a `JukeVox.SessionId` cookie on first request. No login required — the session ID is the guest's identity.
+`PartySessionMiddleware` auto-creates an encrypted `JukeVox.SessionId` cookie on first request (24-hour TTL, `HttpOnly`, `Secure`, `SameSite=Lax`). No login required — the session ID is the guest's identity. The cookie value is encrypted via ASP.NET Data Protection with a timestamp; the middleware validates TTL on every request and re-issues if expired.
+
+Guest display names must be unique per party (case-insensitive). Attempting to join with a taken name returns 409 Conflict.
 
 ### Host auth
 
-`JukeVox.HostAuth` cookie, encrypted via ASP.NET Data Protection. 24-hour TTL. Uses `AddEphemeralDataProtection()` — cookies become invalid after server restart.
+`JukeVox.HostAuth` cookie, encrypted via ASP.NET Data Protection. 24-hour TTL. Uses `AddEphemeralDataProtection()` — cookies become invalid after server restart. On logout, the session-to-party mapping is also cleared so the session doesn't retain stale host state.
 
 ### Passkey (WebAuthn)
 
-Fido2NetLib v4 handles registration and assertion. Setup flow:
+Fido2NetLib v4 handles registration and assertion. Supports multiple hosts:
 
+**First host (admin) setup:**
 1. First server run generates a one-time setup token from `/usr/share/dict/words` (printed to console). Format: `word<0-99><symbol>` x4, e.g. `humble67#forest29!ocean41=bright93?`. Requires the `words` package.
 2. Host visits `/host/setup`, enters the token, registers a passkey
-3. Credential stored in `host-credential.json`
-4. Subsequent logins at `/host` use passkey assertion
+3. Credential stored in `host-credentials/` directory
+4. This host becomes the admin
+
+**Additional host registration:**
+1. Admin generates an invite code from `/host/admin` (one-time use, only one valid at a time)
+2. New host visits `/host/register`, enters invite code and display name, registers a passkey
+3. Each host is limited to one active party at a time
+
+**Login:** All hosts authenticate at `/host` via passkey assertion.
 
 ### Spotify OAuth
 
@@ -153,7 +165,7 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 - **Ephemeral Data Protection**: Host auth cookies are invalid after server restart (uses `AddEphemeralDataProtection`).
 - **InsertionOrder vs physical position**: Items can have InsertionOrders that don't match their list index (from host reorder). `SortQueue` uses InsertionOrder for FIFO within tiers, not list position.
 - **Spotify rate limiting**: `SpotifyPlayerService.SendAsync` retries on 429 with `Retry-After` header (defaults to 1s). Recursive retry with no max depth.
-- **Invite code alphabet**: `ABCDEFGHJKMNPQRSTUVWXYZ23456789` — excludes I, O, L, 0, 1 to prevent confusion. 6-character codes generated with `RandomNumberGenerator`.
+- **Join tokens**: Parties use UUID-based join tokens (`Guid.NewGuid().ToString("N")`, 32 hex chars). Guests join via `/join/:token` URL shared by the host through the share overlay (link/QR). There is no manual code entry — the token is only transmitted via URL.
 - **React StrictMode**: Double-renders in dev (not production). Can cause duplicate API calls during development.
 - **Vite HMR in dev**: Component re-renders on code changes can cause SignalR reconnections and state re-fetches. Does not happen in production.
 - **ConnectionMapping**: Maps session IDs ↔ SignalR connection IDs. Used by `HostPartyController` to target individual guests for `CreditsUpdated` and `PartyEnded` broadcasts.
@@ -162,13 +174,16 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 
 | Prefix | Auth | Purpose |
 |---|---|---|
-| `/api/party/*` | Session cookie | Guest endpoints (join, state) |
+| `/api/party/*` | Session cookie | Guest endpoints (join, leave, state) |
 | `/api/host/*` | HostAuth cookie | Host party management (create, end, settings) |
+| `/api/host/hosts` | HostAuth (admin) | Host credential management |
+| `/api/host/invite-codes` | HostAuth (admin) | Generate host registration invite codes |
+| `/api/host/register/*` | Invite code | Additional host registration |
 | `/api/queue/*` | Session (add/vote), HostAuth (remove/reorder) | Queue operations |
 | `/api/playback/*` | HostAuth cookie | Playback control (play, pause, skip, seek, volume) |
 | `/api/search` | Participant (host or joined guest) | Spotify search |
 | `/api/auth/*` | *(none)* | Spotify OAuth flow |
-| `/hubs/party` | Session cookie | SignalR hub |
+| `/hubs/party` | Session cookie (validated participant) | SignalR hub |
 
 ## Frontend Component Map
 
@@ -179,8 +194,12 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 | `NowPlaying.tsx` | RAF-based progress bar, seeking, quip generation, ambient art crossfade, marquee |
 | `QueueList.tsx` | Voting (optimistic updates), drag-and-drop reorder (host only, clamped at base playlist boundary) |
 | `SearchOverlay.tsx` / `useSearch.ts` | Debounced search with request cancellation |
+| `ShareOverlay.tsx` | QR code + copy/share join link |
 | `HostControls.tsx` | Playback buttons, volume slider (debounced 300ms) |
 | `ManagePanel.tsx` | Guest list, credits, kick, end party |
 | `DeviceSelector.tsx` | Spotify device picker |
 | `BasePlaylistSelector.tsx` | Base playlist picker |
-| `HelpOverlay.tsx` | Voting rules explanation for guests |
+| `HelpOverlay.tsx` | Voting rules explanation for guests, leave party button |
+| `JoinPage.tsx` | `/join/:token` route — handles join flow, existing-session detection, party switching |
+| `HostAdminPage.tsx` | Admin page — invite code generation, host credential management |
+| `HostRegisterPage.tsx` | Additional host registration via invite code + passkey |

@@ -105,11 +105,18 @@ Open https://jukevox-dev.scottp.dev:5173 in your browser. The Vite dev server pr
 
 ### Host setup
 
-1. Set the `JUKEVOX_SETUP_TOKEN` env var to a secret of your choice
+**First host (admin):**
+1. On first run the server generates a one-time setup token and prints it to the console
 2. Navigate to `/host/setup` and enter the token to register your passkey
 3. After registration, go to `/host` to log in and manage parties
+4. The first registered host is the admin
 
-The passkey credential is stored in `host-credential.json` (gitignored). Host auth cookies are ephemeral — they are invalidated when the server restarts, so you'll need to log in again after each restart.
+**Additional hosts:**
+1. Admin generates an invite code from `/host/admin`
+2. New host visits `/host/register`, enters the invite code and a display name, and registers a passkey
+3. Each invite code is single-use; only one is valid at a time
+
+Passkey credentials are stored in `host-credentials/` (gitignored). Host auth cookies are ephemeral — they are invalidated when the server restarts, so you'll need to log in again after each restart.
 
 ## Pre-commit hooks
 
@@ -151,11 +158,12 @@ tests/
   JukeVox.Server.Tests/
 ```
 
-- **Queue management** — App-managed queue (not Spotify's) so users can reorder, remove, and vote on tracks. A 4-tier sort system promotes highly-voted songs and demotes disliked ones.
-- **Real-time updates** — SignalR pushes queue changes, playback state, credits, and party lifecycle events to all connected clients.
+- **Multi-host** — Multiple hosts can register via admin-generated invite codes. Each host can run one party at a time. First host is admin with access to host management at `/host/admin`.
+- **Queue management** — App-managed queue (not Spotify's) so users can reorder, remove, and vote on tracks. A 3-tier sort system promotes highly-voted songs and demotes disliked ones.
+- **Real-time updates** — SignalR pushes queue changes, playback state, credits, and party lifecycle events to all connected clients. Hub validates participants on connection.
 - **Playback monitoring** — A background service polls Spotify every 2 seconds, auto-advances the queue when a track ends, and detects when someone changes the track outside the app.
 - **Host auth** — Passkey (WebAuthn) authentication for the host portal via Fido2NetLib v4.
-- **Sessions** — Cookie-based, no user accounts required for guests.
+- **Sessions** — Encrypted cookie-based sessions, no user accounts required for guests. Guests join via a link or QR code shared by the host.
 
 For detailed architecture docs (service internals, queue sorting tiers, voting thresholds, gotchas), see [CLAUDE.md](CLAUDE.md).
 
@@ -197,11 +205,13 @@ Pipelines are in `.woodpecker/`, running on a self-hosted [Woodpecker CI](https:
 
 ## Persisted state
 
-Two files persist across restarts (both gitignored):
+The following directories persist across restarts (all gitignored):
 
-| File | Contents | Notes |
+| Path | Contents | Notes |
 |---|---|---|
-| `party-state.json` | Active party, queue, guests, tokens | Written after every state mutation by `PartyService` |
-| `host-credential.json` | WebAuthn public key credential | Created during passkey registration at `/host/setup` |
+| `parties/` | Per-party JSON files (queue, guests, tokens) | One file per active party, written after every state mutation |
+| `host-credentials/` | WebAuthn public key credentials | One file per registered host |
 
-Host auth cookies are **not** persisted — they use ephemeral Data Protection keys that are lost on restart. The host will need to re-authenticate via passkey after each server restart.
+Legacy `party-state.json` and `host-credential.json` files are auto-migrated to the new directory structure on startup.
+
+Host auth cookies are **not** persisted — they use ephemeral Data Protection keys that are lost on restart. All hosts will need to re-authenticate via passkey after each server restart.
