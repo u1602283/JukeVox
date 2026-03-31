@@ -17,6 +17,7 @@ public interface IPartyService
     void SetSpotifyTokens(string partyId, SpotifyTokens tokens);
     SpotifyTokens? GetSpotifyTokens(string partyId);
     List<(string PartyId, string InviteCode, string HostId, int QueueCount, int GuestCount, DateTime CreatedAt)> GetAllPartySummaries();
+    (string? DisplayName, string? Error) TrySpendCredit(string partyId, string sessionId);
     Party? ResumeAsHost(string partyId, string newHostSessionId);
     void PersistState(string partyId);
     List<GuestSession> GetAllGuests(string partyId);

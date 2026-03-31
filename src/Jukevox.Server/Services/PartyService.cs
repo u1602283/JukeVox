@@ -275,6 +275,26 @@ public class PartyService : IPartyService
         }
     }
 
+    public (string? DisplayName, string? Error) TrySpendCredit(string partyId, string sessionId)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return (null, "No active party");
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
+        {
+            if (!party.Guests.TryGetValue(sessionId, out var guest))
+                return (null, "Not a party participant");
+
+            if (guest.CreditsRemaining <= 0)
+                return (null, "No credits remaining");
+
+            guest.CreditsRemaining--;
+            PersistStateInternal(party);
+            return (guest.DisplayName, null);
+        }
+    }
+
     // --- Private ---
 
     private Lock GetPartyLock(string partyId)
