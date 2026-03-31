@@ -73,8 +73,9 @@ public class PartyServiceTests
     {
         var party = _service.CreateParty("host-1", HostId, 5);
 
-        var guest = _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        var (guest, error) = _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
+        error.Should().BeNull();
         guest.Should().NotBeNull();
         guest.Should().BeEquivalentTo(new
         {
@@ -89,17 +90,41 @@ public class PartyServiceTests
     {
         _service.CreateParty("host-1", HostId, 5);
 
-        _service.JoinParty("guest-1", "invalid-token", "Alice").Should().BeNull();
+        _service.JoinParty("guest-1", "invalid-token", "Alice").Guest.Should().BeNull();
     }
 
     [Test]
     public void JoinParty_IdempotentRejoin_ReturnsSameGuest()
     {
         var party = _service.CreateParty("host-1", HostId, 5);
-        var guest1 = _service.JoinParty("guest-1", party.JoinToken, "Alice");
-        var guest2 = _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        var (guest1, _) = _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        var (guest2, _) = _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         guest2.Should().BeSameAs(guest1);
+    }
+
+    [Test]
+    public void JoinParty_DuplicateName_ReturnsError()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+
+        var (guest, error) = _service.JoinParty("guest-2", party.JoinToken, "Alice");
+
+        guest.Should().BeNull();
+        error.Should().NotBeNullOrEmpty();
+    }
+
+    [Test]
+    public void JoinParty_DuplicateName_CaseInsensitive()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+
+        var (guest, error) = _service.JoinParty("guest-2", party.JoinToken, "alice");
+
+        guest.Should().BeNull();
+        error.Should().NotBeNullOrEmpty();
     }
 
     [Test]

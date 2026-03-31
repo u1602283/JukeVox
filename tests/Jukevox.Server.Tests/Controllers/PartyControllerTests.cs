@@ -47,7 +47,7 @@ public class PartyControllerTests
     public void JoinParty_InvalidCode_ReturnsBadRequest()
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
-        _partyService.Setup(p => p.JoinParty("guest-1", "9999", "Alice")).Returns((GuestSession?)null).Verifiable(Times.Once);
+        _partyService.Setup(p => p.JoinParty("guest-1", "9999", "Alice")).Returns(((GuestSession?)null, (string?)null)).Verifiable(Times.Once);
 
         var result = _controller.JoinParty(new JoinPartyRequest { JoinToken = "9999", DisplayName = "Alice" });
 
@@ -61,7 +61,7 @@ public class PartyControllerTests
         var guest = TestData.CreateGuestSession("guest-1", "Alice", 5);
         var party = TestData.CreateParty();
         party.Id = PartyId;
-        _partyService.Setup(p => p.JoinParty("guest-1", "1234", "Alice")).Returns(guest).Verifiable(Times.Once);
+        _partyService.Setup(p => p.JoinParty("guest-1", "1234", "Alice")).Returns((guest, (string?)null)).Verifiable(Times.Once);
         _partyService.Setup(p => p.GetPartyIdForSession("guest-1")).Returns(PartyId).Verifiable(Times.Once);
         _partyService.Setup(p => p.GetParty(PartyId)).Returns(party).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue(PartyId)).Returns([]).Verifiable(Times.Once);
@@ -74,6 +74,18 @@ public class PartyControllerTests
         state.PartyId.Should().Be(PartyId);
         state.IsHost.Should().BeFalse();
         state.CreditsRemaining.Should().Be(5);
+    }
+
+    [Test]
+    public void JoinParty_DuplicateName_ReturnsConflict()
+    {
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-2");
+        var error = "Sorry, this party already has a Alice. You'll need an alias so the DJ can tell you apart.";
+        _partyService.Setup(p => p.JoinParty("guest-2", "1234", "Alice")).Returns(((GuestSession?)null, (string?)error)).Verifiable(Times.Once);
+
+        var result = _controller.JoinParty(new JoinPartyRequest { JoinToken = "1234", DisplayName = "Alice" });
+
+        result.Should().BeOfType<ConflictObjectResult>();
     }
 
     [Test]

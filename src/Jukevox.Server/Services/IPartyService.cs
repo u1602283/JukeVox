@@ -9,7 +9,7 @@ public interface IPartyService
     List<Party> GetAllParties();
     List<Party> GetPartiesForHost(string hostId);
     Party CreateParty(string hostSessionId, string hostId, int defaultCredits);
-    GuestSession? JoinParty(string sessionId, string joinToken, string displayName);
+    (GuestSession? Guest, string? Error) JoinParty(string sessionId, string joinToken, string displayName);
     bool IsHost(string partyId, string sessionId);
     bool IsParticipant(string partyId, string sessionId);
     GuestSession? GetGuest(string partyId, string sessionId);

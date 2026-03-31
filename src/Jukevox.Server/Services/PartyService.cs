@@ -71,22 +71,27 @@ public class PartyService : IPartyService
         return party;
     }
 
-    public GuestSession? JoinParty(string sessionId, string joinToken, string displayName)
+    public (GuestSession? Guest, string? Error) JoinParty(string sessionId, string joinToken, string displayName)
     {
         var party = _parties.Values.FirstOrDefault(p => p.JoinToken == joinToken);
-        if (party == null) return null;
+        if (party == null) return (null, null);
 
         var partyLock = GetPartyLock(party.Id);
         lock (partyLock)
         {
             if (party.HostSessionId == sessionId)
-                return null;
+                return (null, null);
 
             if (party.Guests.TryGetValue(sessionId, out var existing))
             {
                 MapSession(sessionId, party.Id);
-                return existing;
+                return (existing, null);
             }
+
+            var nameTaken = party.Guests.Values.Any(g =>
+                string.Equals(g.DisplayName, displayName, StringComparison.OrdinalIgnoreCase));
+            if (nameTaken)
+                return (null, $"Sorry, this party already has a {displayName}. You'll need an alias so the DJ can tell you apart.");
 
             var guest = new GuestSession
             {
@@ -97,7 +102,7 @@ public class PartyService : IPartyService
             party.Guests[sessionId] = guest;
             MapSession(sessionId, party.Id);
             PersistStateInternal(party);
-            return guest;
+            return (guest, null);
         }
     }
 

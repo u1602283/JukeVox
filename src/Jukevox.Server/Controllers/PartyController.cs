@@ -27,7 +27,9 @@ public class PartyController : ControllerBase
     public IActionResult JoinParty([FromBody] JoinPartyRequest request)
     {
         var sessionId = HttpContext.GetSessionId();
-        var guest = _partyService.JoinParty(sessionId, request.JoinToken, request.DisplayName);
+        var (guest, joinError) = _partyService.JoinParty(sessionId, request.JoinToken, request.DisplayName);
+        if (joinError != null)
+            return Conflict(new { error = joinError });
         if (guest == null)
             return BadRequest(new { error = "Invalid join link or no active party" });
 

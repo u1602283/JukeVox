@@ -31,11 +31,14 @@ Thumbs.db
 ## Built frontend (output of npm run build)
 src/Jukevox.Server/wwwroot/
 
-## State file
+## State files
 party-state.json
+parties/
 
-## Host credential
+## Host credentials
 host-credential.json
+host-credential.json.migrated
+host-credentials/
 
 ## TLS certs
 *.pem
