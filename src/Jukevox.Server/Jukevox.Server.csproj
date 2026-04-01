@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="Fido2" Version="4.0.0" />
+    <!-- Required by Fido2 package which uses 9.0.0 by default, which has a high severity vuln -->
+    <PackageReference Include="Microsoft.Bcl.Memory" Version="10.0.5" />
   </ItemGroup>
 
 </Project>
