@@ -14,6 +14,9 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<PartyInactivityOptions>()
+            .Bind(configuration.GetSection(PartyInactivityOptions.SectionName));
+
         services.AddSingleton<IPartyService, PartyService>();
         services.AddSingleton<IQueueService, QueueService>();
         services.AddSingleton<ConnectionMapping>();

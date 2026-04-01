@@ -11,6 +11,7 @@ export interface PartyState {
   basePlaylistId?: string;
   basePlaylistName?: string;
   userVotes?: Record<string, number>;
+  isSleeping?: boolean;
 }
 
 export interface QueueItem {

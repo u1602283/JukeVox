@@ -47,7 +47,8 @@ public class PartyController : ControllerBase
             Queue = _queueService.GetQueue(partyId),
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
-            UserVotes = _queueService.GetUserVotes(partyId, sessionId)
+            UserVotes = _queueService.GetUserVotes(partyId, sessionId),
+            IsSleeping = party.Status == Models.PartyStatus.Sleeping
         });
     }
 
@@ -99,6 +100,7 @@ public class PartyController : ControllerBase
             NowPlaying = _monitorService.GetCachedPlaybackState(partyId),
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
+            IsSleeping = party.Status == Models.PartyStatus.Sleeping,
             UserVotes = _queueService.GetUserVotes(partyId, sessionId)
         });
     }

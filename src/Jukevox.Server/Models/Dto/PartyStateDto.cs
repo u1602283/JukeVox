@@ -14,4 +14,5 @@ public class PartyStateDto
     public string? BasePlaylistId { get; set; }
     public string? BasePlaylistName { get; set; }
     public Dictionary<string, int>? UserVotes { get; set; }
+    public bool IsSleeping { get; set; }
 }

@@ -78,7 +78,8 @@ public class HostPartyController : ControllerBase
             SpotifyConnected = false,
             DefaultCredits = party.DefaultCredits,
             Queue = [],
-            UserVotes = new()
+            UserVotes = new(),
+            IsSleeping = false
         });
     }
 
@@ -138,7 +139,8 @@ public class HostPartyController : ControllerBase
             Queue = _queueService.GetQueue(partyId),
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
-            UserVotes = _queueService.GetUserVotes(partyId, sessionId)
+            UserVotes = _queueService.GetUserVotes(partyId, sessionId),
+            IsSleeping = party.Status == Models.PartyStatus.Sleeping
         });
     }
 
@@ -169,7 +171,8 @@ public class HostPartyController : ControllerBase
             Queue = _queueService.GetQueue(party.Id),
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
-            UserVotes = _queueService.GetUserVotes(party.Id, sessionId)
+            UserVotes = _queueService.GetUserVotes(party.Id, sessionId),
+            IsSleeping = party.Status == Models.PartyStatus.Sleeping
         });
     }
 

@@ -17,4 +17,6 @@ public class Party
     public QueueItem? CurrentTrack { get; set; }
     public List<QueueItem> PlaybackHistory { get; set; } = [];
     public int NextInsertionOrder { get; set; }
+    public PartyStatus Status { get; set; } = PartyStatus.Active;
+    public DateTime? SleepingSince { get; set; }
 }

@@ -20,6 +20,7 @@ public interface IPartyService
     (string? DisplayName, string? Error) TrySpendCredit(string partyId, string sessionId);
     Party? ResumeAsHost(string partyId, string newHostSessionId);
     void PersistState(string partyId);
+    bool SetPartyStatus(string partyId, PartyStatus status, DateTime? sleepingSince);
     List<GuestSession> GetAllGuests(string partyId);
     GuestSession? SetGuestCredits(string partyId, string sessionId, int credits);
     List<GuestSession> AdjustAllCredits(string partyId, int delta);

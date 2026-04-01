@@ -21,7 +21,7 @@ import styles from './HostPortalPage.module.css';
 import partyStyles from './PartyPage.module.css';
 
 export function HostPortalPage() {
-  const { party, setParty } = useParty();
+  const { party, setParty, isSleeping } = useParty();
   const { query, setQuery, results, loading: searchLoading } = useSearch();
 
   const [status, setStatus] = useState<HostStatus | null>(null);
@@ -286,7 +286,14 @@ export function HostPortalPage() {
   return (
     <PartyLayout
       headerTitle={
-        <h1 className={partyStyles.headerTitle} style={{ width: 'auto', flex: 1 }}>JukeVox</h1>
+        <>
+          <h1 className={partyStyles.headerTitle} style={{ width: 'auto', flex: 1 }}>JukeVox</h1>
+          {isSleeping && (
+            <p className={partyStyles.sleepBanner}>
+              Your party fell asleep due to inactivity. Waking up...
+            </p>
+          )}
+        </>
       }
       headerRight={
         <>

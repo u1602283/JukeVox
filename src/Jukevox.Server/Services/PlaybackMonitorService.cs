@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+using JukeVox.Server.Configuration;
 using JukeVox.Server.Hubs;
+using JukeVox.Server.Models;
 using JukeVox.Server.Models.Dto;
 
 namespace JukeVox.Server.Services;
@@ -9,14 +12,17 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PlaybackMonitorService> _logger;
+    private readonly PartyInactivityOptions _inactivityOptions;
     private readonly ConcurrentDictionary<string, PartyPlaybackState> _partyStates = new();
 
     public PlaybackMonitorService(
         IServiceProvider serviceProvider,
-        ILogger<PlaybackMonitorService> logger)
+        ILogger<PlaybackMonitorService> logger,
+        IOptions<PartyInactivityOptions> inactivityOptions)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _inactivityOptions = inactivityOptions.Value;
     }
 
     public PlaybackStateDto? GetCachedPlaybackState(string partyId)
@@ -59,6 +65,23 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         ps.IdleWatching = false;
         ps.WasPlaying = true;
         ps.TrackStartedAt = DateTime.UtcNow;
+        ps.LastActivityUtc = DateTime.UtcNow;
+    }
+
+    public void RecordHostActivity(string partyId)
+    {
+        var ps = GetOrCreateState(partyId);
+        ps.LastActivityUtc = DateTime.UtcNow;
+
+        // Wake sleeping party
+        using var scope = _serviceProvider.CreateScope();
+        var partyService = scope.ServiceProvider.GetRequiredService<IPartyService>();
+        if (partyService.SetPartyStatus(partyId, PartyStatus.Active, sleepingSince: null))
+        {
+            var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<PartyHub, IPartyClient>>();
+            hubContext.Clients.Group(partyId).PartyWoke();
+            _logger.LogInformation("[{PartyId}] Party woken by host activity", partyId);
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -84,6 +107,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
     {
         using var scope = _serviceProvider.CreateScope();
         var partyService = scope.ServiceProvider.GetRequiredService<IPartyService>();
+        var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<PartyHub, IPartyClient>>();
 
         var parties = partyService.GetAllParties();
 
@@ -97,6 +121,12 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         foreach (var party in parties)
         {
             if (party.SpotifyTokens == null) continue;
+
+            if (party.Status == PartyStatus.Sleeping)
+            {
+                await CheckAutoEndAsync(party, partyService, hubContext);
+                continue;
+            }
 
             try
             {
@@ -269,6 +299,43 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                 _logger.LogInformation("[{PartyId}] Queue empty, entering idle watching mode", partyId);
             }
         }
+
+        // Reset activity timer when Spotify is actively playing
+        if (state is { IsPlaying: true })
+            ps.LastActivityUtc = DateTime.UtcNow;
+
+        // Check for inactivity → sleep transition
+        if ((DateTime.UtcNow - ps.LastActivityUtc).TotalMinutes >= _inactivityOptions.SleepAfterMinutes)
+        {
+            await TransitionToSleepAsync(partyId, partyService, hubContext);
+        }
+    }
+
+    private async Task TransitionToSleepAsync(string partyId,
+        IPartyService partyService, IHubContext<PartyHub, IPartyClient> hubContext)
+    {
+        if (!partyService.SetPartyStatus(partyId, PartyStatus.Sleeping, sleepingSince: DateTime.UtcNow))
+            return;
+
+        if (_partyStates.TryGetValue(partyId, out var ps))
+            ps.CachedPlaybackState = null;
+
+        await hubContext.Clients.Group(partyId).PartySleeping();
+        _logger.LogInformation("[{PartyId}] Party sleeping due to inactivity", partyId);
+    }
+
+    private async Task CheckAutoEndAsync(Party party, IPartyService partyService,
+        IHubContext<PartyHub, IPartyClient> hubContext)
+    {
+        if (party.SleepingSince == null) return;
+        if ((DateTime.UtcNow - party.SleepingSince.Value).TotalMinutes < _inactivityOptions.AutoEndAfterMinutes) return;
+
+        await hubContext.Clients.Group(party.Id).PartyEnded();
+        partyService.EndParty(party.Id);
+        _partyStates.TryRemove(party.Id, out _);
+
+        _logger.LogInformation("[{PartyId}] Party auto-ended after sleeping for {Minutes} minutes",
+            party.Id, _inactivityOptions.AutoEndAfterMinutes);
     }
 
     private PartyPlaybackState GetOrCreateState(string partyId)
@@ -305,5 +372,6 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         public DateTime TrackStartedAt = DateTime.MinValue;
         public volatile PlaybackStateDto? CachedPlaybackState;
         public long CachedAtTicks;
+        public DateTime LastActivityUtc = DateTime.UtcNow;
     }
 }

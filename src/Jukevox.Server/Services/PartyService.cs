@@ -279,6 +279,22 @@ public class PartyService : IPartyService
         }
     }
 
+    public bool SetPartyStatus(string partyId, PartyStatus status, DateTime? sleepingSince)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return false;
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
+        {
+            if (party.Status == status) return false;
+            party.Status = status;
+            party.SleepingSince = sleepingSince;
+            PersistStateInternal(party);
+            return true;
+        }
+    }
+
     public (string? DisplayName, string? Error) TrySpendCredit(string partyId, string sessionId)
     {
         var party = GetParty(partyId);

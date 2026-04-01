@@ -17,6 +17,7 @@ export interface PartyContextValue {
   loading: boolean;
   userVotes: Record<string, number>;
   setUserVote: (itemId: string, vote: number) => void;
+  isSleeping: boolean;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -30,6 +31,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [userVotes, setUserVotes] = useState<Record<string, number>>({});
+  const [isSleeping, setIsSleeping] = useState(false);
   const connectedRef = useRef(false);
 
   const setParty = useCallback((state: PartyState | null) => {
@@ -39,6 +41,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
       if (state.nowPlaying !== undefined) setNowPlaying(state.nowPlaying || null);
       if (state.creditsRemaining !== undefined) setCredits(state.creditsRemaining);
       if (state.userVotes) setUserVotes(state.userVotes);
+      setIsSleeping(state.isSleeping ?? false);
     }
   }, []);
 
@@ -85,6 +88,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
           if (s.nowPlaying !== undefined) setNowPlaying(s.nowPlaying || null);
           if (s.creditsRemaining !== undefined) setCredits(s.creditsRemaining);
           if (s.userVotes) setUserVotes(s.userVotes);
+          setIsSleeping(s.isSleeping ?? false);
         })
         .catch(() => { /* keep existing state on error */ });
 
@@ -121,11 +125,14 @@ export function PartyProvider({ children }: { children: ReactNode }) {
         setQueue([]);
         setCredits(null);
         setUserVotes({});
+        setIsSleeping(false);
         // Navigate guests to landing page
         if (!party.isHost && window.location.pathname !== '/host') {
           window.location.href = '/';
         }
       },
+      onPartySleeping: () => { setIsSleeping(true); },
+      onPartyWoke: () => { setIsSleeping(false); },
     });
 
     conn.onclose(() => {
@@ -155,6 +162,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
     loading,
     userVotes,
     setUserVote,
+    isSleeping,
   };
 
   return <PartyCtx.Provider value={value}>{children}</PartyCtx.Provider>;

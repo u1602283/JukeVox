@@ -9,4 +9,6 @@ public interface IPartyClient
     Task QueueUpdated(List<QueueItemDto> queue);
     Task CreditsUpdated(int credits);
     Task PartyEnded();
+    Task PartySleeping();
+    Task PartyWoke();
 }

@@ -7,6 +7,8 @@ export type PartyCallbacks = {
   onQueueUpdated: (queue: QueueItem[]) => void;
   onCreditsUpdated: (credits: number) => void;
   onPartyEnded: () => void;
+  onPartySleeping: () => void;
+  onPartyWoke: () => void;
 };
 
 let connection: signalR.HubConnection | null = null;
@@ -26,6 +28,8 @@ export function createPartyConnection(partyId: string, callbacks: PartyCallbacks
   connection.on('QueueUpdated', callbacks.onQueueUpdated);
   connection.on('CreditsUpdated', callbacks.onCreditsUpdated);
   connection.on('PartyEnded', callbacks.onPartyEnded);
+  connection.on('PartySleeping', callbacks.onPartySleeping);
+  connection.on('PartyWoke', callbacks.onPartyWoke);
 
   return connection;
 }

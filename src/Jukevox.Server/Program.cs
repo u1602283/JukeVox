@@ -48,6 +48,7 @@ app.UseHttpsRedirection();
 app.UseCors();
 app.UseMiddleware<PartySessionMiddleware>(app.Services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>());
 app.UseMiddleware<PartyContextMiddleware>();
+app.UseMiddleware<HostActivityMiddleware>();
 
 app.UseStaticFiles();
 app.MapControllers();

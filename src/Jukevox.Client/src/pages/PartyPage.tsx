@@ -13,7 +13,7 @@ import type { PanelDefinition } from '../components/PartyLayout';
 import styles from './PartyPage.module.css';
 
 export function PartyPage() {
-  const { party } = useParty();
+  const { party, isSleeping } = useParty();
   const { query, setQuery, results, loading } = useSearch();
   const [searchOpen, setSearchOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -34,9 +34,16 @@ export function PartyPage() {
   return (
     <PartyLayout
       headerTitle={
-        <h1 className={styles.headerTitle}>
-          {party.displayName ? `Hi, ${party.displayName}!` : 'JukeVox'}
-        </h1>
+        <>
+          <h1 className={styles.headerTitle}>
+            {party.displayName ? `Hi, ${party.displayName}!` : 'JukeVox'}
+          </h1>
+          {isSleeping && (
+            <p className={styles.sleepBanner}>
+              The party is taking a break. Music will resume when the host returns.
+            </p>
+          )}
+        </>
       }
       headerRight={
         <div className={styles.headerRight}>
