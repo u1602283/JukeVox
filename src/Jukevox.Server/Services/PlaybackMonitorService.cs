@@ -13,16 +13,19 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PlaybackMonitorService> _logger;
     private readonly PartyInactivityOptions _inactivityOptions;
+    private readonly TimeProvider _timeProvider;
     private readonly ConcurrentDictionary<string, PartyPlaybackState> _partyStates = new();
 
     public PlaybackMonitorService(
         IServiceProvider serviceProvider,
         ILogger<PlaybackMonitorService> logger,
-        IOptions<PartyInactivityOptions> inactivityOptions)
+        IOptions<PartyInactivityOptions> inactivityOptions,
+        TimeProvider? timeProvider = null)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _inactivityOptions = inactivityOptions.Value;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public PlaybackStateDto? GetCachedPlaybackState(string partyId)
@@ -35,7 +38,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 
         if (!state.IsPlaying || state.DurationMs <= 0) return state;
 
-        var elapsedMs = (int)((DateTime.UtcNow.Ticks - ps.CachedAtTicks) / TimeSpan.TicksPerMillisecond);
+        var elapsedMs = (int)((_timeProvider.GetUtcNow().UtcDateTime.Ticks - ps.CachedAtTicks) / TimeSpan.TicksPerMillisecond);
         if (elapsedMs <= 0) return state;
 
         return new PlaybackStateDto
@@ -64,14 +67,14 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         ps.WeStartedCurrentTrack = true;
         ps.IdleWatching = false;
         ps.WasPlaying = true;
-        ps.TrackStartedAt = DateTime.UtcNow;
-        ps.LastActivityUtc = DateTime.UtcNow;
+        ps.TrackStartedAt = _timeProvider.GetUtcNow().UtcDateTime;
+        ps.LastActivityUtc = _timeProvider.GetUtcNow().UtcDateTime;
     }
 
     public void RecordHostActivity(string partyId)
     {
         var ps = GetOrCreateState(partyId);
-        ps.LastActivityUtc = DateTime.UtcNow;
+        ps.LastActivityUtc = _timeProvider.GetUtcNow().UtcDateTime;
 
         // Wake sleeping party
         using var scope = _serviceProvider.CreateScope();
@@ -99,7 +102,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                 _logger.LogError(ex, "Error in playback monitor");
             }
 
-            await Task.Delay(2000, stoppingToken);
+            await _timeProvider.Delay(TimeSpan.FromSeconds(2), stoppingToken);
         }
     }
 
@@ -186,7 +189,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                 }
             }
 
-            var inGracePeriod = (DateTime.UtcNow - ps.TrackStartedAt).TotalSeconds < 5;
+            var inGracePeriod = (_timeProvider.GetUtcNow().UtcDateTime - ps.TrackStartedAt).TotalSeconds < 5;
 
             if (!shouldAdvance && !inGracePeriod &&
                 (ps.WeStartedCurrentTrack || ps.IdleWatching) && ps.LastTrackUri != null &&
@@ -227,7 +230,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                     }
 
                     ps.CachedPlaybackState = state;
-                    ps.CachedAtTicks = DateTime.UtcNow.Ticks;
+                    ps.CachedAtTicks = _timeProvider.GetUtcNow().UtcDateTime.Ticks;
 
                     if (state!.TrackUri != ps.LastTrackUri)
                     {
@@ -280,7 +283,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
                         IsFromBasePlaylist = next.IsFromBasePlaylist
                     };
                     ps.CachedPlaybackState = nowPlayingDto;
-                    ps.CachedAtTicks = DateTime.UtcNow.Ticks;
+                    ps.CachedAtTicks = _timeProvider.GetUtcNow().UtcDateTime.Ticks;
                     await hubContext.Clients.Group(party.Id).NowPlayingChanged(nowPlayingDto);
                 }
                 else
@@ -302,10 +305,10 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 
         // Reset activity timer when Spotify is actively playing
         if (state is { IsPlaying: true })
-            ps.LastActivityUtc = DateTime.UtcNow;
+            ps.LastActivityUtc = _timeProvider.GetUtcNow().UtcDateTime;
 
         // Check for inactivity → sleep transition
-        if ((DateTime.UtcNow - ps.LastActivityUtc).TotalMinutes >= _inactivityOptions.SleepAfterMinutes)
+        if ((_timeProvider.GetUtcNow().UtcDateTime - ps.LastActivityUtc).TotalMinutes >= _inactivityOptions.SleepAfterMinutes)
         {
             await TransitionToSleepAsync(partyId, partyService, hubContext);
         }
@@ -314,7 +317,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
     private async Task TransitionToSleepAsync(string partyId,
         IPartyService partyService, IHubContext<PartyHub, IPartyClient> hubContext)
     {
-        if (!partyService.SetPartyStatus(partyId, PartyStatus.Sleeping, sleepingSince: DateTime.UtcNow))
+        if (!partyService.SetPartyStatus(partyId, PartyStatus.Sleeping, sleepingSince: _timeProvider.GetUtcNow().UtcDateTime))
             return;
 
         if (_partyStates.TryGetValue(partyId, out var ps))
@@ -328,7 +331,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         IHubContext<PartyHub, IPartyClient> hubContext)
     {
         if (party.SleepingSince == null) return;
-        if ((DateTime.UtcNow - party.SleepingSince.Value).TotalMinutes < _inactivityOptions.AutoEndAfterMinutes) return;
+        if ((_timeProvider.GetUtcNow().UtcDateTime - party.SleepingSince.Value).TotalMinutes < _inactivityOptions.AutoEndAfterMinutes) return;
 
         await hubContext.Clients.Group(party.Id).PartyEnded();
         partyService.EndParty(party.Id);
@@ -340,7 +343,10 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 
     private PartyPlaybackState GetOrCreateState(string partyId)
     {
-        return _partyStates.GetOrAdd(partyId, _ => new PartyPlaybackState());
+        return _partyStates.GetOrAdd(partyId, _ => new PartyPlaybackState
+        {
+            LastActivityUtc = _timeProvider.GetUtcNow().UtcDateTime
+        });
     }
 
     private static async Task<bool> PlayWithDeviceFallback(ISpotifyPlayerService playerService, string trackUri, PartyPlaybackState ps)
@@ -372,6 +378,6 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         public DateTime TrackStartedAt = DateTime.MinValue;
         public volatile PlaybackStateDto? CachedPlaybackState;
         public long CachedAtTicks;
-        public DateTime LastActivityUtc = DateTime.UtcNow;
+        public DateTime LastActivityUtc;
     }
 }

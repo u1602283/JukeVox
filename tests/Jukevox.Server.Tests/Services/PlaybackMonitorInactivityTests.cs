@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using NUnit.Framework;
 using JukeVox.Server.Configuration;
@@ -20,6 +21,7 @@ public class PlaybackMonitorInactivityTests
     private Mock<IPartyClient> _partyClients = null!;
     private PlaybackMonitorService _monitor = null!;
     private ServiceProvider _serviceProvider = null!;
+    private FakeTimeProvider _time = null!;
 
     [SetUp]
     public void SetUp()
@@ -27,6 +29,7 @@ public class PlaybackMonitorInactivityTests
         _partyService = new Mock<IPartyService>();
         _hubContext = new Mock<IHubContext<PartyHub, IPartyClient>>();
         _partyClients = new Mock<IPartyClient>();
+        _time = new FakeTimeProvider(DateTimeOffset.UtcNow);
 
         _hubContext.Setup(h => h.Clients.Group(It.IsAny<string>())).Returns(_partyClients.Object);
         _partyClients.Setup(c => c.PartyWoke()).Returns(Task.CompletedTask);
@@ -48,7 +51,8 @@ public class PlaybackMonitorInactivityTests
         _monitor = new PlaybackMonitorService(
             _serviceProvider,
             NullLogger<PlaybackMonitorService>.Instance,
-            options);
+            options,
+            _time);
     }
 
     [TearDown]
@@ -58,8 +62,19 @@ public class PlaybackMonitorInactivityTests
         _serviceProvider.Dispose();
     }
 
+    private async Task RunOnePollCycle()
+    {
+        using var cts = new CancellationTokenSource();
+        await _monitor.StartAsync(cts.Token);
+        await Task.Delay(50);
+        await cts.CancelAsync();
+        await _monitor.StopAsync(CancellationToken.None);
+    }
+
+    // --- RecordHostActivity ---
+
     [Test]
-    public void RecordHostActivity_ActiveParty_DoesNotChangeStatus()
+    public void RecordHostActivity_ActiveParty_DoesNotBroadcastWoke()
     {
         var party = new Party { HostSessionId = "host-1", HostId = "h1", Status = PartyStatus.Active };
         _partyService.Setup(p => p.SetPartyStatus(party.Id, PartyStatus.Active, null)).Returns(false);
@@ -98,13 +113,85 @@ public class PlaybackMonitorInactivityTests
         act.Should().NotThrow();
     }
 
-    [Test]
-    public void NotifyTrackStarted_ResetsActivityImplicitly()
-    {
-        // NotifyTrackStarted should mark activity so the party doesn't sleep
-        // while music is being played. We verify it doesn't throw and sets state.
-        var act = () => _monitor.NotifyTrackStarted("party-1", "spotify:track:abc");
+    // --- NotifyTrackStarted activity reset ---
 
-        act.Should().NotThrow();
+    [Test]
+    public void NotifyTrackStarted_ResetsLastActivity()
+    {
+        _monitor.NotifyTrackStarted("party-1", "spotify:track:abc");
+
+        _monitor.GetCachedPlaybackState("party-1").Should().BeNull();
+    }
+
+    // --- PollAllPartiesAsync routing ---
+
+    [Test]
+    public async Task PollAllParties_SleepingParty_SkipsPlaybackPoll_ChecksAutoEnd()
+    {
+        var party = new Party
+        {
+            HostSessionId = "host-1",
+            HostId = "h1",
+            Status = PartyStatus.Sleeping,
+            SleepingSince = _time.GetUtcNow().UtcDateTime.AddMinutes(-10),
+            SpotifyTokens = new SpotifyTokens
+            {
+                AccessToken = "tok", RefreshToken = "ref",
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            }
+        };
+        _partyService.Setup(p => p.GetAllParties()).Returns([party]);
+
+        await RunOnePollCycle();
+
+        _partyService.Verify(p => p.EndParty(party.Id), Times.Never);
+        _partyClients.Verify(c => c.PartyEnded(), Times.Never);
+    }
+
+    // --- CheckAutoEndAsync ---
+
+    [Test]
+    public async Task PollAllParties_SleepingPastThreshold_EndsParty()
+    {
+        var party = new Party
+        {
+            HostSessionId = "host-1",
+            HostId = "h1",
+            Status = PartyStatus.Sleeping,
+            SleepingSince = _time.GetUtcNow().UtcDateTime.AddMinutes(-121),
+            SpotifyTokens = new SpotifyTokens
+            {
+                AccessToken = "tok", RefreshToken = "ref",
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            }
+        };
+        _partyService.Setup(p => p.GetAllParties()).Returns([party]);
+
+        await RunOnePollCycle();
+
+        _partyClients.Verify(c => c.PartyEnded(), Times.Once);
+        _partyService.Verify(p => p.EndParty(party.Id), Times.Once);
+    }
+
+    [Test]
+    public async Task PollAllParties_SleepingWithNullSleepingSince_DoesNotEnd()
+    {
+        var party = new Party
+        {
+            HostSessionId = "host-1",
+            HostId = "h1",
+            Status = PartyStatus.Sleeping,
+            SleepingSince = null,
+            SpotifyTokens = new SpotifyTokens
+            {
+                AccessToken = "tok", RefreshToken = "ref",
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            }
+        };
+        _partyService.Setup(p => p.GetAllParties()).Returns([party]);
+
+        await RunOnePollCycle();
+
+        _partyService.Verify(p => p.EndParty(It.IsAny<string>()), Times.Never);
     }
 }

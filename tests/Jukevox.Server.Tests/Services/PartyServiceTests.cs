@@ -301,4 +301,53 @@ public class PartyServiceTests
         var newService = CreateService(_tempDir);
         newService.GetParty(party.Id).Should().BeNull();
     }
+
+    // --- SetPartyStatus ---
+
+    [Test]
+    public void SetPartyStatus_NonexistentParty_ReturnsFalse()
+    {
+        _service.SetPartyStatus("nonexistent", PartyStatus.Sleeping, DateTime.UtcNow).Should().BeFalse();
+    }
+
+    [Test]
+    public void SetPartyStatus_SameStatus_ReturnsFalseAndDoesNotPersist()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5);
+        party.Status.Should().Be(PartyStatus.Active);
+
+        _service.SetPartyStatus(party.Id, PartyStatus.Active, null).Should().BeFalse();
+
+        party.Status.Should().Be(PartyStatus.Active);
+    }
+
+    [Test]
+    public void SetPartyStatus_ActiveToSleeping_UpdatesAndPersists()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5);
+        var sleepingSince = DateTime.UtcNow;
+
+        _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, sleepingSince).Should().BeTrue();
+
+        party.Status.Should().Be(PartyStatus.Sleeping);
+        party.SleepingSince.Should().Be(sleepingSince);
+
+        // Verify persisted by reloading
+        var newService = CreateService(_tempDir);
+        var reloaded = newService.GetParty(party.Id);
+        reloaded.Should().NotBeNull();
+        reloaded!.Status.Should().Be(PartyStatus.Sleeping);
+    }
+
+    [Test]
+    public void SetPartyStatus_SleepingToActive_ClearsSleepingSince()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, DateTime.UtcNow);
+
+        _service.SetPartyStatus(party.Id, PartyStatus.Active, null).Should().BeTrue();
+
+        party.Status.Should().Be(PartyStatus.Active);
+        party.SleepingSince.Should().BeNull();
+    }
 }
