@@ -73,6 +73,13 @@ HOSTAUTH__ServerDomain=jukevox-dev.scottp.dev
 HOSTAUTH__Origins=https://jukevox-dev.scottp.dev:5173
 ```
 
+Optional inactivity settings (with defaults shown):
+
+```sh
+PARTYINACTIVITY__SleepAfterMinutes=15
+PARTYINACTIVITY__AutoEndAfterMinutes=120
+```
+
 When `cert.pem`/`key.pem` are present, Kestrel auto-configures HTTPS on port 5001 so `ASPNETCORE_URLS` is not needed. If the cert files are absent, set `ASPNETCORE_URLS=https://127.0.0.1:5001` explicitly.
 
 Export the variables before running (or use [direnv](https://direnv.net/)):
@@ -161,7 +168,7 @@ tests/
 - **Multi-host** — Multiple hosts can register via admin-generated invite codes. Each host can run one party at a time. First host is admin with access to host management at `/host/admin`.
 - **Queue management** — App-managed queue (not Spotify's) so users can reorder, remove, and vote on tracks. A 3-tier sort system promotes highly-voted songs and demotes disliked ones.
 - **Real-time updates** — SignalR pushes queue changes, playback state, credits, and party lifecycle events to all connected clients. Hub validates participants on connection.
-- **Playback monitoring** — A background service polls Spotify every 2 seconds, auto-advances the queue when a track ends, and detects when someone changes the track outside the app.
+- **Playback monitoring** — A background service polls Spotify every 2 seconds, auto-advances the queue when a track ends, and detects when someone changes the track outside the app. Parties automatically sleep after 15 minutes of inactivity and are auto-ended after 2 hours of sleep.
 - **Host auth** — Passkey (WebAuthn) authentication for the host portal via Fido2NetLib v4.
 - **Sessions** — Encrypted cookie-based sessions, no user accounts required for guests. Guests join via a link or QR code shared by the host.
 

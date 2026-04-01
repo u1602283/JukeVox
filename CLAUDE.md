@@ -35,7 +35,8 @@ JukeVox is a collaborative Spotify queue app. A host creates a party, connects t
 
 1. `PartySessionMiddleware` extracts/creates an encrypted session ID from the `JukeVox.SessionId` cookie, stores it in `HttpContext.Items["SessionId"]`
 2. `PartyContextMiddleware` resolves the session's party ID (if any) and stores it in `IPartyContextAccessor` for downstream use
-3. Controllers access session ID via `HttpContext.GetSessionId()` extension method
+3. `HostActivityMiddleware` records host activity timestamps for inactivity detection (runs after the response, only for authenticated hosts with an active party)
+4. Controllers access session ID via `HttpContext.GetSessionId()` extension method
 4. Controllers delegate to singleton services (`PartyService`, `QueueService`) for state mutations
 5. After mutations, controllers broadcast updates to clients via `IHubContext<PartyHub, IPartyClient>`
 
@@ -43,7 +44,7 @@ JukeVox is a collaborative Spotify queue app. A host creates a party, connects t
 
 - **PartyService** — Singleton. Manages all active `Party` objects (one per host, keyed by party ID). Uses per-party `Lock` instances for concurrency. Persists each party to its own JSON file in `parties/` after every mutation.
 - **QueueService** — Singleton. Manages queue add/remove/reorder/dequeue. Uses per-party `Lock` instances (separate from `PartyService` locks). Injects `IHubContext` to broadcast `QueueUpdated` after changes.
-- **PlaybackMonitorService** — `BackgroundService` that polls Spotify every 2 seconds. See [Playback Monitor](#playback-monitor) section below.
+- **PlaybackMonitorService** — `BackgroundService` that polls Spotify every 2 seconds. Accepts `TimeProvider` for testability. See [Playback Monitor](#playback-monitor) section below.
 - **SpotifyAuthService** — Handles OAuth authorization code flow and token refresh. Tokens are stored in the `Party` model and auto-refreshed with a 1-minute expiry buffer.
 - **SpotifyPlayerService** — HTTP wrapper for Spotify Web API player endpoints. Retries on 429 with `Retry-After` header (recursive, no max depth).
 - **HostCredentialService** — Manages WebAuthn credentials for multiple hosts. First host registers via setup token; additional hosts register via admin-generated invite codes (one-time use). Stores credentials in `host-credentials/` directory. Tracks admin status (first registered host is admin).
@@ -64,6 +65,8 @@ JukeVox is a collaborative Spotify queue app. A host creates a party, connects t
 | `QueueUpdated` | `List<QueueItemDto>` | Add, remove, reorder, vote, dequeue |
 | `CreditsUpdated` | `int` | Credit grant or spend |
 | `PartyEnded` | *(none)* | Host ends party |
+| `PartySleeping` | *(none)* | Party entered sleep due to inactivity |
+| `PartyWoke` | *(none)* | Party woken by host activity |
 
 ### Frontend state management
 
@@ -121,6 +124,43 @@ Key file: `Services/PlaybackMonitorService.cs`
 - **Foreign track detection:** After grace period, if Spotify moves to a track we didn't start, the monitor takes over: dequeues next item if queue has items, otherwise clears tracking state.
 - **Idle mode:** Entered when queue is empty after dequeue. `_idleWatching = true`. If items are added and Spotify is idle, the monitor auto-starts playback.
 - **Device fallback:** `PlayWithDeviceFallback` tries the last known device first, then falls back to: previously active device → any active device → first device in list.
+- **Inactivity detection:** Tracks `LastActivityUtc` per party. Activity is reset by Spotify playback (IsPlaying), host API requests (`HostActivityMiddleware`), and track starts (`NotifyTrackStarted`). See [Party Inactivity](#party-inactivity) section below.
+
+## Party Inactivity
+
+Key files: `Services/PlaybackMonitorService.cs`, `Middleware/HostActivityMiddleware.cs`, `Configuration/PartyInactivityOptions.cs`
+
+Parties have a `Status` field (`Active` or `Sleeping`) and an optional `SleepingSince` timestamp. The lifecycle is:
+
+1. **Active → Sleeping:** When `LastActivityUtc` exceeds `SleepAfterMinutes` (default: 15), the playback monitor transitions the party to `Sleeping` via `PartyService.SetPartyStatus` (under lock), clears cached playback state, and broadcasts `PartySleeping`.
+2. **Sleeping → Active:** When a host makes any authenticated API request, `HostActivityMiddleware` calls `RecordHostActivity`, which wakes the party via `SetPartyStatus` and broadcasts `PartyWoke`.
+3. **Sleeping → Ended:** If a party has been sleeping longer than `AutoEndAfterMinutes` (default: 120), the playback monitor auto-ends it via `PartyEnded` broadcast + `EndParty`.
+
+While sleeping, the playback monitor skips Spotify polling entirely — it only checks whether the auto-end threshold has been reached.
+
+### Configuration
+
+```json
+{
+  "PartyInactivity": {
+    "SleepAfterMinutes": 15,
+    "AutoEndAfterMinutes": 120
+  }
+}
+```
+
+Or via environment variables: `PARTYINACTIVITY__SleepAfterMinutes`, `PARTYINACTIVITY__AutoEndAfterMinutes`.
+
+### Activity sources
+
+Activity is reset (preventing sleep) by:
+- Spotify reporting `IsPlaying: true` during a poll cycle
+- Any authenticated host HTTP request (via `HostActivityMiddleware`)
+- `NotifyTrackStarted` (called by controllers when starting a track)
+
+### Frontend
+
+`PartyContext` tracks `isSleeping` state, updated via `PartySleeping`/`PartyWoke` SignalR events and the `isSleeping` field in `PartyStateDto`. Both `PartyPage` (guest) and `HostPortalPage` (host) display a sleep banner when active. The guest banner says the host is away; the host banner says the party fell asleep.
 
 ## Authentication
 
@@ -169,6 +209,9 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 - **React StrictMode**: Double-renders in dev (not production). Can cause duplicate API calls during development.
 - **Vite HMR in dev**: Component re-renders on code changes can cause SignalR reconnections and state re-fetches. Does not happen in production.
 - **ConnectionMapping**: Maps session IDs ↔ SignalR connection IDs. Used by `HostPartyController` to target individual guests for `CreditsUpdated` and `PartyEnded` broadcasts.
+- **Party status mutations under lock**: `Party.Status` and `Party.SleepingSince` must only be mutated via `PartyService.SetPartyStatus`, which acquires the per-party lock. Never mutate these fields directly on the `Party` object.
+- **TimeProvider in PlaybackMonitorService**: The service accepts an optional `TimeProvider` parameter (defaults to `TimeProvider.System`). Tests inject `FakeTimeProvider` to control time deterministically. All `DateTime.UtcNow` and `Task.Delay` calls go through this provider.
+- **HostActivityMiddleware runs after response**: The middleware calls `next(context)` first, then records activity. This means it doesn't block the response, but the activity timestamp is set after the request completes.
 
 ## API Route Map
 
