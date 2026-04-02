@@ -64,4 +64,17 @@ public class ConnectionMappingTests
         _mapping.GetConnectionId("session-1").Should().BeNull();
         _mapping.GetConnectionId("session-2").Should().Be("conn-2");
     }
+
+    [Test]
+    public void Reconnect_OldConnectionDisconnect_DoesNotRemoveNewMapping()
+    {
+        // Simulate rapid reconnect: new connection before old disconnects
+        _mapping.Add("session-1", "conn-old");
+        _mapping.Add("session-1", "conn-new");
+
+        // Old connection disconnects — should NOT remove the new mapping
+        _mapping.RemoveByConnection("conn-old");
+
+        _mapping.GetConnectionId("session-1").Should().Be("conn-new");
+    }
 }

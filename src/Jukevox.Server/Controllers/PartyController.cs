@@ -26,8 +26,12 @@ public class PartyController : ControllerBase
     [HttpPost("join")]
     public IActionResult JoinParty([FromBody] JoinPartyRequest request)
     {
+        var displayName = request.DisplayName?.Trim() ?? "";
+        if (string.IsNullOrEmpty(displayName) || displayName.Length > 30)
+            return BadRequest(new { error = "Display name must be between 1 and 30 characters" });
+
         var sessionId = HttpContext.GetSessionId();
-        var (guest, joinError) = _partyService.JoinParty(sessionId, request.JoinToken, request.DisplayName);
+        var (guest, joinError) = _partyService.JoinParty(sessionId, request.JoinToken, displayName);
         if (joinError != null)
             return Conflict(new { error = joinError });
         if (guest == null)
