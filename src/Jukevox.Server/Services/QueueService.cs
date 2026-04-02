@@ -200,22 +200,25 @@ public class QueueService : IQueueService
         var party = _partyService.GetParty(partyId);
         if (party == null) return [];
 
-        MigrateInsertionOrders(party);
-
-        return party.Queue.Select(q => new QueueItemDto
+        lock (GetQueueLock(partyId))
         {
-            Id = q.Id,
-            TrackUri = q.TrackUri,
-            TrackName = q.TrackName,
-            ArtistName = q.ArtistName,
-            AlbumName = q.AlbumName,
-            AlbumImageUrl = q.AlbumImageUrl,
-            DurationMs = q.DurationMs,
-            AddedByName = q.AddedByName,
-            AddedAt = q.AddedAt,
-            IsFromBasePlaylist = q.IsFromBasePlaylist,
-            Score = q.Score
-        }).ToList();
+            MigrateInsertionOrders(party);
+
+            return party.Queue.Select(q => new QueueItemDto
+            {
+                Id = q.Id,
+                TrackUri = q.TrackUri,
+                TrackName = q.TrackName,
+                ArtistName = q.ArtistName,
+                AlbumName = q.AlbumName,
+                AlbumImageUrl = q.AlbumImageUrl,
+                DurationMs = q.DurationMs,
+                AddedByName = q.AddedByName,
+                AddedAt = q.AddedAt,
+                IsFromBasePlaylist = q.IsFromBasePlaylist,
+                Score = q.Score
+            }).ToList();
+        }
     }
 
     public (bool Success, string? Error) Vote(string partyId, string sessionId, string itemId, int vote, bool isHost = false)
@@ -265,13 +268,16 @@ public class QueueService : IQueueService
         var party = _partyService.GetParty(partyId);
         if (party == null) return new();
 
-        var votes = new Dictionary<string, int>();
-        foreach (var item in party.Queue)
+        lock (GetQueueLock(partyId))
         {
-            if (item.Votes.TryGetValue(sessionId, out var v))
-                votes[item.Id] = v;
+            var votes = new Dictionary<string, int>();
+            foreach (var item in party.Queue)
+            {
+                if (item.Votes.TryGetValue(sessionId, out var v))
+                    votes[item.Id] = v;
+            }
+            return votes;
         }
-        return votes;
     }
 
     private static bool TracksMatch(QueueItem a, QueueItem b)

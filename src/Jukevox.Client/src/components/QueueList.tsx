@@ -84,7 +84,8 @@ export function QueueList() {
     ));
 
     try {
-      await api.vote(itemId, newVote);
+      const { queue: sorted } = await api.vote(itemId, newVote);
+      setQueue(sorted);
     } catch (err) {
       setUserVote(itemId, currentVote);
       setQueue(prev => prev.map(item =>
