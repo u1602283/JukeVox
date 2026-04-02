@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Fido2NetLib;
 using Fido2NetLib.Objects;
 using JukeVox.Server.Extensions;
+using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
 using JukeVox.Server.Models;
 using JukeVox.Server.Services;
@@ -16,13 +18,15 @@ public class HostAuthController : ControllerBase
     private readonly Fido2Configuration _fido2Config;
     private readonly HostCredentialService _credentialService;
     private readonly IPartyService _partyService;
+    private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
 
-    public HostAuthController(Fido2 fido2, Fido2Configuration fido2Config, HostCredentialService credentialService, IPartyService partyService)
+    public HostAuthController(Fido2 fido2, Fido2Configuration fido2Config, HostCredentialService credentialService, IPartyService partyService, IHubContext<PartyHub, IPartyClient> hubContext)
     {
         _fido2 = fido2;
         _fido2Config = fido2Config;
         _credentialService = credentialService;
         _partyService = partyService;
+        _hubContext = hubContext;
     }
 
     [HttpGet("status")]
@@ -56,12 +60,16 @@ public class HostAuthController : ControllerBase
         if (!_credentialService.IsSetupTokenValid(request.Token))
             return Unauthorized(new { error = "Invalid setup token" });
 
+        var displayName = request.DisplayName?.Trim();
+        if (displayName != null && displayName.Length > 30)
+            return BadRequest(new { error = "Display name must be 30 characters or fewer" });
+
         var hostId = Guid.NewGuid().ToString("N")[..8];
         var user = new Fido2User
         {
             Id = System.Text.Encoding.UTF8.GetBytes($"host-{hostId}"),
-            Name = request.DisplayName ?? _fido2Config.ServerName,
-            DisplayName = request.DisplayName ?? _fido2Config.ServerName
+            Name = displayName ?? _fido2Config.ServerName,
+            DisplayName = displayName ?? _fido2Config.ServerName
         };
 
         var options = _fido2.RequestNewCredential(new RequestNewCredentialParams
@@ -79,7 +87,7 @@ public class HostAuthController : ControllerBase
         var sessionId = HttpContext.GetSessionId();
         _credentialService.StorePendingChallenge(sessionId, new PendingRegistration
         {
-            Options = options, HostId = hostId, IsAdmin = true, DisplayName = request.DisplayName ?? "Admin"
+            Options = options, HostId = hostId, IsAdmin = true, DisplayName = displayName ?? "Admin"
         });
 
         return Ok(options);
@@ -100,7 +108,8 @@ public class HostAuthController : ControllerBase
         {
             AttestationResponse = attestation,
             OriginalOptions = pending.Options,
-            IsCredentialIdUniqueToUserCallback = async (_, _) => true
+            IsCredentialIdUniqueToUserCallback = async (args, _) =>
+                _credentialService.GetCredentialByCredentialId(args.CredentialId) == null
         }, HttpContext.RequestAborted);
 
         _credentialService.SaveCredential(new HostCredential
@@ -126,15 +135,19 @@ public class HostAuthController : ControllerBase
         if (!_credentialService.HasAnyCredential)
             return BadRequest(new { error = "No admin exists yet. Use /host/setup first." });
 
-        if (!_credentialService.ValidateAndConsumeInviteCode(request.InviteCode))
+        var displayName = request.DisplayName.Trim();
+        if (string.IsNullOrEmpty(displayName) || displayName.Length > 30)
+            return BadRequest(new { error = "Display name must be between 1 and 30 characters" });
+
+        if (!_credentialService.IsInviteCodeValid(request.InviteCode))
             return Unauthorized(new { error = "Invalid or expired invite code" });
 
         var hostId = Guid.NewGuid().ToString("N")[..8];
         var user = new Fido2User
         {
             Id = System.Text.Encoding.UTF8.GetBytes($"host-{hostId}"),
-            Name = request.DisplayName,
-            DisplayName = request.DisplayName
+            Name = displayName,
+            DisplayName = displayName
         };
 
         var options = _fido2.RequestNewCredential(new RequestNewCredentialParams
@@ -152,7 +165,7 @@ public class HostAuthController : ControllerBase
         var sessionId = HttpContext.GetSessionId();
         _credentialService.StorePendingChallenge(sessionId, new PendingRegistration
         {
-            Options = options, HostId = hostId, IsAdmin = false, DisplayName = request.DisplayName
+            Options = options, HostId = hostId, IsAdmin = false, DisplayName = displayName, InviteCode = request.InviteCode
         });
 
         return Ok(options);
@@ -166,11 +179,15 @@ public class HostAuthController : ControllerBase
         if (pending == null)
             return BadRequest(new { error = "No pending registration challenge. Please start again." });
 
+        if (pending.InviteCode == null || !_credentialService.ValidateAndConsumeInviteCode(pending.InviteCode))
+            return Unauthorized(new { error = "Invite code is no longer valid. Please request a new one." });
+
         var result = await _fido2.MakeNewCredentialAsync(new MakeNewCredentialParams
         {
             AttestationResponse = attestation,
             OriginalOptions = pending.Options,
-            IsCredentialIdUniqueToUserCallback = async (_, _) => true
+            IsCredentialIdUniqueToUserCallback = async (args, _) =>
+                _credentialService.GetCredentialByCredentialId(args.CredentialId) == null
         }, HttpContext.RequestAborted);
 
         _credentialService.SaveCredential(new HostCredential
@@ -257,7 +274,7 @@ public class HostAuthController : ControllerBase
     }
 
     [HttpDelete("hosts/{targetHostId}")]
-    public IActionResult DeleteHost(string targetHostId)
+    public async Task<IActionResult> DeleteHost(string targetHostId)
     {
         var hostId = HttpContext.GetAuthenticatedHostId();
         if (hostId == null || !_credentialService.IsAdmin(hostId))
@@ -268,6 +285,14 @@ public class HostAuthController : ControllerBase
 
         if (!_credentialService.DeleteCredential(targetHostId))
             return NotFound(new { error = "Host not found" });
+
+        // End all active parties owned by the deleted host and notify clients
+        var parties = _partyService.GetPartiesForHost(targetHostId);
+        foreach (var party in parties)
+        {
+            await _hubContext.Clients.Group(party.Id).PartyEnded();
+            _partyService.EndParty(party.Id);
+        }
 
         return NoContent();
     }
@@ -315,4 +340,5 @@ public class PendingRegistration
     public required string HostId { get; set; }
     public required bool IsAdmin { get; set; }
     public required string DisplayName { get; set; }
+    public string? InviteCode { get; set; }
 }

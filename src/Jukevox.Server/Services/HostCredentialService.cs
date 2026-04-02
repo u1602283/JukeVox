@@ -118,7 +118,9 @@ public class HostCredentialService
             }, new JsonSerializerOptions { WriteIndented = true });
 
             var filePath = Path.Combine(_credentialsDir, $"{credential.HostId}.json");
-            File.WriteAllText(filePath, json);
+            var tmpPath = filePath + ".tmp";
+            File.WriteAllText(tmpPath, json);
+            File.Move(tmpPath, filePath, overwrite: true);
             _logger.LogInformation("Host credential saved for {HostId} ({DisplayName})", credential.HostId, credential.DisplayName);
         }
     }
@@ -169,26 +171,42 @@ public class HostCredentialService
 
     public string GenerateInviteCode()
     {
-        // Only one invite code valid at a time — clear any existing
-        _inviteCodes.Clear();
+        lock (_lock)
+        {
+            // Only one invite code valid at a time — clear any existing
+            _inviteCodes.Clear();
 
-        var code = Guid.NewGuid().ToString("N")[..16];
-        _inviteCodes[code] = DateTime.UtcNow;
-        PersistInviteCodes();
-        _logger.LogInformation("Generated host invite code");
-        return code;
+            var code = Guid.NewGuid().ToString("N")[..16];
+            _inviteCodes[code] = DateTime.UtcNow;
+            PersistInviteCodes();
+            _logger.LogInformation("Generated host invite code");
+            return code;
+        }
+    }
+
+    public bool IsInviteCodeValid(string code)
+    {
+        lock (_lock)
+        {
+            if (!_inviteCodes.TryGetValue(code, out var created))
+                return false;
+            return DateTime.UtcNow - created <= InviteCodeTtl;
+        }
     }
 
     public bool ValidateAndConsumeInviteCode(string code)
     {
-        if (!_inviteCodes.TryRemove(code, out var created))
-            return false;
+        lock (_lock)
+        {
+            if (!_inviteCodes.TryRemove(code, out var created))
+                return false;
 
-        if (DateTime.UtcNow - created > InviteCodeTtl)
-            return false;
+            if (DateTime.UtcNow - created > InviteCodeTtl)
+                return false;
 
-        PersistInviteCodes();
-        return true;
+            PersistInviteCodes();
+            return true;
+        }
     }
 
     // --- Challenge storage ---

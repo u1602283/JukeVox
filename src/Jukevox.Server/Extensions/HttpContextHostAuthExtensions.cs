@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.DataProtection;
+using JukeVox.Server.Services;
 
 namespace JukeVox.Server.Extensions;
 
@@ -23,6 +24,10 @@ public static class HttpContextHostAuthExtensions
             var value = protector.Unprotect(cookie);
             // Legacy cookies contain just "host" — treat as unauthenticated
             if (value == "host")
+                return null;
+            // Verify the credential still exists (e.g. host was deleted by admin)
+            var credentialService = context.RequestServices.GetService<HostCredentialService>();
+            if (credentialService != null && credentialService.GetCredential(value) == null)
                 return null;
             return value;
         }
