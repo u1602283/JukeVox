@@ -408,4 +408,207 @@ public class PartyServiceTests
         _service.TryAutoEndSleepingParty(party.Id, 120, time).Should().BeFalse();
         _service.GetParty(party.Id).Should().NotBeNull();
     }
+
+    // --- TrySpendCredit ---
+
+    [Test]
+    public void TrySpendCredit_ValidGuest_DecrementsAndReturnsName()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+
+        var (name, error) = _service.TrySpendCredit(party.Id, "guest-1");
+
+        name.Should().Be("Alice");
+        error.Should().BeNull();
+        _service.GetGuest(party.Id, "guest-1")!.CreditsRemaining.Should().Be(4);
+    }
+
+    [Test]
+    public void TrySpendCredit_NoCredits_ReturnsError()
+    {
+        var party = _service.CreateParty("host-1", HostId, 1).Party!;
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        _service.TrySpendCredit(party.Id, "guest-1"); // spend the one credit
+
+        var (name, error) = _service.TrySpendCredit(party.Id, "guest-1");
+
+        name.Should().BeNull();
+        error.Should().Be("No credits remaining");
+    }
+
+    [Test]
+    public void TrySpendCredit_NotParticipant_ReturnsError()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+
+        var (name, error) = _service.TrySpendCredit(party.Id, "stranger");
+
+        name.Should().BeNull();
+        error.Should().Be("Not a party participant");
+    }
+
+    [Test]
+    public void TrySpendCredit_NoParty_ReturnsError()
+    {
+        var (name, error) = _service.TrySpendCredit("nonexistent", "guest-1");
+
+        name.Should().BeNull();
+        error.Should().Be("No active party");
+    }
+
+    // --- GetPartiesForHost ---
+
+    [Test]
+    public void GetPartiesForHost_ReturnsOnlyOwnedParties()
+    {
+        _service.CreateParty("host-a", "host-a-id", 5);
+        _service.CreateParty("host-b", "host-b-id", 5);
+
+        _service.GetPartiesForHost("host-a-id").Should().HaveCount(1);
+        _service.GetPartiesForHost("host-b-id").Should().HaveCount(1);
+        _service.GetPartiesForHost("nobody").Should().BeEmpty();
+    }
+
+    // --- GetAllPartySummaries ---
+
+    [Test]
+    public void GetAllPartySummaries_ReturnsCorrectCounts()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+
+        var summaries = _service.GetAllPartySummaries();
+
+        summaries.Should().HaveCount(1);
+        summaries[0].GuestCount.Should().Be(1);
+        summaries[0].HostId.Should().Be(HostId);
+    }
+
+    // --- UnmapSession ---
+
+    [Test]
+    public void UnmapSession_RemovesMapping()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+        _service.GetPartyIdForSession("host-1").Should().Be(party.Id);
+
+        _service.UnmapSession("host-1");
+
+        _service.GetPartyIdForSession("host-1").Should().BeNull();
+    }
+
+    // --- DemoteHostToGuest ---
+
+    [Test]
+    public void DemoteHostToGuest_AddsHostAsGuest()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+
+        _service.DemoteHostToGuest(party.Id, "OldHost");
+
+        var guest = _service.GetGuest(party.Id, "host-1");
+        guest.Should().NotBeNull();
+        guest!.DisplayName.Should().Be("OldHost");
+        guest.CreditsRemaining.Should().Be(5);
+    }
+
+    [Test]
+    public void DemoteHostToGuest_Idempotent_DoesNotOverwrite()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+        _service.DemoteHostToGuest(party.Id, "OldHost");
+        _service.SetGuestCredits(party.Id, "host-1", 99);
+
+        // Second demote should not overwrite existing guest
+        _service.DemoteHostToGuest(party.Id, "OldHost");
+
+        _service.GetGuest(party.Id, "host-1")!.CreditsRemaining.Should().Be(99);
+    }
+
+    // --- CreateParty atomicity ---
+
+    [Test]
+    public void CreateParty_SecondParty_ReturnsError()
+    {
+        _service.CreateParty("host-1", HostId, 5);
+
+        var (party, error) = _service.CreateParty("host-1", HostId, 5);
+
+        party.Should().BeNull();
+        error.Should().NotBeNullOrEmpty();
+    }
+
+    // --- Multi-party isolation ---
+
+    [Test]
+    public void SessionMapping_IsolatesPartiesCorrectly()
+    {
+        var partyA = _service.CreateParty("host-a", "host-a-id", 5).Party!;
+        var partyB = _service.CreateParty("host-b", "host-b-id", 5).Party!;
+
+        _service.JoinParty("guest-1", partyA.JoinToken, "Alice");
+        _service.JoinParty("guest-2", partyB.JoinToken, "Bob");
+
+        _service.GetPartyIdForSession("guest-1").Should().Be(partyA.Id);
+        _service.GetPartyIdForSession("guest-2").Should().Be(partyB.Id);
+        _service.IsParticipant(partyA.Id, "guest-2").Should().BeFalse();
+        _service.IsParticipant(partyB.Id, "guest-1").Should().BeFalse();
+    }
+
+    [Test]
+    public void EndParty_DoesNotAffectOtherParty()
+    {
+        var partyA = _service.CreateParty("host-a", "host-a-id", 5).Party!;
+        var partyB = _service.CreateParty("host-b", "host-b-id", 5).Party!;
+        _service.JoinParty("guest-1", partyB.JoinToken, "Bob");
+
+        _service.EndParty(partyA.Id);
+
+        _service.GetParty(partyB.Id).Should().NotBeNull();
+        _service.GetPartyIdForSession("guest-1").Should().Be(partyB.Id);
+    }
+
+    // --- RemoveGuest session cleanup ---
+
+    [Test]
+    public void RemoveGuest_UnmapsSession()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        _service.GetPartyIdForSession("guest-1").Should().Be(party.Id);
+
+        _service.RemoveGuest(party.Id, "guest-1");
+
+        _service.GetPartyIdForSession("guest-1").Should().BeNull();
+    }
+
+    // --- JoinParty as host returns null ---
+
+    [Test]
+    public void JoinParty_AsHost_ReturnsNull()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+
+        var (guest, error) = _service.JoinParty("host-1", party.JoinToken, "Host");
+
+        guest.Should().BeNull();
+        error.Should().BeNull();
+    }
+
+    // --- EndParty cleans up all session mappings ---
+
+    [Test]
+    public void EndParty_UnmapsAllSessions()
+    {
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
+        _service.JoinParty("guest-1", party.JoinToken, "Alice");
+        _service.JoinParty("guest-2", party.JoinToken, "Bob");
+
+        _service.EndParty(party.Id);
+
+        _service.GetPartyIdForSession("host-1").Should().BeNull();
+        _service.GetPartyIdForSession("guest-1").Should().BeNull();
+        _service.GetPartyIdForSession("guest-2").Should().BeNull();
+    }
 }

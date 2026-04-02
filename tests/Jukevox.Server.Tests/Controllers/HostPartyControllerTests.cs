@@ -135,7 +135,7 @@ public class HostPartyControllerTests
         _partyService.Setup(p => p.SetGuestCredits(PartyId, "g1", 7)).Returns(guest);
 
         _connectionMapping.Add("g1", "conn-123");
-        var mockClient = new Mock<Hubs.IPartyClient>();
+        var mockClient = new Mock<JukeVox.Server.Hubs.IPartyClient>();
         _hub.HubClients.Setup(c => c.Client("conn-123")).Returns(mockClient.Object);
         mockClient.Setup(c => c.CreditsUpdated(7)).Returns(Task.CompletedTask);
 
