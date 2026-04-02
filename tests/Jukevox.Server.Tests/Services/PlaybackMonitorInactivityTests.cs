@@ -141,10 +141,11 @@ public class PlaybackMonitorInactivityTests
             }
         };
         _partyService.Setup(p => p.GetAllParties()).Returns([party]);
+        _partyService.Setup(p => p.TryAutoEndSleepingParty(party.Id, 120, _time)).Returns(false);
 
         await RunOnePollCycle();
 
-        _partyService.Verify(p => p.EndParty(party.Id), Times.Never);
+        _partyService.Verify(p => p.TryAutoEndSleepingParty(party.Id, 120, _time), Times.Once);
         _partyClients.Verify(c => c.PartyEnded(), Times.Never);
     }
 
@@ -166,11 +167,12 @@ public class PlaybackMonitorInactivityTests
             }
         };
         _partyService.Setup(p => p.GetAllParties()).Returns([party]);
+        _partyService.Setup(p => p.TryAutoEndSleepingParty(party.Id, 120, _time)).Returns(true);
 
         await RunOnePollCycle();
 
         _partyClients.Verify(c => c.PartyEnded(), Times.Once);
-        _partyService.Verify(p => p.EndParty(party.Id), Times.Once);
+        _partyService.Verify(p => p.TryAutoEndSleepingParty(party.Id, 120, _time), Times.Once);
     }
 
     [Test]
@@ -189,9 +191,11 @@ public class PlaybackMonitorInactivityTests
             }
         };
         _partyService.Setup(p => p.GetAllParties()).Returns([party]);
+        _partyService.Setup(p => p.TryAutoEndSleepingParty(party.Id, 120, _time)).Returns(false);
 
         await RunOnePollCycle();
 
-        _partyService.Verify(p => p.EndParty(It.IsAny<string>()), Times.Never);
+        _partyService.Verify(p => p.TryAutoEndSleepingParty(party.Id, 120, _time), Times.Once);
+        _partyClients.Verify(c => c.PartyEnded(), Times.Never);
     }
 }

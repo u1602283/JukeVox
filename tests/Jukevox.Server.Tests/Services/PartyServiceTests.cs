@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using NUnit.Framework;
 using JukeVox.Server.Models;
@@ -349,5 +350,59 @@ public class PartyServiceTests
 
         party.Status.Should().Be(PartyStatus.Active);
         party.SleepingSince.Should().BeNull();
+    }
+
+    // --- TryAutoEndSleepingParty ---
+
+    [Test]
+    public void TryAutoEndSleepingParty_SleepingPastThreshold_EndsParty()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, time.GetUtcNow().UtcDateTime);
+
+        time.Advance(TimeSpan.FromMinutes(121));
+
+        _service.TryAutoEndSleepingParty(party.Id, 120, time).Should().BeTrue();
+        _service.GetParty(party.Id).Should().BeNull();
+    }
+
+    [Test]
+    public void TryAutoEndSleepingParty_SleepingUnderThreshold_ReturnsFalse()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, time.GetUtcNow().UtcDateTime);
+
+        time.Advance(TimeSpan.FromMinutes(60));
+
+        _service.TryAutoEndSleepingParty(party.Id, 120, time).Should().BeFalse();
+        _service.GetParty(party.Id).Should().NotBeNull();
+    }
+
+    [Test]
+    public void TryAutoEndSleepingParty_ActiveParty_ReturnsFalse()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var party = _service.CreateParty("host-1", HostId, 5);
+
+        _service.TryAutoEndSleepingParty(party.Id, 120, time).Should().BeFalse();
+        _service.GetParty(party.Id).Should().NotBeNull();
+    }
+
+    [Test]
+    public void TryAutoEndSleepingParty_WokenBetweenCheckAndEnd_ReturnsFalse()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var party = _service.CreateParty("host-1", HostId, 5);
+        _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, time.GetUtcNow().UtcDateTime);
+
+        time.Advance(TimeSpan.FromMinutes(121));
+
+        // Simulate wake happening before TryAutoEnd checks under lock
+        _service.SetPartyStatus(party.Id, PartyStatus.Active, null);
+
+        _service.TryAutoEndSleepingParty(party.Id, 120, time).Should().BeFalse();
+        _service.GetParty(party.Id).Should().NotBeNull();
     }
 }

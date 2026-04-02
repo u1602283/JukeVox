@@ -21,6 +21,7 @@ public interface IPartyService
     Party? ResumeAsHost(string partyId, string newHostSessionId);
     void PersistState(string partyId);
     bool SetPartyStatus(string partyId, PartyStatus status, DateTime? sleepingSince);
+    bool TryAutoEndSleepingParty(string partyId, int autoEndAfterMinutes, TimeProvider timeProvider);
     List<GuestSession> GetAllGuests(string partyId);
     GuestSession? SetGuestCredits(string partyId, string sessionId, int credits);
     List<GuestSession> AdjustAllCredits(string partyId, int delta);

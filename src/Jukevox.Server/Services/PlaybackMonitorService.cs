@@ -330,11 +330,10 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
     private async Task CheckAutoEndAsync(Party party, IPartyService partyService,
         IHubContext<PartyHub, IPartyClient> hubContext)
     {
-        if (party.SleepingSince == null) return;
-        if ((_timeProvider.GetUtcNow().UtcDateTime - party.SleepingSince.Value).TotalMinutes < _inactivityOptions.AutoEndAfterMinutes) return;
+        if (!partyService.TryAutoEndSleepingParty(party.Id, _inactivityOptions.AutoEndAfterMinutes, _timeProvider))
+            return;
 
         await hubContext.Clients.Group(party.Id).PartyEnded();
-        partyService.EndParty(party.Id);
         _partyStates.TryRemove(party.Id, out _);
 
         _logger.LogInformation("[{PartyId}] Party auto-ended after sleeping for {Minutes} minutes",

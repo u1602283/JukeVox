@@ -238,6 +238,25 @@ public class PartyService : IPartyService
         }
     }
 
+    public bool TryAutoEndSleepingParty(string partyId, int autoEndAfterMinutes, TimeProvider timeProvider)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return false;
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
+        {
+            if (party.Status != PartyStatus.Sleeping || party.SleepingSince == null)
+                return false;
+
+            if ((timeProvider.GetUtcNow().UtcDateTime - party.SleepingSince.Value).TotalMinutes < autoEndAfterMinutes)
+                return false;
+        }
+
+        EndParty(partyId);
+        return true;
+    }
+
     public void EndParty(string partyId)
     {
         if (!_parties.TryRemove(partyId, out _)) return;
