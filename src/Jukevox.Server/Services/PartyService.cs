@@ -9,6 +9,7 @@ public class PartyService : IPartyService
     private readonly ConcurrentDictionary<string, Party> _parties = new();
     private readonly ConcurrentDictionary<string, string> _sessionToPartyId = new();
     private readonly ConcurrentDictionary<string, Lock> _partyLocks = new();
+    private readonly ConcurrentDictionary<string, Lock> _hostLocks = new();
     private readonly string _partiesDir;
     private readonly ILogger<PartyService> _logger;
 
@@ -50,25 +51,32 @@ public class PartyService : IPartyService
         return _parties.Values.Where(p => p.HostId == hostId).ToList();
     }
 
-    public Party CreateParty(string hostSessionId, string hostId, int defaultCredits)
+    public (Party? Party, string? Error) CreateParty(string hostSessionId, string hostId, int defaultCredits)
     {
-        var party = new Party
+        var hostLock = _hostLocks.GetOrAdd(hostId, _ => new Lock());
+        lock (hostLock)
         {
-            HostSessionId = hostSessionId,
-            HostId = hostId,
-            DefaultCredits = defaultCredits
-        };
+            if (GetPartiesForHost(hostId).Count > 0)
+                return (null, "You already have an active party");
 
-        var partyLock = GetPartyLock(party.Id);
-        lock (partyLock)
-        {
-            _parties[party.Id] = party;
-            MapSession(hostSessionId, party.Id);
-            PersistStateInternal(party);
+            var party = new Party
+            {
+                HostSessionId = hostSessionId,
+                HostId = hostId,
+                DefaultCredits = defaultCredits
+            };
+
+            var partyLock = GetPartyLock(party.Id);
+            lock (partyLock)
+            {
+                _parties[party.Id] = party;
+                MapSession(hostSessionId, party.Id);
+                PersistStateInternal(party);
+            }
+
+            _logger.LogInformation("Party created: {PartyId} (host: {HostId})", party.Id, hostId);
+            return (party, null);
         }
-
-        _logger.LogInformation("Party created: {PartyId} (host: {HostId})", party.Id, hostId);
-        return party;
     }
 
     public (GuestSession? Guest, string? Error) JoinParty(string sessionId, string joinToken, string displayName)
@@ -184,6 +192,32 @@ public class PartyService : IPartyService
         }
     }
 
+    public void DemoteHostToGuest(string partyId, string displayName)
+    {
+        var party = GetParty(partyId);
+        if (party == null) return;
+
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
+        {
+            var hostSessionId = party.HostSessionId;
+            if (string.IsNullOrEmpty(hostSessionId)) return;
+
+            // Add the old host as a guest
+            if (!party.Guests.ContainsKey(hostSessionId))
+            {
+                party.Guests[hostSessionId] = new GuestSession
+                {
+                    SessionId = hostSessionId,
+                    DisplayName = displayName,
+                    CreditsRemaining = party.DefaultCredits
+                };
+            }
+
+            PersistStateInternal(party);
+        }
+    }
+
     public List<GuestSession> GetAllGuests(string partyId)
     {
         var party = GetParty(partyId);
@@ -251,13 +285,22 @@ public class PartyService : IPartyService
 
             if ((timeProvider.GetUtcNow().UtcDateTime - party.SleepingSince.Value).TotalMinutes < autoEndAfterMinutes)
                 return false;
-        }
 
-        EndParty(partyId);
+            EndPartyInternal(partyId);
+        }
         return true;
     }
 
     public void EndParty(string partyId)
+    {
+        var partyLock = GetPartyLock(partyId);
+        lock (partyLock)
+        {
+            EndPartyInternal(partyId);
+        }
+    }
+
+    private void EndPartyInternal(string partyId)
     {
         if (!_parties.TryRemove(partyId, out _)) return;
 
@@ -379,13 +422,12 @@ public class PartyService : IPartyService
                 var party = JsonSerializer.Deserialize<Party>(json, JsonOptions);
                 if (party == null) continue;
 
-                _parties[party.Id] = party;
+                // Purge stale sessions — after restart with ephemeral data protection,
+                // all session cookies are invalid so old mappings just cause conflicts
+                party.Guests.Clear();
+                party.HostSessionId = string.Empty;
 
-                // Rebuild session-to-party mappings
-                if (!string.IsNullOrEmpty(party.HostSessionId))
-                    _sessionToPartyId[party.HostSessionId] = party.Id;
-                foreach (var guestId in party.Guests.Keys)
-                    _sessionToPartyId[guestId] = party.Id;
+                _parties[party.Id] = party;
 
                 _logger.LogInformation("Loaded party {PartyId} (queue: {Count} items)",
                     party.Id, party.Queue.Count);

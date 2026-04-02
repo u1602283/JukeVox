@@ -8,7 +8,7 @@ public interface IPartyService
     string? GetPartyIdForSession(string sessionId);
     List<Party> GetAllParties();
     List<Party> GetPartiesForHost(string hostId);
-    Party CreateParty(string hostSessionId, string hostId, int defaultCredits);
+    (Party? Party, string? Error) CreateParty(string hostSessionId, string hostId, int defaultCredits);
     (GuestSession? Guest, string? Error) JoinParty(string sessionId, string joinToken, string displayName);
     bool IsHost(string partyId, string sessionId);
     bool IsParticipant(string partyId, string sessionId);
@@ -19,6 +19,7 @@ public interface IPartyService
     List<(string PartyId, string JoinToken, string HostId, int QueueCount, int GuestCount, DateTime CreatedAt)> GetAllPartySummaries();
     (string? DisplayName, string? Error) TrySpendCredit(string partyId, string sessionId);
     Party? ResumeAsHost(string partyId, string newHostSessionId);
+    void DemoteHostToGuest(string partyId, string displayName);
     void PersistState(string partyId);
     bool SetPartyStatus(string partyId, PartyStatus status, DateTime? sleepingSince);
     bool TryAutoEndSleepingParty(string partyId, int autoEndAfterMinutes, TimeProvider timeProvider);

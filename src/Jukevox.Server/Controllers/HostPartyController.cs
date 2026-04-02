@@ -64,11 +64,10 @@ public class HostPartyController : ControllerBase
         if (request.DefaultCredits < 1)
             return BadRequest(new { error = "Credits per guest must be at least 1" });
 
-        if (_partyService.GetPartiesForHost(hostId).Count > 0)
-            return Conflict(new { error = "You already have an active party" });
-
         var sessionId = HttpContext.GetSessionId();
-        var party = _partyService.CreateParty(sessionId, hostId, request.DefaultCredits);
+        var (party, createError) = _partyService.CreateParty(sessionId, hostId, request.DefaultCredits);
+        if (party == null)
+            return Conflict(new { error = createError });
 
         return Ok(new PartyStateDto
         {
@@ -127,7 +126,22 @@ public class HostPartyController : ControllerBase
             return Forbid();
 
         var sessionId = HttpContext.GetSessionId();
-        _partyService.ResumeAsHost(partyId, sessionId);
+
+        // Admin taking over another host's party: demote original host to guest
+        if (party.HostId != hostId)
+        {
+            var originalHostCredential = _credentialService.GetCredential(party.HostId);
+            var originalHostName = originalHostCredential?.DisplayName ?? "Host";
+            _partyService.DemoteHostToGuest(partyId, originalHostName);
+            _partyService.ResumeAsHost(partyId, sessionId);
+            // Update party ownership to the admin
+            party.HostId = hostId;
+            _partyService.PersistState(partyId);
+        }
+        else
+        {
+            _partyService.ResumeAsHost(partyId, sessionId);
+        }
 
         return Ok(new PartyStateDto
         {

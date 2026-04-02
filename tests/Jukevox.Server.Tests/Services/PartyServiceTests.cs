@@ -47,7 +47,7 @@ public class PartyServiceTests
     [Test]
     public void CreateParty_ReturnsPartyWithCorrectValues()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         party.Should().NotBeNull();
         party.Should().BeEquivalentTo(new
@@ -62,7 +62,7 @@ public class PartyServiceTests
     [Test]
     public void GetParty_AfterCreate_ReturnsParty()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         var retrieved = _service.GetParty(party.Id);
         retrieved.Should().NotBeNull();
@@ -72,7 +72,7 @@ public class PartyServiceTests
     [Test]
     public void JoinParty_CorrectCode_ReturnsGuestSession()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         var (guest, error) = _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
@@ -97,7 +97,7 @@ public class PartyServiceTests
     [Test]
     public void JoinParty_IdempotentRejoin_ReturnsSameGuest()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         var (guest1, _) = _service.JoinParty("guest-1", party.JoinToken, "Alice");
         var (guest2, _) = _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
@@ -107,7 +107,7 @@ public class PartyServiceTests
     [Test]
     public void JoinParty_DuplicateName_ReturnsError()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var (guest, error) = _service.JoinParty("guest-2", party.JoinToken, "Alice");
@@ -119,7 +119,7 @@ public class PartyServiceTests
     [Test]
     public void JoinParty_DuplicateName_CaseInsensitive()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var (guest, error) = _service.JoinParty("guest-2", party.JoinToken, "alice");
@@ -131,7 +131,7 @@ public class PartyServiceTests
     [Test]
     public void IsHost_HostSessionId_ReturnsTrue()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         _service.IsHost(party.Id, "host-1").Should().BeTrue();
         _service.IsHost(party.Id, "guest-1").Should().BeFalse();
@@ -140,7 +140,7 @@ public class PartyServiceTests
     [Test]
     public void IsParticipant_HostAndGuest_ReturnTrue()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         _service.IsParticipant(party.Id, "host-1").Should().BeTrue();
@@ -151,7 +151,7 @@ public class PartyServiceTests
     [Test]
     public void UpdateSettings_ChangesCredits()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         _service.UpdateSettings(party.Id, 10);
 
@@ -162,7 +162,7 @@ public class PartyServiceTests
     [Test]
     public void SpotifyTokens_RoundTrip()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         var tokens = new SpotifyTokens
         {
@@ -181,7 +181,7 @@ public class PartyServiceTests
     [Test]
     public void ResumeAsHost_UpdatesHostSessionId()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         var resumed = _service.ResumeAsHost(party.Id, "host-2");
 
@@ -194,7 +194,7 @@ public class PartyServiceTests
     [Test]
     public void Persistence_SurvivesNewInstance()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var newService = CreateService(_tempDir);
@@ -202,13 +202,16 @@ public class PartyServiceTests
         var retrieved = newService.GetParty(party.Id);
         retrieved.Should().NotBeNull();
         retrieved.JoinToken.Should().Be(party.JoinToken);
-        retrieved.Guests.Should().ContainKey("guest-1");
+        // Guests and host session are purged on reload (ephemeral data protection
+        // invalidates all session cookies on restart)
+        retrieved.Guests.Should().BeEmpty();
+        retrieved.HostSessionId.Should().BeEmpty();
     }
 
     [Test]
     public void GetAllGuests_ReturnsAllJoinedGuests()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
         _service.JoinParty("guest-2", party.JoinToken, "Bob");
 
@@ -227,7 +230,7 @@ public class PartyServiceTests
     [Test]
     public void SetGuestCredits_SetsAbsoluteValue()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var guest = _service.SetGuestCredits(party.Id, "guest-1", 10);
@@ -239,7 +242,7 @@ public class PartyServiceTests
     [Test]
     public void SetGuestCredits_ClampsToZero()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var guest = _service.SetGuestCredits(party.Id, "guest-1", -3);
@@ -250,7 +253,7 @@ public class PartyServiceTests
     [Test]
     public void SetGuestCredits_UnknownGuest_ReturnsNull()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         _service.SetGuestCredits(party.Id, "nobody", 10).Should().BeNull();
     }
@@ -258,7 +261,7 @@ public class PartyServiceTests
     [Test]
     public void AdjustAllCredits_AddsDelta()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
         _service.JoinParty("guest-2", party.JoinToken, "Bob");
 
@@ -271,7 +274,7 @@ public class PartyServiceTests
     [Test]
     public void AdjustAllCredits_NegativeDelta_ClampsToZero()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         var guests = _service.AdjustAllCredits(party.Id, -10);
@@ -283,7 +286,7 @@ public class PartyServiceTests
     [Test]
     public void EndParty_ClearsCurrentParty()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.JoinParty("guest-1", party.JoinToken, "Alice");
 
         _service.EndParty(party.Id);
@@ -295,7 +298,7 @@ public class PartyServiceTests
     [Test]
     public void EndParty_DeletesStateFile()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         _service.EndParty(party.Id);
 
@@ -314,7 +317,7 @@ public class PartyServiceTests
     [Test]
     public void SetPartyStatus_SameStatus_ReturnsFalseAndDoesNotPersist()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         party.Status.Should().Be(PartyStatus.Active);
 
         _service.SetPartyStatus(party.Id, PartyStatus.Active, null).Should().BeFalse();
@@ -325,7 +328,7 @@ public class PartyServiceTests
     [Test]
     public void SetPartyStatus_ActiveToSleeping_UpdatesAndPersists()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         var sleepingSince = DateTime.UtcNow;
 
         _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, sleepingSince).Should().BeTrue();
@@ -343,7 +346,7 @@ public class PartyServiceTests
     [Test]
     public void SetPartyStatus_SleepingToActive_ClearsSleepingSince()
     {
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, DateTime.UtcNow);
 
         _service.SetPartyStatus(party.Id, PartyStatus.Active, null).Should().BeTrue();
@@ -358,7 +361,7 @@ public class PartyServiceTests
     public void TryAutoEndSleepingParty_SleepingPastThreshold_EndsParty()
     {
         var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, time.GetUtcNow().UtcDateTime);
 
         time.Advance(TimeSpan.FromMinutes(121));
@@ -371,7 +374,7 @@ public class PartyServiceTests
     public void TryAutoEndSleepingParty_SleepingUnderThreshold_ReturnsFalse()
     {
         var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, time.GetUtcNow().UtcDateTime);
 
         time.Advance(TimeSpan.FromMinutes(60));
@@ -384,7 +387,7 @@ public class PartyServiceTests
     public void TryAutoEndSleepingParty_ActiveParty_ReturnsFalse()
     {
         var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         _service.TryAutoEndSleepingParty(party.Id, 120, time).Should().BeFalse();
         _service.GetParty(party.Id).Should().NotBeNull();
@@ -394,7 +397,7 @@ public class PartyServiceTests
     public void TryAutoEndSleepingParty_WokenBetweenCheckAndEnd_ReturnsFalse()
     {
         var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var party = _service.CreateParty("host-1", HostId, 5);
+        var party = _service.CreateParty("host-1", HostId, 5).Party!;
         _service.SetPartyStatus(party.Id, PartyStatus.Sleeping, time.GetUtcNow().UtcDateTime);
 
         time.Advance(TimeSpan.FromMinutes(121));
