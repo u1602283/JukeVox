@@ -180,7 +180,7 @@ For detailed architecture docs (service internals, queue sorting tiers, voting t
 
 The project includes a multi-stage Dockerfile:
 
-1. **Frontend build** — `node:22-alpine` runs `npm ci && npm run build`, outputting to `src/Jukevox.Server/wwwroot/`
+1. **Frontend build** — `node:22-alpine` runs `npm ci && npm run build`, outputting to `src/JukeVox.Server/wwwroot/`
 2. **Backend build** — `dotnet/sdk:10.0-alpine` restores and publishes the server project
 3. **Runtime** — `dotnet/aspnet:10.0-alpine` runs the app on port 8080
 

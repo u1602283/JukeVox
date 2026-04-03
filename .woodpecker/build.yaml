@@ -18,7 +18,7 @@ steps:
   - name: test
     image: mcr.microsoft.com/dotnet/sdk:10.0-alpine
     commands:
-      - dotnet test Jukevox.slnx
+      - dotnet test JukeVox.slnx
 
   - name: build
     image: woodpeckerci/plugin-docker-buildx
