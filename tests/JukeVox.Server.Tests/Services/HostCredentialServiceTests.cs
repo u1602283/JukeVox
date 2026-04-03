@@ -1,19 +1,16 @@
 using FluentAssertions;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
-using Moq;
 using JukeVox.Server.Models;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using NUnit.Framework;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class HostCredentialServiceTests
 {
-    private string _tempDir = null!;
-    private HostCredentialService _service = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -26,8 +23,13 @@ public class HostCredentialServiceTests
     public void TearDown()
     {
         if (Directory.Exists(_tempDir))
+        {
             Directory.Delete(_tempDir, true);
+        }
     }
+
+    private string _tempDir = null!;
+    private HostCredentialService _service = null!;
 
     private static HostCredentialService CreateService(string contentRootPath)
     {
@@ -70,10 +72,7 @@ public class HostCredentialServiceTests
     }
 
     [Test]
-    public void GetCredential_Unknown_ReturnsNull()
-    {
-        _service.GetCredential("nonexistent").Should().BeNull();
-    }
+    public void GetCredential_Unknown_ReturnsNull() => _service.GetCredential("nonexistent").Should().BeNull();
 
     [Test]
     public void GetCredentialByCredentialId_FindsByBytes()
@@ -88,9 +87,7 @@ public class HostCredentialServiceTests
 
     [Test]
     public void GetCredentialByCredentialId_UnknownBytes_ReturnsNull()
-    {
-        _service.GetCredentialByCredentialId([9, 9, 9]).Should().BeNull();
-    }
+        => _service.GetCredentialByCredentialId([9, 9, 9]).Should().BeNull();
 
     [Test]
     public void GetAllCredentials_ReturnsAll()
@@ -104,7 +101,7 @@ public class HostCredentialServiceTests
     [Test]
     public void DeleteCredential_RemovesFromMemoryAndDisk()
     {
-        _service.SaveCredential(MakeCredential("host-1"));
+        _service.SaveCredential(MakeCredential());
 
         _service.DeleteCredential("host-1").Should().BeTrue();
 
@@ -113,17 +110,14 @@ public class HostCredentialServiceTests
     }
 
     [Test]
-    public void DeleteCredential_Unknown_ReturnsFalse()
-    {
-        _service.DeleteCredential("nonexistent").Should().BeFalse();
-    }
+    public void DeleteCredential_Unknown_ReturnsFalse() => _service.DeleteCredential("nonexistent").Should().BeFalse();
 
     // --- Admin ---
 
     [Test]
     public void IsAdmin_AdminCredential_ReturnsTrue()
     {
-        _service.SaveCredential(MakeCredential("admin", isAdmin: true));
+        _service.SaveCredential(MakeCredential("admin", true));
 
         _service.IsAdmin("admin").Should().BeTrue();
     }
@@ -148,14 +142,12 @@ public class HostCredentialServiceTests
 
     [Test]
     public void IsSetupTokenValid_WrongToken_ReturnsFalse()
-    {
-        _service.IsSetupTokenValid("definitely-wrong-token").Should().BeFalse();
-    }
+        => _service.IsSetupTokenValid("definitely-wrong-token").Should().BeFalse();
 
     [Test]
     public void SaveAdminCredential_ClearsSetupToken()
     {
-        _service.SaveCredential(MakeCredential("admin", isAdmin: true));
+        _service.SaveCredential(MakeCredential("admin", true));
 
         _service.IsSetupAvailable.Should().BeFalse();
     }
@@ -163,7 +155,7 @@ public class HostCredentialServiceTests
     [Test]
     public void SaveNonAdminCredential_DoesNotClearSetupToken()
     {
-        _service.SaveCredential(MakeCredential("regular", isAdmin: false));
+        _service.SaveCredential(MakeCredential("regular"));
 
         // HasAnyCredential is true, so IsSetupAvailable is false regardless
         _service.HasAnyCredential.Should().BeTrue();
@@ -174,7 +166,7 @@ public class HostCredentialServiceTests
     [Test]
     public void UpdateSignCount_PersistsNewValue()
     {
-        _service.SaveCredential(MakeCredential("host-1"));
+        _service.SaveCredential(MakeCredential());
 
         _service.UpdateSignCount("host-1", 42);
 
@@ -205,10 +197,7 @@ public class HostCredentialServiceTests
     }
 
     [Test]
-    public void IsInviteCodeValid_InvalidCode_ReturnsFalse()
-    {
-        _service.IsInviteCodeValid("bogus").Should().BeFalse();
-    }
+    public void IsInviteCodeValid_InvalidCode_ReturnsFalse() => _service.IsInviteCodeValid("bogus").Should().BeFalse();
 
     [Test]
     public void ValidateAndConsumeInviteCode_ConsumesOnce()
@@ -265,9 +254,7 @@ public class HostCredentialServiceTests
 
     [Test]
     public void GetPendingChallenge_UnknownSession_ReturnsNull()
-    {
-        _service.GetPendingChallenge<object>("nobody").Should().BeNull();
-    }
+        => _service.GetPendingChallenge<object>("nobody").Should().BeNull();
 
     [Test]
     public void StorePendingChallenge_OverwritesPrevious()
@@ -283,7 +270,7 @@ public class HostCredentialServiceTests
     [Test]
     public void Credentials_PersistAcrossInstances()
     {
-        _service.SaveCredential(MakeCredential("host-1", isAdmin: true));
+        _service.SaveCredential(MakeCredential("host-1", true));
 
         var newService = CreateService(_tempDir);
 
@@ -296,7 +283,7 @@ public class HostCredentialServiceTests
     [Test]
     public void DeleteCredential_PersistsDeletion()
     {
-        _service.SaveCredential(MakeCredential("host-1"));
+        _service.SaveCredential(MakeCredential());
         _service.DeleteCredential("host-1");
 
         var newService = CreateService(_tempDir);
@@ -311,13 +298,14 @@ public class HostCredentialServiceTests
     {
         // Write a legacy credential file
         var legacyPath = Path.Combine(_tempDir, "host-credential.json");
-        File.WriteAllText(legacyPath, """
-        {
-            "CredentialId": "AQIDBA==",
-            "PublicKey": "BQYHCA==",
-            "SignCount": 3
-        }
-        """);
+        File.WriteAllText(legacyPath,
+            """
+            {
+                "CredentialId": "AQIDBA==",
+                "PublicKey": "BQYHCA==",
+                "SignCount": 3
+            }
+            """);
 
         var service = CreateService(_tempDir);
 

@@ -1,21 +1,17 @@
 using System.Net;
 using FluentAssertions;
+using JukeVox.Server.Services;
+using JukeVox.Server.Tests.Helpers;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
-using JukeVox.Server.Services;
-using JukeVox.Server.Tests.Helpers;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class SpotifyPlayerServiceTests
 {
-    private MockHttpHandler _handler = null!;
-    private Mock<ISpotifyAuthService> _authService = null!;
-    private SpotifyPlayerService _service = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -37,6 +33,10 @@ public class SpotifyPlayerServiceTests
         _handler.Dispose();
     }
 
+    private MockHttpHandler _handler = null!;
+    private Mock<ISpotifyAuthService> _authService = null!;
+    private SpotifyPlayerService _service = null!;
+
     private Uri RequestUri(int index = 0) => _handler.Requests[index].RequestUri!;
 
     // --- GetPlaybackStateAsync ---
@@ -45,54 +45,55 @@ public class SpotifyPlayerServiceTests
     public async Task GetPlaybackStateAsync_Success_MapsAllFields()
     {
         _handler.EnqueueSuccess("""
-        {
-            "is_playing": true,
-            "progress_ms": 45000,
-            "item": {
-                "uri": "spotify:track:abc123",
-                "name": "Test Song",
-                "duration_ms": 200000,
-                "artists": [
-                    { "name": "Artist One" },
-                    { "name": "Artist Two" }
-                ],
-                "album": {
-                    "name": "Test Album",
-                    "images": [
-                        { "url": "https://img.spotify.com/large.jpg", "height": 640, "width": 640 },
-                        { "url": "https://img.spotify.com/small.jpg", "height": 64, "width": 64 }
-                    ]
-                }
-            },
-            "device": {
-                "id": "device-1",
-                "name": "My Speaker",
-                "type": "Speaker",
-                "is_active": true,
-                "volume_percent": 75,
-                "supports_volume": true
-            }
-        }
-        """);
+                                {
+                                    "is_playing": true,
+                                    "progress_ms": 45000,
+                                    "item": {
+                                        "uri": "spotify:track:abc123",
+                                        "name": "Test Song",
+                                        "duration_ms": 200000,
+                                        "artists": [
+                                            { "name": "Artist One" },
+                                            { "name": "Artist Two" }
+                                        ],
+                                        "album": {
+                                            "name": "Test Album",
+                                            "images": [
+                                                { "url": "https://img.spotify.com/large.jpg", "height": 640, "width": 640 },
+                                                { "url": "https://img.spotify.com/small.jpg", "height": 64, "width": 64 }
+                                            ]
+                                        }
+                                    },
+                                    "device": {
+                                        "id": "device-1",
+                                        "name": "My Speaker",
+                                        "type": "Speaker",
+                                        "is_active": true,
+                                        "volume_percent": 75,
+                                        "supports_volume": true
+                                    }
+                                }
+                                """);
 
         var state = await _service.GetPlaybackStateAsync();
 
         state.Should().NotBeNull();
-        state.Should().BeEquivalentTo(new
-        {
-            IsPlaying = true,
-            TrackUri = "spotify:track:abc123",
-            TrackName = "Test Song",
-            ArtistName = "Artist One, Artist Two",
-            AlbumName = "Test Album",
-            AlbumImageUrl = "https://img.spotify.com/large.jpg",
-            ProgressMs = 45000,
-            DurationMs = 200000,
-            VolumePercent = 75,
-            SupportsVolume = true,
-            DeviceId = "device-1",
-            DeviceName = "My Speaker"
-        });
+        state.Should()
+            .BeEquivalentTo(new
+            {
+                IsPlaying = true,
+                TrackUri = "spotify:track:abc123",
+                TrackName = "Test Song",
+                ArtistName = "Artist One, Artist Two",
+                AlbumName = "Test Album",
+                AlbumImageUrl = "https://img.spotify.com/large.jpg",
+                ProgressMs = 45000,
+                DurationMs = 200000,
+                VolumePercent = 75,
+                SupportsVolume = true,
+                DeviceId = "device-1",
+                DeviceName = "My Speaker"
+            });
     }
 
     [Test]
@@ -124,26 +125,27 @@ public class SpotifyPlayerServiceTests
     public async Task GetPlaybackStateAsync_NullItem_ReturnsNullFields()
     {
         _handler.EnqueueSuccess("""
-        {
-            "is_playing": false,
-            "progress_ms": null,
-            "item": null,
-            "device": null
-        }
-        """);
+                                {
+                                    "is_playing": false,
+                                    "progress_ms": null,
+                                    "item": null,
+                                    "device": null
+                                }
+                                """);
 
         var state = await _service.GetPlaybackStateAsync();
 
         state.Should().NotBeNull();
-        state.Should().BeEquivalentTo(new
-        {
-            IsPlaying = false,
-            TrackUri = (string?)null,
-            TrackName = (string?)null,
-            ArtistName = (string?)null,
-            ProgressMs = 0,
-            DurationMs = 0
-        });
+        state.Should()
+            .BeEquivalentTo(new
+            {
+                IsPlaying = false,
+                TrackUri = (string?)null,
+                TrackName = (string?)null,
+                ArtistName = (string?)null,
+                ProgressMs = 0,
+                DurationMs = 0
+            });
     }
 
     // --- PlayTrackAsync ---
@@ -252,49 +254,53 @@ public class SpotifyPlayerServiceTests
     public async Task GetDevicesAsync_Success_MapsDevices()
     {
         _handler.EnqueueSuccess("""
-        {
-            "devices": [
-                {
-                    "id": "dev-1",
-                    "name": "Living Room Speaker",
-                    "type": "Speaker",
-                    "is_active": true,
-                    "volume_percent": 80,
-                    "supports_volume": true
-                },
-                {
-                    "id": "dev-2",
-                    "name": "Phone",
-                    "type": "Smartphone",
-                    "is_active": false,
-                    "volume_percent": null,
-                    "supports_volume": false
-                }
-            ]
-        }
-        """);
+                                {
+                                    "devices": [
+                                        {
+                                            "id": "dev-1",
+                                            "name": "Living Room Speaker",
+                                            "type": "Speaker",
+                                            "is_active": true,
+                                            "volume_percent": 80,
+                                            "supports_volume": true
+                                        },
+                                        {
+                                            "id": "dev-2",
+                                            "name": "Phone",
+                                            "type": "Smartphone",
+                                            "is_active": false,
+                                            "volume_percent": null,
+                                            "supports_volume": false
+                                        }
+                                    ]
+                                }
+                                """);
 
         var devices = await _service.GetDevicesAsync();
 
         devices.Should().HaveCount(2);
 
-        devices[0].Should().BeEquivalentTo(new
-        {
-            Id = "dev-1",
-            Name = "Living Room Speaker",
-            Type = "Speaker",
-            IsActive = true,
-            VolumePercent = 80,
-            SupportsVolume = true
-        });
+        devices[0]
+            .Should()
+            .BeEquivalentTo(new
+            {
+                Id = "dev-1",
+                Name = "Living Room Speaker",
+                Type = "Speaker",
+                IsActive = true,
+                VolumePercent = 80,
+                SupportsVolume = true
+            });
 
-        devices[1].Should().BeEquivalentTo(new
-        {
-            Id = "dev-2",
-            IsActive = false,
-            VolumePercent = 0, // null → 0
-            SupportsVolume = false
-        });
+        devices[1]
+            .Should()
+            .BeEquivalentTo(new
+            {
+                Id = "dev-2",
+                IsActive = false,
+                VolumePercent = 0, // null → 0
+                SupportsVolume = false
+            });
     }
 
     [Test]
@@ -327,10 +333,12 @@ public class SpotifyPlayerServiceTests
 
         await _service.PauseAsync();
 
-        _handler.Requests[0].Headers.Authorization.Should().BeEquivalentTo(new
-        {
-            Scheme = "Bearer",
-            Parameter = "test-token"
-        });
+        _handler.Requests[0]
+            .Headers.Authorization.Should()
+            .BeEquivalentTo(new
+            {
+                Scheme = "Bearer",
+                Parameter = "test-token"
+            });
     }
 }

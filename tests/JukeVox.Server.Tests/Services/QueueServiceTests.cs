@@ -1,20 +1,15 @@
 using FluentAssertions;
-using Moq;
-using NUnit.Framework;
 using JukeVox.Server.Models;
 using JukeVox.Server.Services;
 using JukeVox.Server.Tests.Helpers;
+using Moq;
+using NUnit.Framework;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class QueueServiceTests
 {
-    private const string PartyId = "test1234";
-    private Party _party = null!;
-    private Mock<IPartyService> _partyServiceMock = null!;
-    private QueueService _service = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -31,6 +26,11 @@ public class QueueServiceTests
         _partyServiceMock.VerifyAll();
         _partyServiceMock.VerifyNoOtherCalls();
     }
+
+    private const string PartyId = "test1234";
+    private Party _party = null!;
+    private Mock<IPartyService> _partyServiceMock = null!;
+    private QueueService _service = null!;
 
     [Test]
     public void AddToQueue_AsHost_AddsItem()
@@ -50,7 +50,8 @@ public class QueueServiceTests
     public void AddToQueue_AsGuest_SpendsCreditAndUsesDisplayName()
     {
         _partyServiceMock.Setup(p => p.TrySpendCredit(PartyId, "guest-1"))
-            .Returns(("Alice", (string?)null)).Verifiable(Times.Once);
+            .Returns(("Alice", null))
+            .Verifiable(Times.Once);
         _partyServiceMock.Setup(p => p.PersistState(PartyId)).Verifiable(Times.Once);
         var request = TestData.CreateAddToQueueRequest("Guest Song");
 
@@ -65,7 +66,8 @@ public class QueueServiceTests
     public void AddToQueue_GuestWithZeroCredits_ReturnsError()
     {
         _partyServiceMock.Setup(p => p.TrySpendCredit(PartyId, "guest-1"))
-            .Returns(((string?)null, "No credits remaining")).Verifiable(Times.Once);
+            .Returns((null, "No credits remaining"))
+            .Verifiable(Times.Once);
 
         var (item, error) = _service.AddToQueue(PartyId, "guest-1", TestData.CreateAddToQueueRequest());
 
@@ -77,7 +79,8 @@ public class QueueServiceTests
     public void AddToQueue_NonParticipant_ReturnsError()
     {
         _partyServiceMock.Setup(p => p.TrySpendCredit(PartyId, "stranger"))
-            .Returns(((string?)null, "Not a party participant")).Verifiable(Times.Once);
+            .Returns((null, "Not a party participant"))
+            .Verifiable(Times.Once);
 
         var (item, error) = _service.AddToQueue(PartyId, "stranger", TestData.CreateAddToQueueRequest());
 
@@ -90,7 +93,7 @@ public class QueueServiceTests
     {
         _partyServiceMock.Setup(p => p.PersistState(PartyId)).Verifiable(Times.Once);
         // Add a base playlist item first
-        _party.Queue.Add(TestData.CreateQueueItem("Base Song", isFromBasePlaylist: true));
+        _party.Queue.Add(TestData.CreateQueueItem("Base Song", true));
 
         var request = TestData.CreateAddToQueueRequest("User Song");
         _service.AddToQueue(PartyId, _party.HostSessionId, request);
@@ -112,10 +115,7 @@ public class QueueServiceTests
 
     [Test]
     public void RemoveFromQueue_NotFound_ReturnsFalse()
-    {
-
-        _service.RemoveFromQueue(PartyId, "nonexistent").Should().BeFalse();
-    }
+        => _service.RemoveFromQueue(PartyId, "nonexistent").Should().BeFalse();
 
     [Test]
     public void Reorder_CorrectOrder()
@@ -173,16 +173,14 @@ public class QueueServiceTests
         _service.Dequeue(PartyId);
 
         _party.CurrentTrack!.TrackName.Should().Be("Next");
-        _party.PlaybackHistory.Should().ContainSingle()
-            .Which.TrackName.Should().Be("Current");
+        _party.PlaybackHistory.Should()
+            .ContainSingle()
+            .Which.TrackName.Should()
+            .Be("Current");
     }
 
     [Test]
-    public void Dequeue_EmptyQueue_ReturnsNull()
-    {
-
-        _service.Dequeue(PartyId).Should().BeNull();
-    }
+    public void Dequeue_EmptyQueue_ReturnsNull() => _service.Dequeue(PartyId).Should().BeNull();
 
     [Test]
     public void Dequeue_AutoRefillsFromBasePlaylist()
@@ -216,14 +214,15 @@ public class QueueServiceTests
         result.TrackName.Should().Be("Previous");
         _party.CurrentTrack!.TrackName.Should().Be("Previous");
         _party.PlaybackHistory.Should().BeEmpty();
-        _party.Queue.Should().ContainSingle()
-            .Which.TrackName.Should().Be("Current");
+        _party.Queue.Should()
+            .ContainSingle()
+            .Which.TrackName.Should()
+            .Be("Current");
     }
 
     [Test]
     public void SkipToPrevious_EmptyHistory_ReturnsNull()
     {
-
         _party.CurrentTrack = TestData.CreateQueueItem("Current");
 
         _service.SkipToPrevious(PartyId).Should().BeNull();
@@ -320,7 +319,6 @@ public class QueueServiceTests
     [Test]
     public void Vote_InvalidValue_ReturnsError()
     {
-
         var item = TestData.CreateQueueItem("Song");
         _party.Queue.Add(item);
 
@@ -334,7 +332,7 @@ public class QueueServiceTests
     public void Vote_BasePlaylistItem_Succeeds()
     {
         _partyServiceMock.Setup(p => p.PersistState(PartyId)).Verifiable(Times.Once);
-        var item = TestData.CreateQueueItem("Base Song", isFromBasePlaylist: true);
+        var item = TestData.CreateQueueItem("Base Song", true);
         _party.Queue.Add(item);
 
         var (success, error) = _service.Vote(PartyId, _party.HostSessionId, item.Id, 1);
@@ -347,7 +345,6 @@ public class QueueServiceTests
     [Test]
     public void Vote_NonParticipant_ReturnsError()
     {
-
         var item = TestData.CreateQueueItem("Song");
         _party.Queue.Add(item);
 
@@ -360,7 +357,6 @@ public class QueueServiceTests
     [Test]
     public void Vote_ItemNotFound_ReturnsError()
     {
-
         var (success, error) = _service.Vote(PartyId, _party.HostSessionId, "nonexistent", 1);
 
         success.Should().BeFalse();
@@ -375,9 +371,9 @@ public class QueueServiceTests
         var item = TestData.CreateQueueItem("Hated Song");
         _party.Queue.Add(item);
 
-        var guest1 = TestData.CreateGuestSession("g1", "G1", 5);
-        var guest2 = TestData.CreateGuestSession("g2", "G2", 5);
-        var guest3 = TestData.CreateGuestSession("g3", "G3", 5);
+        var guest1 = TestData.CreateGuestSession("g1", "G1");
+        var guest2 = TestData.CreateGuestSession("g2", "G2");
+        var guest3 = TestData.CreateGuestSession("g3", "G3");
         _party.Guests["g1"] = guest1;
         _party.Guests["g2"] = guest2;
         _party.Guests["g3"] = guest3;
@@ -403,7 +399,7 @@ public class QueueServiceTests
         item3.InsertionOrder = 2;
         _party.Queue.AddRange([item1, item2, item3]);
 
-        var guest = TestData.CreateGuestSession("g1", "G1", 5);
+        var guest = TestData.CreateGuestSession("g1", "G1");
         _party.Guests["g1"] = guest;
 
         // Two upvotes on Song 3 (below threshold of 3) — order should not change
@@ -429,8 +425,8 @@ public class QueueServiceTests
         item3.InsertionOrder = 2;
         _party.Queue.AddRange([item1, item2, item3]);
 
-        var g1 = TestData.CreateGuestSession("g1", "G1", 5);
-        var g2 = TestData.CreateGuestSession("g2", "G2", 5);
+        var g1 = TestData.CreateGuestSession("g1", "G1");
+        var g2 = TestData.CreateGuestSession("g2", "G2");
         _party.Guests["g1"] = g1;
         _party.Guests["g2"] = g2;
 
@@ -467,7 +463,6 @@ public class QueueServiceTests
     [Test]
     public void GetUserVotes_ReturnsVotesForSession()
     {
-
         _partyServiceMock.Setup(p => p.GetParty(PartyId)).Returns(_party).Verifiable(Times.Exactly(2));
         _partyServiceMock.Setup(p => p.PersistState(PartyId)).Verifiable(Times.Once);
         var item = TestData.CreateQueueItem("Song");
@@ -561,7 +556,7 @@ public class QueueServiceTests
     public void Vote_AsGuest_Succeeds()
     {
         _partyServiceMock.Setup(p => p.PersistState(PartyId)).Verifiable(Times.Once);
-        var guest = TestData.CreateGuestSession("guest-1", "Alice", 5);
+        var guest = TestData.CreateGuestSession("guest-1", "Alice");
         _party.Guests["guest-1"] = guest;
         var item = TestData.CreateQueueItem("Song");
         _party.Queue.Add(item);
@@ -583,19 +578,20 @@ public class QueueServiceTests
         _partyServiceMock.Setup(p => p.PersistState(PartyId)).Verifiable(Times.Exactly(5));
         // 3 guest AddToQueue calls
         _partyServiceMock.Setup(p => p.TrySpendCredit(PartyId, "guest-1"))
-            .Returns(("Alice", (string?)null)).Verifiable(Times.Exactly(3));
+            .Returns(("Alice", null))
+            .Verifiable(Times.Exactly(3));
 
         // Set up base playlist (adds shuffled base items to queue)
         var baseTracks = new List<BasePlaylistTrack>
         {
             TestData.CreateBasePlaylistTrack("Base 1"),
             TestData.CreateBasePlaylistTrack("Base 2"),
-            TestData.CreateBasePlaylistTrack("Base 3"),
+            TestData.CreateBasePlaylistTrack("Base 3")
         };
         _service.SetBasePlaylist(PartyId, baseTracks, "playlist-123", "Test Playlist");
 
         // Guest adds manual songs (these should go before base playlist items)
-        var guest = TestData.CreateGuestSession("guest-1", "Alice", 5);
+        var guest = TestData.CreateGuestSession("guest-1", "Alice");
         _party.Guests["guest-1"] = guest;
         _service.AddToQueue(PartyId, "guest-1", TestData.CreateAddToQueueRequest("Manual 1"));
         _service.AddToQueue(PartyId, "guest-1", TestData.CreateAddToQueueRequest("Manual 2"));

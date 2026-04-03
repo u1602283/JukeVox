@@ -1,21 +1,17 @@
 using FluentAssertions;
+using JukeVox.Server.Models;
+using JukeVox.Server.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using NUnit.Framework;
-using JukeVox.Server.Models;
-using JukeVox.Server.Services;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class PartyServiceTests
 {
-    private const string HostId = "test-host-id";
-    private string _tempDir = null!;
-    private PartyService _service = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -28,8 +24,14 @@ public class PartyServiceTests
     public void TearDown()
     {
         if (Directory.Exists(_tempDir))
+        {
             Directory.Delete(_tempDir, true);
+        }
     }
+
+    private const string HostId = "test-host-id";
+    private string _tempDir = null!;
+    private PartyService _service = null!;
 
     private static PartyService CreateService(string contentRootPath)
     {
@@ -39,10 +41,7 @@ public class PartyServiceTests
     }
 
     [Test]
-    public void GetParty_NoParty_ReturnsNull()
-    {
-        _service.GetParty("nonexistent").Should().BeNull();
-    }
+    public void GetParty_NoParty_ReturnsNull() => _service.GetParty("nonexistent").Should().BeNull();
 
     [Test]
     public void CreateParty_ReturnsPartyWithCorrectValues()
@@ -50,12 +49,14 @@ public class PartyServiceTests
         var party = _service.CreateParty("host-1", HostId, 5).Party!;
 
         party.Should().NotBeNull();
-        party.Should().BeEquivalentTo(new
-        {
-            HostSessionId = "host-1",
-            HostId,
-            DefaultCredits = 5
-        }, options => options.ExcludingMissingMembers());
+        party.Should()
+            .BeEquivalentTo(new
+                {
+                    HostSessionId = "host-1",
+                    HostId,
+                    DefaultCredits = 5
+                },
+                options => options.ExcludingMissingMembers());
         party.JoinToken.Should().NotBeNullOrEmpty().And.HaveLength(32);
     }
 
@@ -78,12 +79,13 @@ public class PartyServiceTests
 
         error.Should().BeNull();
         guest.Should().NotBeNull();
-        guest.Should().BeEquivalentTo(new
-        {
-            SessionId = "guest-1",
-            DisplayName = "Alice",
-            CreditsRemaining = 5
-        });
+        guest.Should()
+            .BeEquivalentTo(new
+            {
+                SessionId = "guest-1",
+                DisplayName = "Alice",
+                CreditsRemaining = 5
+            });
     }
 
     [Test]
@@ -218,14 +220,11 @@ public class PartyServiceTests
         var guests = _service.GetAllGuests(party.Id);
 
         guests.Should().HaveCount(2);
-        guests.Select(g => g.DisplayName).Should().BeEquivalentTo(["Alice", "Bob"]);
+        guests.Select(g => g.DisplayName).Should().BeEquivalentTo("Alice", "Bob");
     }
 
     [Test]
-    public void GetAllGuests_NoParty_ReturnsEmpty()
-    {
-        _service.GetAllGuests("nonexistent").Should().BeEmpty();
-    }
+    public void GetAllGuests_NoParty_ReturnsEmpty() => _service.GetAllGuests("nonexistent").Should().BeEmpty();
 
     [Test]
     public void SetGuestCredits_SetsAbsoluteValue()
@@ -309,10 +308,10 @@ public class PartyServiceTests
     // --- SetPartyStatus ---
 
     [Test]
-    public void SetPartyStatus_NonexistentParty_ReturnsFalse()
-    {
-        _service.SetPartyStatus("nonexistent", PartyStatus.Sleeping, DateTime.UtcNow).Should().BeFalse();
-    }
+    public void SetPartyStatus_NonexistentParty_ReturnsFalse() => _service
+        .SetPartyStatus("nonexistent", PartyStatus.Sleeping, DateTime.UtcNow)
+        .Should()
+        .BeFalse();
 
     [Test]
     public void SetPartyStatus_SameStatus_ReturnsFalseAndDoesNotPersist()

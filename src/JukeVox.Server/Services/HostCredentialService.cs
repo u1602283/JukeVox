@@ -8,32 +8,23 @@ namespace JukeVox.Server.Services;
 
 public class HostCredentialService
 {
-    private readonly string _credentialsDir;
-    private readonly string _inviteCodesFilePath;
-    private readonly ILogger<HostCredentialService> _logger;
-    private readonly Lock _lock = new();
-
-    private readonly ConcurrentDictionary<string, HostCredential> _credentials = new();
-    private readonly ConcurrentDictionary<string, string> _credentialIdToHostId = new(new ByteArrayKeyComparer());
-    private readonly ConcurrentDictionary<string, DateTime> _inviteCodes = new();
-    private string? _setupToken;
-
-    // Temporary challenge storage for WebAuthn ceremonies
-    private readonly ConcurrentDictionary<string, (object Options, DateTime Created)> _pendingChallenges = new();
+    private const string SpecialChars = "!@#$%^&*+=?~";
 
     private static readonly string[] DictionaryPaths =
     [
         "/usr/share/dict/words",
         "/usr/share/dict/british"
     ];
-    private const string SpecialChars = "!@#$%^&*+=?~";
+
     private static readonly TimeSpan InviteCodeTtl = TimeSpan.FromHours(24);
 
     private static readonly Lazy<string[]> DictionaryWords = new(() =>
     {
         var path = DictionaryPaths.FirstOrDefault(File.Exists);
         if (path == null)
+        {
             return [];
+        }
 
         return File.ReadAllLines(path)
             .Select(w => w.ToLowerInvariant())
@@ -41,6 +32,19 @@ public class HostCredentialService
             .Distinct()
             .ToArray();
     });
+
+    private readonly ConcurrentDictionary<string, string> _credentialIdToHostId = new(new ByteArrayKeyComparer());
+
+    private readonly ConcurrentDictionary<string, HostCredential> _credentials = new();
+    private readonly string _credentialsDir;
+    private readonly ConcurrentDictionary<string, DateTime> _inviteCodes = new();
+    private readonly string _inviteCodesFilePath;
+    private readonly Lock _lock = new();
+    private readonly ILogger<HostCredentialService> _logger;
+
+    // Temporary challenge storage for WebAuthn ceremonies
+    private readonly ConcurrentDictionary<string, (object Options, DateTime Created)> _pendingChallenges = new();
+    private string? _setupToken;
 
     public HostCredentialService(IWebHostEnvironment env, ILogger<HostCredentialService> logger)
     {
@@ -68,7 +72,10 @@ public class HostCredentialService
     {
         var key = Convert.ToBase64String(credentialId);
         if (_credentialIdToHostId.TryGetValue(key, out var hostId))
+        {
             return GetCredential(hostId);
+        }
+
         return null;
     }
 
@@ -76,21 +83,28 @@ public class HostCredentialService
     {
         // Fido2 v4 uses base64url strings for credential IDs — normalize to standard base64 for lookup
         var normalized = Convert.ToBase64String(Convert.FromBase64String(
-            credentialIdBase64.Replace('-', '+').Replace('_', '/').PadRight(
-                credentialIdBase64.Length + (4 - credentialIdBase64.Length % 4) % 4, '=')));
+            credentialIdBase64.Replace('-', '+')
+                .Replace('_', '/')
+                .PadRight(
+                    credentialIdBase64.Length + (4 - credentialIdBase64.Length % 4) % 4,
+                    '=')));
         if (_credentialIdToHostId.TryGetValue(normalized, out var hostId))
+        {
             return GetCredential(hostId);
+        }
+
         return null;
     }
 
-    public List<HostCredential> GetAllCredentials()
-    {
-        return [.. _credentials.Values];
-    }
+    public List<HostCredential> GetAllCredentials() => [.. _credentials.Values];
 
     public bool IsSetupTokenValid(string token)
     {
-        if (_setupToken == null) return false;
+        if (_setupToken == null)
+        {
+            return false;
+        }
+
         return CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(token),
             Encoding.UTF8.GetBytes(_setupToken));
@@ -104,50 +118,58 @@ public class HostCredentialService
             _credentialIdToHostId[Convert.ToBase64String(credential.CredentialId)] = credential.HostId;
 
             if (credential.IsAdmin)
+            {
                 _setupToken = null;
+            }
 
             var json = JsonSerializer.Serialize(new HostCredentialJson
-            {
-                HostId = credential.HostId,
-                DisplayName = credential.DisplayName,
-                CredentialId = Convert.ToBase64String(credential.CredentialId),
-                PublicKey = Convert.ToBase64String(credential.PublicKey),
-                SignCount = credential.SignCount,
-                IsAdmin = credential.IsAdmin,
-                CreatedAt = credential.CreatedAt
-            }, new JsonSerializerOptions { WriteIndented = true });
+                {
+                    HostId = credential.HostId,
+                    DisplayName = credential.DisplayName,
+                    CredentialId = Convert.ToBase64String(credential.CredentialId),
+                    PublicKey = Convert.ToBase64String(credential.PublicKey),
+                    SignCount = credential.SignCount,
+                    IsAdmin = credential.IsAdmin,
+                    CreatedAt = credential.CreatedAt
+                },
+                new JsonSerializerOptions { WriteIndented = true });
 
             var filePath = Path.Combine(_credentialsDir, $"{credential.HostId}.json");
             var tmpPath = filePath + ".tmp";
             File.WriteAllText(tmpPath, json);
-            File.Move(tmpPath, filePath, overwrite: true);
-            _logger.LogInformation("Host credential saved for {HostId} ({DisplayName})", credential.HostId, credential.DisplayName);
+            File.Move(tmpPath, filePath, true);
+            _logger.LogInformation("Host credential saved for {HostId} ({DisplayName})",
+                credential.HostId,
+                credential.DisplayName);
         }
     }
 
     public void UpdateSignCount(string hostId, uint newSignCount)
     {
         var credential = GetCredential(hostId);
-        if (credential == null) return;
+        if (credential == null)
+        {
+            return;
+        }
 
         lock (_lock)
         {
             credential.SignCount = newSignCount;
         }
+
         SaveCredential(credential);
     }
 
-    public bool IsAdmin(string hostId)
-    {
-        return _credentials.TryGetValue(hostId, out var cred) && cred.IsAdmin;
-    }
+    public bool IsAdmin(string hostId) => _credentials.TryGetValue(hostId, out var cred) && cred.IsAdmin;
 
     public bool DeleteCredential(string hostId)
     {
         lock (_lock)
         {
             if (!_credentials.TryRemove(hostId, out var credential))
+            {
                 return false;
+            }
 
             _credentialIdToHostId.TryRemove(Convert.ToBase64String(credential.CredentialId), out _);
 
@@ -155,7 +177,9 @@ public class HostCredentialService
             try
             {
                 if (File.Exists(filePath))
+                {
                     File.Delete(filePath);
+                }
             }
             catch (Exception ex)
             {
@@ -189,7 +213,10 @@ public class HostCredentialService
         lock (_lock)
         {
             if (!_inviteCodes.TryGetValue(code, out var created))
+            {
                 return false;
+            }
+
             return DateTime.UtcNow - created <= InviteCodeTtl;
         }
     }
@@ -199,10 +226,14 @@ public class HostCredentialService
         lock (_lock)
         {
             if (!_inviteCodes.TryRemove(code, out var created))
+            {
                 return false;
+            }
 
             if (DateTime.UtcNow - created > InviteCodeTtl)
+            {
                 return false;
+            }
 
             PersistInviteCodes();
             return true;
@@ -222,8 +253,11 @@ public class HostCredentialService
         if (_pendingChallenges.TryRemove(sessionId, out var entry))
         {
             if (DateTime.UtcNow - entry.Created < TimeSpan.FromMinutes(5))
+            {
                 return entry.Options as T;
+            }
         }
+
         return null;
     }
 
@@ -235,7 +269,9 @@ public class HostCredentialService
         foreach (var key in _pendingChallenges.Keys)
         {
             if (_pendingChallenges.TryGetValue(key, out var entry) && entry.Created < cutoff)
+            {
                 _pendingChallenges.TryRemove(key, out _);
+            }
         }
     }
 
@@ -264,7 +300,9 @@ public class HostCredentialService
                     };
                     _credentials[credential.HostId] = credential;
                     _credentialIdToHostId[Convert.ToBase64String(credential.CredentialId)] = credential.HostId;
-                    _logger.LogInformation("Loaded host credential: {HostId} ({DisplayName})", credential.HostId, credential.DisplayName);
+                    _logger.LogInformation("Loaded host credential: {HostId} ({DisplayName})",
+                        credential.HostId,
+                        credential.DisplayName);
                 }
             }
             catch (Exception ex)
@@ -292,7 +330,9 @@ public class HostCredentialService
     {
         var legacyPath = Path.Combine(dataDir, "host-credential.json");
         if (!File.Exists(legacyPath) || HasAnyCredential)
+        {
             return;
+        }
 
         try
         {
@@ -313,7 +353,8 @@ public class HostCredentialService
                 SaveCredential(credential);
                 File.Move(legacyPath, legacyPath + ".migrated");
                 _setupToken = null;
-                _logger.LogInformation("Migrated legacy host credential to multi-host format (hostId: {HostId})", hostId);
+                _logger.LogInformation("Migrated legacy host credential to multi-host format (hostId: {HostId})",
+                    hostId);
             }
         }
         catch (Exception ex)
@@ -325,7 +366,9 @@ public class HostCredentialService
     private void LoadInviteCodes()
     {
         if (!File.Exists(_inviteCodesFilePath))
+        {
             return;
+        }
 
         try
         {
@@ -337,7 +380,9 @@ public class HostCredentialService
                 foreach (var kv in codes)
                 {
                     if (kv.Value >= cutoff)
+                    {
                         _inviteCodes[kv.Key] = kv.Value;
+                    }
                 }
             }
         }
@@ -378,6 +423,7 @@ public class HostCredentialService
             sb.Append(RandomNumberGenerator.GetInt32(100));
             sb.Append(SpecialChars[RandomNumberGenerator.GetInt32(SpecialChars.Length)]);
         }
+
         return sb.ToString();
     }
 
@@ -400,7 +446,7 @@ public class HostCredentialService
     }
 
     /// <summary>
-    /// Comparer for using base64-encoded byte arrays as dictionary keys.
+    ///     Comparer for using base64-encoded byte arrays as dictionary keys.
     /// </summary>
     private class ByteArrayKeyComparer : IEqualityComparer<string>
     {

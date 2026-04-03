@@ -1,10 +1,11 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using JukeVox.Server.Extensions;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
+using JukeVox.Server.Models;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace JukeVox.Server.Controllers;
 
@@ -12,11 +13,11 @@ namespace JukeVox.Server.Controllers;
 [Route("api/playback")]
 public class PlaybackController : ControllerBase
 {
-    private readonly ISpotifyPlayerService _playerService;
-    private readonly IPartyService _partyService;
-    private readonly IQueueService _queueService;
-    private readonly IPlaybackMonitorService _monitorService;
     private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
+    private readonly IPlaybackMonitorService _monitorService;
+    private readonly IPartyService _partyService;
+    private readonly ISpotifyPlayerService _playerService;
+    private readonly IQueueService _queueService;
 
     public PlaybackController(
         ISpotifyPlayerService playerService,
@@ -34,7 +35,11 @@ public class PlaybackController : ControllerBase
 
     private string? GetHostPartyId()
     {
-        if (!HttpContext.IsHostAuthenticated()) return null;
+        if (!HttpContext.IsHostAuthenticated())
+        {
+            return null;
+        }
+
         var sessionId = HttpContext.GetSessionId();
         return _partyService.GetPartyIdForSession(sessionId);
     }
@@ -43,7 +48,10 @@ public class PlaybackController : ControllerBase
     public async Task<IActionResult> Pause()
     {
         var partyId = GetHostPartyId();
-        if (partyId == null) return Forbid();
+        if (partyId == null)
+        {
+            return Forbid();
+        }
 
         var success = await _playerService.PauseAsync();
         return success ? Ok() : StatusCode(502, new { error = "Spotify API failed" });
@@ -53,7 +61,10 @@ public class PlaybackController : ControllerBase
     public async Task<IActionResult> Resume()
     {
         var partyId = GetHostPartyId();
-        if (partyId == null) return Forbid();
+        if (partyId == null)
+        {
+            return Forbid();
+        }
 
         var success = await _playerService.ResumeAsync();
         return success ? Ok() : StatusCode(502, new { error = "Spotify API failed" });
@@ -63,7 +74,10 @@ public class PlaybackController : ControllerBase
     public async Task<IActionResult> Previous([FromQuery] int progressMs = 0)
     {
         var partyId = GetHostPartyId();
-        if (partyId == null) return Forbid();
+        if (partyId == null)
+        {
+            return Forbid();
+        }
 
         if (progressMs > 5000)
         {
@@ -92,7 +106,10 @@ public class PlaybackController : ControllerBase
     public async Task<IActionResult> Skip()
     {
         var partyId = GetHostPartyId();
-        if (partyId == null) return Forbid();
+        if (partyId == null)
+        {
+            return Forbid();
+        }
 
         var next = _queueService.Dequeue(partyId);
 
@@ -118,7 +135,10 @@ public class PlaybackController : ControllerBase
     public async Task<IActionResult> Seek([FromQuery] int positionMs)
     {
         var partyId = GetHostPartyId();
-        if (partyId == null) return Forbid();
+        if (partyId == null)
+        {
+            return Forbid();
+        }
 
         var success = await _playerService.SeekAsync(Math.Max(positionMs, 0));
         return success ? Ok() : StatusCode(502, new { error = "Spotify API failed" });
@@ -128,7 +148,10 @@ public class PlaybackController : ControllerBase
     public async Task<IActionResult> SetVolume([FromQuery] int percent)
     {
         var partyId = GetHostPartyId();
-        if (partyId == null) return Forbid();
+        if (partyId == null)
+        {
+            return Forbid();
+        }
 
         var success = await _playerService.SetVolumeAsync(Math.Clamp(percent, 0, 100));
         return success ? Ok() : StatusCode(502, new { error = "Spotify API failed" });
@@ -138,13 +161,16 @@ public class PlaybackController : ControllerBase
     public async Task<IActionResult> GetDevices()
     {
         var partyId = GetHostPartyId();
-        if (partyId == null) return Forbid();
+        if (partyId == null)
+        {
+            return Forbid();
+        }
 
         var devices = await _playerService.GetDevicesAsync();
         return Ok(devices);
     }
 
-    private async Task BroadcastNowPlaying(string partyId, Models.QueueItem track)
+    private async Task BroadcastNowPlaying(string partyId, QueueItem track)
     {
         var cached = _monitorService.GetCachedPlaybackState(partyId);
         var dto = new PlaybackStateDto
@@ -171,7 +197,10 @@ public class PlaybackController : ControllerBase
     public async Task<IActionResult> SelectDevice([FromBody] SelectDeviceRequest request)
     {
         var partyId = GetHostPartyId();
-        if (partyId == null) return Forbid();
+        if (partyId == null)
+        {
+            return Forbid();
+        }
 
         var success = await _playerService.TransferPlaybackAsync(request.DeviceId);
         return success ? Ok() : StatusCode(502, new { error = "Spotify API failed" });

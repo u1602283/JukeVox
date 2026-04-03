@@ -1,7 +1,7 @@
 using Fido2NetLib;
-using Microsoft.AspNetCore.DataProtection;
 using JukeVox.Server.Configuration;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace JukeVox.Server.Extensions;
 
@@ -41,7 +41,7 @@ public static class ServiceCollectionExtensions
             ServerName = serverName,
             Origins = new HashSet<string>(
                 (configuration["HostAuth:Origins"] ?? "http://localhost:5173")
-                    .Split(';', StringSplitOptions.RemoveEmptyEntries))
+                .Split(';', StringSplitOptions.RemoveEmptyEntries))
         };
         services.AddSingleton(fido2Config);
         services.AddSingleton<Fido2>();

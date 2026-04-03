@@ -28,7 +28,9 @@ public static class TestData
         IsFromBasePlaylist = isFromBasePlaylist
     };
 
-    public static GuestSession CreateGuestSession(string sessionId = "guest-1", string displayName = "Guest One", int credits = 5) => new()
+    public static GuestSession CreateGuestSession(string sessionId = "guest-1",
+        string displayName = "Guest One",
+        int credits = 5) => new()
     {
         SessionId = sessionId,
         DisplayName = displayName,

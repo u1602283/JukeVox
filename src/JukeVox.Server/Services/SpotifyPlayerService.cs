@@ -9,11 +9,12 @@ namespace JukeVox.Server.Services;
 
 public class SpotifyPlayerService : ISpotifyPlayerService
 {
-    private readonly HttpClient _httpClient;
-    private readonly ISpotifyAuthService _authService;
-    private readonly ILogger<SpotifyPlayerService> _logger;
-
     private const string BaseUrl = "https://api.spotify.com/v1/me/player";
+
+    private const int MaxRetries = 5;
+    private readonly ISpotifyAuthService _authService;
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<SpotifyPlayerService> _logger;
 
     public SpotifyPlayerService(
         HttpClient httpClient,
@@ -29,12 +30,20 @@ public class SpotifyPlayerService : ISpotifyPlayerService
     {
         var response = await SendAsync(HttpMethod.Get, BaseUrl);
         if (response == null || response.StatusCode == HttpStatusCode.NoContent)
+        {
             return null;
+        }
 
-        if (!response.IsSuccessStatusCode) return null;
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
 
         var state = await response.Content.ReadFromJsonAsync<SpotifyPlaybackState>();
-        if (state == null) return null;
+        if (state == null)
+        {
+            return null;
+        }
 
         return new PlaybackStateDto
         {
@@ -58,7 +67,10 @@ public class SpotifyPlayerService : ISpotifyPlayerService
     public async Task<bool> PlayTrackAsync(string trackUri, string? deviceId = null)
     {
         var url = BaseUrl + "/play";
-        if (deviceId != null) url += $"?device_id={deviceId}";
+        if (deviceId != null)
+        {
+            url += $"?device_id={deviceId}";
+        }
 
         var body = JsonSerializer.Serialize(new { uris = new[] { trackUri } });
         var response = await SendAsync(HttpMethod.Put, url, body);
@@ -104,20 +116,27 @@ public class SpotifyPlayerService : ISpotifyPlayerService
     public async Task<List<SpotifyDeviceDto>> GetDevicesAsync()
     {
         var response = await SendAsync(HttpMethod.Get, BaseUrl + "/devices");
-        if (response == null || !response.IsSuccessStatusCode) return [];
+        if (response == null || !response.IsSuccessStatusCode)
+        {
+            return [];
+        }
 
         var result = await response.Content.ReadFromJsonAsync<SpotifyDevicesResponse>();
-        if (result == null) return [];
+        if (result == null)
+        {
+            return [];
+        }
 
         return result.Devices.Select(d => new SpotifyDeviceDto
-        {
-            Id = d.Id,
-            Name = d.Name,
-            Type = d.Type,
-            IsActive = d.IsActive,
-            VolumePercent = d.VolumePercent ?? 0,
-            SupportsVolume = d.SupportsVolume
-        }).ToList();
+            {
+                Id = d.Id,
+                Name = d.Name,
+                Type = d.Type,
+                IsActive = d.IsActive,
+                VolumePercent = d.VolumePercent ?? 0,
+                SupportsVolume = d.SupportsVolume
+            })
+            .ToList();
     }
 
     public async Task<bool> TransferPlaybackAsync(string deviceId)
@@ -127,20 +146,23 @@ public class SpotifyPlayerService : ISpotifyPlayerService
         return response?.IsSuccessStatusCode ?? false;
     }
 
-    private const int MaxRetries = 5;
-
     private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url, string? jsonBody = null)
     {
-        for (var attempt = 0; ; attempt++)
+        for (var attempt = 0;; attempt++)
         {
             var token = await _authService.GetValidAccessTokenAsync();
-            if (token == null) return null;
+            if (token == null)
+            {
+                return null;
+            }
 
             var request = new HttpRequestMessage(method, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             if (jsonBody != null)
+            {
                 request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+            }
 
             try
             {
@@ -150,7 +172,9 @@ public class SpotifyPlayerService : ISpotifyPlayerService
                 {
                     var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(1);
                     _logger.LogWarning("Spotify rate limited (attempt {Attempt}/{Max}). Retry after: {RetryAfter}",
-                        attempt + 1, MaxRetries, retryAfter);
+                        attempt + 1,
+                        MaxRetries,
+                        retryAfter);
                     response.Dispose();
                     await Task.Delay(retryAfter);
                     continue;
@@ -160,7 +184,10 @@ public class SpotifyPlayerService : ISpotifyPlayerService
                 {
                     var body = await response.Content.ReadAsStringAsync();
                     _logger.LogWarning("Spotify API error: {Method} {Url} → {Status} {Body}",
-                        method, url, (int)response.StatusCode, body);
+                        method,
+                        url,
+                        (int)response.StatusCode,
+                        body);
                 }
 
                 return response;

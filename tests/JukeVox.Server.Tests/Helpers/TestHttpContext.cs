@@ -23,10 +23,7 @@ public static class TestHttpContext
         return context;
     }
 
-    public static HttpContext CreateGuestContext(string sessionId = "guest-1")
-    {
-        return CreateBaseContext(sessionId);
-    }
+    public static HttpContext CreateGuestContext(string sessionId = "guest-1") => CreateBaseContext(sessionId);
 
     private static HttpContext CreateBaseContext(string sessionId)
     {

@@ -1,26 +1,18 @@
 using FluentAssertions;
-using Microsoft.AspNetCore.Mvc;
-using Moq;
-using NUnit.Framework;
 using JukeVox.Server.Controllers;
 using JukeVox.Server.Models;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
 using JukeVox.Server.Tests.Helpers;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using NUnit.Framework;
 
 namespace JukeVox.Server.Tests.Controllers;
 
 [TestFixture]
 public class PlaybackControllerTests
 {
-    private const string PartyId = "test1234";
-    private Mock<ISpotifyPlayerService> _playerService = null!;
-    private Mock<IPartyService> _partyService = null!;
-    private Mock<IQueueService> _queueService = null!;
-    private Mock<IPlaybackMonitorService> _monitorService = null!;
-    private MockHubContext _hub = null!;
-    private PlaybackController _controller = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -53,10 +45,17 @@ public class PlaybackControllerTests
         _hub.PartyClient.VerifyNoOtherCalls();
     }
 
-    private void SetupHostPartyId()
-    {
-        _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId).Verifiable(Times.Once);
-    }
+    private const string PartyId = "test1234";
+    private Mock<ISpotifyPlayerService> _playerService = null!;
+    private Mock<IPartyService> _partyService = null!;
+    private Mock<IQueueService> _queueService = null!;
+    private Mock<IPlaybackMonitorService> _monitorService = null!;
+    private MockHubContext _hub = null!;
+    private PlaybackController _controller = null!;
+
+    private void SetupHostPartyId() => _partyService.Setup(p => p.GetPartyIdForSession("host-session"))
+        .Returns(PartyId)
+        .Verifiable(Times.Once);
 
     [Test]
     public async Task Pause_NotHost_ReturnsForbid()
@@ -89,8 +88,10 @@ public class PlaybackControllerTests
 
         var result = await _controller.Pause();
 
-        result.Should().BeOfType<ObjectResult>()
-            .Which.StatusCode.Should().Be(502);
+        result.Should()
+            .BeOfType<ObjectResult>()
+            .Which.StatusCode.Should()
+            .Be(502);
     }
 
     [Test]
@@ -112,7 +113,7 @@ public class PlaybackControllerTests
         SetupHostPartyId();
         _playerService.Setup(p => p.SeekAsync(0)).ReturnsAsync(true).Verifiable(Times.Once);
 
-        var result = await _controller.Previous(progressMs: 6000);
+        var result = await _controller.Previous(6000);
 
         result.Should().BeOfType<OkResult>();
         // VerifyNoOtherCalls in TearDown ensures SkipToPrevious was never called
@@ -127,12 +128,18 @@ public class PlaybackControllerTests
         _queueService.Setup(q => q.SkipToPrevious(PartyId)).Returns(prevTrack).Verifiable(Times.Once);
         _playerService.Setup(p => p.PlayTrackAsync(prevTrack.TrackUri, null)).ReturnsAsync(true).Verifiable(Times.Once);
         _monitorService.Setup(m => m.NotifyTrackStarted(PartyId, prevTrack.TrackUri)).Verifiable(Times.Once);
-        _monitorService.Setup(m => m.GetCachedPlaybackState(PartyId)).Returns((PlaybackStateDto?)null).Verifiable(Times.Once);
+        _monitorService.Setup(m => m.GetCachedPlaybackState(PartyId))
+            .Returns((PlaybackStateDto?)null)
+            .Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue(PartyId)).Returns([]).Verifiable(Times.Once);
-        _hub.PartyClient.Setup(c => c.NowPlayingChanged(It.IsAny<PlaybackStateDto>())).Returns(Task.CompletedTask).Verifiable(Times.Once);
-        _hub.PartyClient.Setup(c => c.QueueUpdated(It.IsAny<List<QueueItemDto>>())).Returns(Task.CompletedTask).Verifiable(Times.Once);
+        _hub.PartyClient.Setup(c => c.NowPlayingChanged(It.IsAny<PlaybackStateDto>()))
+            .Returns(Task.CompletedTask)
+            .Verifiable(Times.Once);
+        _hub.PartyClient.Setup(c => c.QueueUpdated(It.IsAny<List<QueueItemDto>>()))
+            .Returns(Task.CompletedTask)
+            .Verifiable(Times.Once);
 
-        var result = await _controller.Previous(progressMs: 3000);
+        var result = await _controller.Previous(3000);
 
         result.Should().BeOfType<OkResult>();
     }
@@ -145,7 +152,7 @@ public class PlaybackControllerTests
         _queueService.Setup(q => q.SkipToPrevious(PartyId)).Returns((QueueItem?)null).Verifiable(Times.Once);
         _playerService.Setup(p => p.SeekAsync(0)).ReturnsAsync(true).Verifiable(Times.Once);
 
-        var result = await _controller.Previous(progressMs: 3000);
+        var result = await _controller.Previous(3000);
 
         result.Should().BeOfType<OkResult>();
     }
@@ -159,10 +166,16 @@ public class PlaybackControllerTests
         _queueService.Setup(q => q.Dequeue(PartyId)).Returns(nextTrack).Verifiable(Times.Once);
         _playerService.Setup(p => p.PlayTrackAsync(nextTrack.TrackUri, null)).ReturnsAsync(true).Verifiable(Times.Once);
         _monitorService.Setup(m => m.NotifyTrackStarted(PartyId, nextTrack.TrackUri)).Verifiable(Times.Once);
-        _monitorService.Setup(m => m.GetCachedPlaybackState(PartyId)).Returns((PlaybackStateDto?)null).Verifiable(Times.Once);
+        _monitorService.Setup(m => m.GetCachedPlaybackState(PartyId))
+            .Returns((PlaybackStateDto?)null)
+            .Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue(PartyId)).Returns([]).Verifiable(Times.Once);
-        _hub.PartyClient.Setup(c => c.NowPlayingChanged(It.IsAny<PlaybackStateDto>())).Returns(Task.CompletedTask).Verifiable(Times.Once);
-        _hub.PartyClient.Setup(c => c.QueueUpdated(It.IsAny<List<QueueItemDto>>())).Returns(Task.CompletedTask).Verifiable(Times.Once);
+        _hub.PartyClient.Setup(c => c.NowPlayingChanged(It.IsAny<PlaybackStateDto>()))
+            .Returns(Task.CompletedTask)
+            .Verifiable(Times.Once);
+        _hub.PartyClient.Setup(c => c.QueueUpdated(It.IsAny<List<QueueItemDto>>()))
+            .Returns(Task.CompletedTask)
+            .Verifiable(Times.Once);
 
         var result = await _controller.Skip();
 

@@ -1,33 +1,21 @@
 using FluentAssertions;
+using JukeVox.Server.Controllers;
+using JukeVox.Server.Hubs;
+using JukeVox.Server.Models;
+using JukeVox.Server.Models.Dto;
+using JukeVox.Server.Services;
+using JukeVox.Server.Tests.Helpers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
-using JukeVox.Server.Controllers;
-using JukeVox.Server.Models;
-using JukeVox.Server.Models.Dto;
-using JukeVox.Server.Services;
-using JukeVox.Server.Tests.Helpers;
 
 namespace JukeVox.Server.Tests.Controllers;
 
 [TestFixture]
 public class HostPartyControllerTests
 {
-    private const string PartyId = "test1234";
-    private const string HostId = "test-host-id";
-    private Mock<IPartyService> _partyService = null!;
-    private Mock<IQueueService> _queueService = null!;
-    private Mock<ISpotifyPlayerService> _playerService = null!;
-    private Mock<ISpotifyPlaylistService> _playlistService = null!;
-    private Mock<IPlaybackMonitorService> _monitorService = null!;
-    private MockHubContext _hub = null!;
-    private ConnectionMapping _connectionMapping = null!;
-    private HostCredentialService _credentialService = null!;
-    private string _tempDir = null!;
-    private HostPartyController _controller = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -60,13 +48,26 @@ public class HostPartyControllerTests
     public void TearDown()
     {
         if (Directory.Exists(_tempDir))
+        {
             Directory.Delete(_tempDir, true);
+        }
     }
 
+    private const string PartyId = "test1234";
+    private const string HostId = "test-host-id";
+    private Mock<IPartyService> _partyService = null!;
+    private Mock<IQueueService> _queueService = null!;
+    private Mock<ISpotifyPlayerService> _playerService = null!;
+    private Mock<ISpotifyPlaylistService> _playlistService = null!;
+    private Mock<IPlaybackMonitorService> _monitorService = null!;
+    private MockHubContext _hub = null!;
+    private ConnectionMapping _connectionMapping = null!;
+    private HostCredentialService _credentialService = null!;
+    private string _tempDir = null!;
+    private HostPartyController _controller = null!;
+
     private void SetupActiveParty()
-    {
-        _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId);
-    }
+        => _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId);
 
     [Test]
     public void GetGuests_AsHost_ReturnsGuestList()
@@ -135,7 +136,7 @@ public class HostPartyControllerTests
         _partyService.Setup(p => p.SetGuestCredits(PartyId, "g1", 7)).Returns(guest);
 
         _connectionMapping.Add("g1", "conn-123");
-        var mockClient = new Mock<JukeVox.Server.Hubs.IPartyClient>();
+        var mockClient = new Mock<IPartyClient>();
         _hub.HubClients.Setup(c => c.Client("conn-123")).Returns(mockClient.Object);
         mockClient.Setup(c => c.CreditsUpdated(7)).Returns(Task.CompletedTask);
 

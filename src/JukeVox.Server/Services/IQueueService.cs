@@ -5,7 +5,11 @@ namespace JukeVox.Server.Services;
 
 public interface IQueueService
 {
-    (QueueItem? Item, string? Error) AddToQueue(string partyId, string sessionId, AddToQueueRequest request, bool isHost = false);
+    (QueueItem? Item, string? Error) AddToQueue(string partyId,
+        string sessionId,
+        AddToQueueRequest request,
+        bool isHost = false);
+
     bool RemoveFromQueue(string partyId, string itemId);
     bool Reorder(string partyId, List<string> orderedIds);
     QueueItem? Dequeue(string partyId);

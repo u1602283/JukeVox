@@ -1,31 +1,19 @@
 using System.Net;
+using System.Text;
 using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
-using NUnit.Framework;
 using JukeVox.Server.Configuration;
 using JukeVox.Server.Models;
 using JukeVox.Server.Services;
 using JukeVox.Server.Tests.Helpers;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using NUnit.Framework;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class SpotifyAuthServiceTests
 {
-    private const string PartyId = "test1234";
-    private MockHttpHandler _handler = null!;
-    private Mock<IPartyService> _partyService = null!;
-    private IPartyContextAccessor _partyContextAccessor = null!;
-    private SpotifyAuthService _service = null!;
-
-    private static readonly SpotifyOptions Options = new()
-    {
-        ClientId = "test-client-id",
-        ClientSecret = "test-client-secret",
-        RedirectUri = "https://127.0.0.1:5001/api/auth/callback"
-    };
-
     [SetUp]
     public void SetUp()
     {
@@ -48,6 +36,19 @@ public class SpotifyAuthServiceTests
         _handler.Dispose();
     }
 
+    private const string PartyId = "test1234";
+    private MockHttpHandler _handler = null!;
+    private Mock<IPartyService> _partyService = null!;
+    private IPartyContextAccessor _partyContextAccessor = null!;
+    private SpotifyAuthService _service = null!;
+
+    private static readonly SpotifyOptions Options = new()
+    {
+        ClientId = "test-client-id",
+        ClientSecret = "test-client-secret",
+        RedirectUri = "https://127.0.0.1:5001/api/auth/callback"
+    };
+
     [Test]
     public void GetAuthorizeUrl_ContainsClientIdAndScopes()
     {
@@ -64,17 +65,18 @@ public class SpotifyAuthServiceTests
     public async Task ExchangeCodeAsync_Success_ReturnsTokensAndPersists()
     {
         _handler.EnqueueSuccess("""
-        {
-            "access_token": "new-access-token",
-            "token_type": "Bearer",
-            "expires_in": 3600,
-            "refresh_token": "new-refresh-token",
-            "scope": "user-read-playback-state"
-        }
-        """);
+                                {
+                                    "access_token": "new-access-token",
+                                    "token_type": "Bearer",
+                                    "expires_in": 3600,
+                                    "refresh_token": "new-refresh-token",
+                                    "scope": "user-read-playback-state"
+                                }
+                                """);
 
-        _partyService.Setup(p => p.SetSpotifyTokens(PartyId, It.Is<SpotifyTokens>(
-            t => t.AccessToken == "new-access-token"))).Verifiable(Times.Once);
+        _partyService
+            .Setup(p => p.SetSpotifyTokens(PartyId, It.Is<SpotifyTokens>(t => t.AccessToken == "new-access-token")))
+            .Verifiable(Times.Once);
 
         var tokens = await _service.ExchangeCodeAsync("auth-code", PartyId);
 
@@ -88,12 +90,12 @@ public class SpotifyAuthServiceTests
     public async Task ExchangeCodeAsync_NoRefreshToken_DefaultsToEmpty()
     {
         _handler.EnqueueSuccess("""
-        {
-            "access_token": "access",
-            "token_type": "Bearer",
-            "expires_in": 3600
-        }
-        """);
+                                {
+                                    "access_token": "access",
+                                    "token_type": "Bearer",
+                                    "expires_in": 3600
+                                }
+                                """);
 
         _partyService.Setup(p => p.SetSpotifyTokens(PartyId, It.IsAny<SpotifyTokens>())).Verifiable(Times.Once);
 
@@ -106,7 +108,7 @@ public class SpotifyAuthServiceTests
     [Test]
     public async Task ExchangeCodeAsync_Failure_ReturnsNull()
     {
-        _handler.EnqueueError(HttpStatusCode.BadRequest);
+        _handler.EnqueueError();
 
         var tokens = await _service.ExchangeCodeAsync("bad-code", PartyId);
 
@@ -126,7 +128,7 @@ public class SpotifyAuthServiceTests
         var request = _handler.Requests[0];
         request.Headers.Authorization.Should().NotBeNull();
         request.Headers.Authorization!.Scheme.Should().Be("Basic");
-        var decoded = System.Text.Encoding.UTF8.GetString(
+        var decoded = Encoding.UTF8.GetString(
             Convert.FromBase64String(request.Headers.Authorization.Parameter!));
         decoded.Should().Be("test-client-id:test-client-secret");
     }
@@ -171,16 +173,17 @@ public class SpotifyAuthServiceTests
         _partyService.Setup(p => p.GetSpotifyTokens(PartyId)).Returns(tokens).Verifiable(Times.Exactly(2));
 
         _handler.EnqueueSuccess("""
-        {
-            "access_token": "refreshed-token",
-            "token_type": "Bearer",
-            "expires_in": 3600,
-            "refresh_token": "new-refresh-token"
-        }
-        """);
+                                {
+                                    "access_token": "refreshed-token",
+                                    "token_type": "Bearer",
+                                    "expires_in": 3600,
+                                    "refresh_token": "new-refresh-token"
+                                }
+                                """);
 
-        _partyService.Setup(p => p.SetSpotifyTokens(PartyId, It.Is<SpotifyTokens>(
-            t => t.AccessToken == "refreshed-token" && t.RefreshToken == "new-refresh-token"))).Verifiable(Times.Once);
+        _partyService.Setup(p => p.SetSpotifyTokens(PartyId,
+                It.Is<SpotifyTokens>(t => t.AccessToken == "refreshed-token" && t.RefreshToken == "new-refresh-token")))
+            .Verifiable(Times.Once);
 
         var token = await _service.GetValidAccessTokenAsync();
 
@@ -216,15 +219,16 @@ public class SpotifyAuthServiceTests
         _partyService.Setup(p => p.GetSpotifyTokens(PartyId)).Returns(tokens).Verifiable(Times.Exactly(2));
 
         _handler.EnqueueSuccess("""
-        {
-            "access_token": "new-access",
-            "token_type": "Bearer",
-            "expires_in": 3600
-        }
-        """);
+                                {
+                                    "access_token": "new-access",
+                                    "token_type": "Bearer",
+                                    "expires_in": 3600
+                                }
+                                """);
 
-        _partyService.Setup(p => p.SetSpotifyTokens(PartyId, It.Is<SpotifyTokens>(
-            t => t.RefreshToken == "original-refresh"))).Verifiable(Times.Once);
+        _partyService
+            .Setup(p => p.SetSpotifyTokens(PartyId, It.Is<SpotifyTokens>(t => t.RefreshToken == "original-refresh")))
+            .Verifiable(Times.Once);
 
         await _service.GetValidAccessTokenAsync();
     }

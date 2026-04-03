@@ -4,13 +4,16 @@ namespace JukeVox.Server.Services;
 
 public class ConnectionMapping
 {
-    private readonly ConcurrentDictionary<string, string> _sessionToConnection = new();
     private readonly ConcurrentDictionary<string, string> _connectionToSession = new();
+    private readonly ConcurrentDictionary<string, string> _sessionToConnection = new();
 
     public void Add(string sessionId, string connectionId)
     {
         if (_sessionToConnection.TryGetValue(sessionId, out var old))
+        {
             _connectionToSession.TryRemove(old, out _);
+        }
+
         _sessionToConnection[sessionId] = connectionId;
         _connectionToSession[connectionId] = sessionId;
     }

@@ -1,10 +1,10 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using JukeVox.Server.Extensions;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace JukeVox.Server.Controllers;
 
@@ -12,11 +12,11 @@ namespace JukeVox.Server.Controllers;
 [Route("api/queue")]
 public class QueueController : ControllerBase
 {
-    private readonly IQueueService _queueService;
+    private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
+    private readonly IPlaybackMonitorService _monitorService;
     private readonly IPartyService _partyService;
     private readonly ISpotifyPlayerService _playerService;
-    private readonly IPlaybackMonitorService _monitorService;
-    private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
+    private readonly IQueueService _queueService;
 
     public QueueController(
         IQueueService queueService,
@@ -37,11 +37,16 @@ public class QueueController : ControllerBase
     {
         var sessionId = HttpContext.GetSessionId();
         var partyId = _partyService.GetPartyIdForSession(sessionId);
-        if (partyId == null) return Unauthorized();
+        if (partyId == null)
+        {
+            return Unauthorized();
+        }
 
         var isHost = _partyService.IsHost(partyId, sessionId);
         if (!isHost && !_partyService.IsParticipant(partyId, sessionId))
+        {
             return Unauthorized();
+        }
 
         return Ok(new
         {
@@ -55,15 +60,22 @@ public class QueueController : ControllerBase
     {
         var sessionId = HttpContext.GetSessionId();
         var partyId = _partyService.GetPartyIdForSession(sessionId);
-        if (partyId == null) return Unauthorized();
+        if (partyId == null)
+        {
+            return Unauthorized();
+        }
 
         var isHost = _partyService.IsHost(partyId, sessionId);
         if (!isHost && !_partyService.IsParticipant(partyId, sessionId))
+        {
             return Unauthorized();
+        }
 
         var (item, error) = _queueService.AddToQueue(partyId, sessionId, request, isHost);
         if (item == null)
+        {
             return BadRequest(new { error });
+        }
 
         var party = _partyService.GetParty(partyId)!;
         var queue = _queueService.GetQueue(partyId);
@@ -102,14 +114,21 @@ public class QueueController : ControllerBase
     public async Task<IActionResult> RemoveFromQueue(string id)
     {
         if (!HttpContext.IsHostAuthenticated())
+        {
             return Forbid();
+        }
 
         var sessionId = HttpContext.GetSessionId();
         var partyId = _partyService.GetPartyIdForSession(sessionId);
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         if (!_queueService.RemoveFromQueue(partyId, id))
+        {
             return NotFound();
+        }
 
         var queue = _queueService.GetQueue(partyId);
         await _hubContext.Clients.Group(partyId).QueueUpdated(queue);
@@ -121,14 +140,21 @@ public class QueueController : ControllerBase
     public async Task<IActionResult> Reorder([FromBody] ReorderQueueRequest request)
     {
         if (!HttpContext.IsHostAuthenticated())
+        {
             return Forbid();
+        }
 
         var sessionId = HttpContext.GetSessionId();
         var partyId = _partyService.GetPartyIdForSession(sessionId);
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         if (!_queueService.Reorder(partyId, request.OrderedIds))
+        {
             return BadRequest();
+        }
 
         var queue = _queueService.GetQueue(partyId);
         await _hubContext.Clients.Group(partyId).QueueUpdated(queue);
@@ -141,15 +167,22 @@ public class QueueController : ControllerBase
     {
         var sessionId = HttpContext.GetSessionId();
         var partyId = _partyService.GetPartyIdForSession(sessionId);
-        if (partyId == null) return Unauthorized();
+        if (partyId == null)
+        {
+            return Unauthorized();
+        }
 
         var isHost = _partyService.IsHost(partyId, sessionId);
         if (!isHost && !_partyService.IsParticipant(partyId, sessionId))
+        {
             return Unauthorized();
+        }
 
         var (success, error) = _queueService.Vote(partyId, sessionId, id, request.Vote, isHost);
         if (!success)
+        {
             return BadRequest(new { error });
+        }
 
         var queue = _queueService.GetQueue(partyId);
         await _hubContext.Clients.Group(partyId).QueueUpdated(queue);

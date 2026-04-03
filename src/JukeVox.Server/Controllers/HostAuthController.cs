@@ -1,5 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
+using System.Text;
 using Fido2NetLib;
 using Fido2NetLib.Objects;
 using JukeVox.Server.Extensions;
@@ -7,6 +6,8 @@ using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
 using JukeVox.Server.Models;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace JukeVox.Server.Controllers;
 
@@ -14,13 +15,17 @@ namespace JukeVox.Server.Controllers;
 [Route("api/host")]
 public class HostAuthController : ControllerBase
 {
+    private readonly HostCredentialService _credentialService;
     private readonly Fido2 _fido2;
     private readonly Fido2Configuration _fido2Config;
-    private readonly HostCredentialService _credentialService;
-    private readonly IPartyService _partyService;
     private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
+    private readonly IPartyService _partyService;
 
-    public HostAuthController(Fido2 fido2, Fido2Configuration fido2Config, HostCredentialService credentialService, IPartyService partyService, IHubContext<PartyHub, IPartyClient> hubContext)
+    public HostAuthController(Fido2 fido2,
+        Fido2Configuration fido2Config,
+        HostCredentialService credentialService,
+        IPartyService partyService,
+        IHubContext<PartyHub, IPartyClient> hubContext)
     {
         _fido2 = fido2;
         _fido2Config = fido2Config;
@@ -44,10 +49,7 @@ public class HostAuthController : ControllerBase
     }
 
     [HttpGet("setup/status")]
-    public IActionResult GetSetupStatus()
-    {
-        return Ok(new { available = _credentialService.IsSetupAvailable });
-    }
+    public IActionResult GetSetupStatus() => Ok(new { available = _credentialService.IsSetupAvailable });
 
     // --- First-time setup (creates admin) ---
 
@@ -55,19 +57,25 @@ public class HostAuthController : ControllerBase
     public IActionResult SetupBegin([FromBody] SetupBeginRequest request)
     {
         if (!_credentialService.IsSetupAvailable)
+        {
             return BadRequest(new { error = "Setup is not available" });
+        }
 
         if (!_credentialService.IsSetupTokenValid(request.Token))
+        {
             return Unauthorized(new { error = "Invalid setup token" });
+        }
 
         var displayName = request.DisplayName?.Trim();
         if (displayName != null && displayName.Length > 30)
+        {
             return BadRequest(new { error = "Display name must be 30 characters or fewer" });
+        }
 
         var hostId = Guid.NewGuid().ToString("N")[..8];
         var user = new Fido2User
         {
-            Id = System.Text.Encoding.UTF8.GetBytes($"host-{hostId}"),
+            Id = Encoding.UTF8.GetBytes($"host-{hostId}"),
             Name = displayName ?? _fido2Config.ServerName,
             DisplayName = displayName ?? _fido2Config.ServerName
         };
@@ -85,10 +93,11 @@ public class HostAuthController : ControllerBase
         });
 
         var sessionId = HttpContext.GetSessionId();
-        _credentialService.StorePendingChallenge(sessionId, new PendingRegistration
-        {
-            Options = options, HostId = hostId, IsAdmin = true, DisplayName = displayName ?? "Admin"
-        });
+        _credentialService.StorePendingChallenge(sessionId,
+            new PendingRegistration
+            {
+                Options = options, HostId = hostId, IsAdmin = true, DisplayName = displayName ?? "Admin"
+            });
 
         return Ok(options);
     }
@@ -97,20 +106,25 @@ public class HostAuthController : ControllerBase
     public async Task<IActionResult> SetupComplete([FromBody] AuthenticatorAttestationRawResponse attestation)
     {
         if (_credentialService.HasAnyCredential)
+        {
             return BadRequest(new { error = "Setup already completed. Use invite codes to register new hosts." });
+        }
 
         var sessionId = HttpContext.GetSessionId();
         var pending = _credentialService.GetPendingChallenge<PendingRegistration>(sessionId);
         if (pending == null)
+        {
             return BadRequest(new { error = "No pending registration challenge. Please start setup again." });
+        }
 
         var result = await _fido2.MakeNewCredentialAsync(new MakeNewCredentialParams
-        {
-            AttestationResponse = attestation,
-            OriginalOptions = pending.Options,
-            IsCredentialIdUniqueToUserCallback = async (args, _) =>
-                _credentialService.GetCredentialByCredentialId(args.CredentialId) == null
-        }, HttpContext.RequestAborted);
+            {
+                AttestationResponse = attestation,
+                OriginalOptions = pending.Options,
+                IsCredentialIdUniqueToUserCallback = async (args, _) =>
+                    _credentialService.GetCredentialByCredentialId(args.CredentialId) == null
+            },
+            HttpContext.RequestAborted);
 
         _credentialService.SaveCredential(new HostCredential
         {
@@ -133,19 +147,25 @@ public class HostAuthController : ControllerBase
     public IActionResult RegisterBegin([FromBody] RegisterBeginRequest request)
     {
         if (!_credentialService.HasAnyCredential)
+        {
             return BadRequest(new { error = "No admin exists yet. Use /host/setup first." });
+        }
 
         var displayName = request.DisplayName.Trim();
         if (string.IsNullOrEmpty(displayName) || displayName.Length > 30)
+        {
             return BadRequest(new { error = "Display name must be between 1 and 30 characters" });
+        }
 
         if (!_credentialService.IsInviteCodeValid(request.InviteCode))
+        {
             return Unauthorized(new { error = "Invalid or expired invite code" });
+        }
 
         var hostId = Guid.NewGuid().ToString("N")[..8];
         var user = new Fido2User
         {
-            Id = System.Text.Encoding.UTF8.GetBytes($"host-{hostId}"),
+            Id = Encoding.UTF8.GetBytes($"host-{hostId}"),
             Name = displayName,
             DisplayName = displayName
         };
@@ -163,10 +183,12 @@ public class HostAuthController : ControllerBase
         });
 
         var sessionId = HttpContext.GetSessionId();
-        _credentialService.StorePendingChallenge(sessionId, new PendingRegistration
-        {
-            Options = options, HostId = hostId, IsAdmin = false, DisplayName = displayName, InviteCode = request.InviteCode
-        });
+        _credentialService.StorePendingChallenge(sessionId,
+            new PendingRegistration
+            {
+                Options = options, HostId = hostId, IsAdmin = false, DisplayName = displayName,
+                InviteCode = request.InviteCode
+            });
 
         return Ok(options);
     }
@@ -177,18 +199,23 @@ public class HostAuthController : ControllerBase
         var sessionId = HttpContext.GetSessionId();
         var pending = _credentialService.GetPendingChallenge<PendingRegistration>(sessionId);
         if (pending == null)
+        {
             return BadRequest(new { error = "No pending registration challenge. Please start again." });
+        }
 
         if (pending.InviteCode == null || !_credentialService.ValidateAndConsumeInviteCode(pending.InviteCode))
+        {
             return Unauthorized(new { error = "Invite code is no longer valid. Please request a new one." });
+        }
 
         var result = await _fido2.MakeNewCredentialAsync(new MakeNewCredentialParams
-        {
-            AttestationResponse = attestation,
-            OriginalOptions = pending.Options,
-            IsCredentialIdUniqueToUserCallback = async (args, _) =>
-                _credentialService.GetCredentialByCredentialId(args.CredentialId) == null
-        }, HttpContext.RequestAborted);
+            {
+                AttestationResponse = attestation,
+                OriginalOptions = pending.Options,
+                IsCredentialIdUniqueToUserCallback = async (args, _) =>
+                    _credentialService.GetCredentialByCredentialId(args.CredentialId) == null
+            },
+            HttpContext.RequestAborted);
 
         _credentialService.SaveCredential(new HostCredential
         {
@@ -212,7 +239,9 @@ public class HostAuthController : ControllerBase
     {
         var credentials = _credentialService.GetAllCredentials();
         if (credentials.Count == 0)
+        {
             return BadRequest(new { error = "No host credentials registered" });
+        }
 
         var allowedCredentials = credentials
             .Select(c => new PublicKeyCredentialDescriptor(c.CredentialId))
@@ -236,21 +265,26 @@ public class HostAuthController : ControllerBase
         var sessionId = HttpContext.GetSessionId();
         var options = _credentialService.GetPendingChallenge<AssertionOptions>(sessionId);
         if (options == null)
+        {
             return BadRequest(new { error = "No pending login challenge. Please try again." });
+        }
 
         // Find which host credential matches
         var credential = _credentialService.GetCredentialByCredentialIdString(assertion.Id);
         if (credential == null)
+        {
             return BadRequest(new { error = "Unknown credential" });
+        }
 
         var result = await _fido2.MakeAssertionAsync(new MakeAssertionParams
-        {
-            AssertionResponse = assertion,
-            OriginalOptions = options,
-            StoredPublicKey = credential.PublicKey,
-            StoredSignatureCounter = credential.SignCount,
-            IsUserHandleOwnerOfCredentialIdCallback = async (_, _) => true
-        }, HttpContext.RequestAborted);
+            {
+                AssertionResponse = assertion,
+                OriginalOptions = options,
+                StoredPublicKey = credential.PublicKey,
+                StoredSignatureCounter = credential.SignCount,
+                IsUserHandleOwnerOfCredentialIdCallback = async (_, _) => true
+            },
+            HttpContext.RequestAborted);
 
         _credentialService.UpdateSignCount(credential.HostId, result.SignCount);
         HttpContext.SetHostAuthCookie(credential.HostId);
@@ -265,10 +299,13 @@ public class HostAuthController : ControllerBase
     {
         var hostId = HttpContext.GetAuthenticatedHostId();
         if (hostId == null || !_credentialService.IsAdmin(hostId))
+        {
             return Forbid();
+        }
 
         var hosts = _credentialService.GetAllCredentials()
-            .Select(c => new { hostId = c.HostId, displayName = c.DisplayName, isAdmin = c.IsAdmin, createdAt = c.CreatedAt })
+            .Select(c => new
+                { hostId = c.HostId, displayName = c.DisplayName, isAdmin = c.IsAdmin, createdAt = c.CreatedAt })
             .ToList();
         return Ok(hosts);
     }
@@ -278,13 +315,19 @@ public class HostAuthController : ControllerBase
     {
         var hostId = HttpContext.GetAuthenticatedHostId();
         if (hostId == null || !_credentialService.IsAdmin(hostId))
+        {
             return Forbid();
+        }
 
         if (targetHostId == hostId)
+        {
             return BadRequest(new { error = "Cannot delete your own credential" });
+        }
 
         if (!_credentialService.DeleteCredential(targetHostId))
+        {
             return NotFound(new { error = "Host not found" });
+        }
 
         // End all active parties owned by the deleted host and notify clients
         var parties = _partyService.GetPartiesForHost(targetHostId);
@@ -304,7 +347,9 @@ public class HostAuthController : ControllerBase
     {
         var hostId = HttpContext.GetAuthenticatedHostId();
         if (hostId == null || !_credentialService.IsAdmin(hostId))
+        {
             return Forbid();
+        }
 
         var code = _credentialService.GenerateInviteCode();
         return Ok(new { code });

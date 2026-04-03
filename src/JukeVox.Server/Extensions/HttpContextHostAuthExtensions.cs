@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.DataProtection;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace JukeVox.Server.Extensions;
 
@@ -10,9 +10,10 @@ public static class HttpContextHostAuthExtensions
 
     public static string? GetAuthenticatedHostId(this HttpContext context)
     {
-        if (!context.Request.Cookies.TryGetValue(CookieName, out var cookie) ||
-            string.IsNullOrEmpty(cookie))
+        if (!context.Request.Cookies.TryGetValue(CookieName, out var cookie) || string.IsNullOrEmpty(cookie))
+        {
             return null;
+        }
 
         var protector = context.RequestServices
             .GetRequiredService<IDataProtectionProvider>()
@@ -24,11 +25,17 @@ public static class HttpContextHostAuthExtensions
             var value = protector.Unprotect(cookie);
             // Legacy cookies contain just "host" — treat as unauthenticated
             if (value == "host")
+            {
                 return null;
+            }
+
             // Verify the credential still exists (e.g. host was deleted by admin)
             var credentialService = context.RequestServices.GetService<HostCredentialService>();
             if (credentialService != null && credentialService.GetCredential(value) == null)
+            {
                 return null;
+            }
+
             return value;
         }
         catch
@@ -37,10 +44,7 @@ public static class HttpContextHostAuthExtensions
         }
     }
 
-    public static bool IsHostAuthenticated(this HttpContext context)
-    {
-        return context.GetAuthenticatedHostId() != null;
-    }
+    public static bool IsHostAuthenticated(this HttpContext context) => context.GetAuthenticatedHostId() != null;
 
     public static void SetHostAuthCookie(this HttpContext context, string hostId)
     {
@@ -51,17 +55,16 @@ public static class HttpContextHostAuthExtensions
 
         var token = protector.Protect(hostId, TimeSpan.FromHours(24));
 
-        context.Response.Cookies.Append(CookieName, token, new CookieOptions
-        {
-            HttpOnly = true,
-            SameSite = SameSiteMode.Lax,
-            Secure = true,
-            MaxAge = TimeSpan.FromHours(24)
-        });
+        context.Response.Cookies.Append(CookieName,
+            token,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                SameSite = SameSiteMode.Lax,
+                Secure = true,
+                MaxAge = TimeSpan.FromHours(24)
+            });
     }
 
-    public static void ClearHostAuthCookie(this HttpContext context)
-    {
-        context.Response.Cookies.Delete(CookieName);
-    }
+    public static void ClearHostAuthCookie(this HttpContext context) => context.Response.Cookies.Delete(CookieName);
 }

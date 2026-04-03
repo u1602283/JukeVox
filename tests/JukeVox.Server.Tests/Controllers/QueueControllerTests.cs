@@ -1,26 +1,17 @@
 using FluentAssertions;
-using Microsoft.AspNetCore.Mvc;
-using Moq;
-using NUnit.Framework;
 using JukeVox.Server.Controllers;
-using JukeVox.Server.Models;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
 using JukeVox.Server.Tests.Helpers;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using NUnit.Framework;
 
 namespace JukeVox.Server.Tests.Controllers;
 
 [TestFixture]
 public class QueueControllerTests
 {
-    private const string PartyId = "test1234";
-    private Mock<IQueueService> _queueService = null!;
-    private Mock<IPartyService> _partyService = null!;
-    private Mock<ISpotifyPlayerService> _playerService = null!;
-    private Mock<IPlaybackMonitorService> _monitorService = null!;
-    private MockHubContext _hub = null!;
-    private QueueController _controller = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -53,15 +44,32 @@ public class QueueControllerTests
         _hub.PartyClient.VerifyNoOtherCalls();
     }
 
+    private const string PartyId = "test1234";
+    private Mock<IQueueService> _queueService = null!;
+    private Mock<IPartyService> _partyService = null!;
+    private Mock<ISpotifyPlayerService> _playerService = null!;
+    private Mock<IPlaybackMonitorService> _monitorService = null!;
+    private MockHubContext _hub = null!;
+    private QueueController _controller = null!;
+
     [Test]
     public void GetQueue_AsHost_ReturnsOk()
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
         _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId).Verifiable(Times.Once);
         _partyService.Setup(p => p.IsHost(PartyId, "host-session")).Returns(true).Verifiable(Times.Once);
-        var queue = new List<QueueItemDto> { new() { Id = "1", TrackUri = "uri", TrackName = "Song", ArtistName = "Artist", AlbumName = "Album", AddedByName = "Host" } };
+        var queue = new List<QueueItemDto>
+        {
+            new()
+            {
+                Id = "1", TrackUri = "uri", TrackName = "Song", ArtistName = "Artist", AlbumName = "Album",
+                AddedByName = "Host"
+            }
+        };
         _queueService.Setup(q => q.GetQueue(PartyId)).Returns(queue).Verifiable(Times.Once);
-        _queueService.Setup(q => q.GetUserVotes(PartyId, "host-session")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetUserVotes(PartyId, "host-session"))
+            .Returns(new Dictionary<string, int>())
+            .Verifiable(Times.Once);
 
         var result = _controller.GetQueue();
 
@@ -71,12 +79,14 @@ public class QueueControllerTests
     [Test]
     public void GetQueue_AsGuest_Participant_ReturnsOk()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext();
         _partyService.Setup(p => p.GetPartyIdForSession("guest-1")).Returns(PartyId).Verifiable(Times.Once);
         _partyService.Setup(p => p.IsHost(PartyId, "guest-1")).Returns(false).Verifiable(Times.Once);
         _partyService.Setup(p => p.IsParticipant(PartyId, "guest-1")).Returns(true).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue(PartyId)).Returns([]).Verifiable(Times.Once);
-        _queueService.Setup(q => q.GetUserVotes(PartyId, "guest-1")).Returns(new Dictionary<string, int>()).Verifiable(Times.Once);
+        _queueService.Setup(q => q.GetUserVotes(PartyId, "guest-1"))
+            .Returns(new Dictionary<string, int>())
+            .Verifiable(Times.Once);
 
         _controller.GetQueue().Should().BeOfType<OkObjectResult>();
     }
@@ -95,7 +105,7 @@ public class QueueControllerTests
     [Test]
     public async Task AddToQueue_Success_BroadcastsQueue()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext("host-session");
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
         _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId).Verifiable(Times.Once);
         _partyService.Setup(p => p.IsHost(PartyId, "host-session")).Returns(true).Verifiable(Times.Once);
         var request = TestData.CreateAddToQueueRequest("New Song");
@@ -104,7 +114,9 @@ public class QueueControllerTests
         party.Id = PartyId;
         var queueDtos = new List<QueueItemDto>();
 
-        _queueService.Setup(q => q.AddToQueue(PartyId, "host-session", request, true)).Returns((addedItem, (string?)null)).Verifiable(Times.Once);
+        _queueService.Setup(q => q.AddToQueue(PartyId, "host-session", request, true))
+            .Returns((addedItem, null))
+            .Verifiable(Times.Once);
         _partyService.Setup(p => p.GetParty(PartyId)).Returns(party).Verifiable(Times.Once);
         _queueService.Setup(q => q.GetQueue(PartyId)).Returns(queueDtos).Verifiable(Times.Once);
         _hub.PartyClient.Setup(c => c.QueueUpdated(queueDtos)).Returns(Task.CompletedTask).Verifiable(Times.Once);
@@ -117,17 +129,21 @@ public class QueueControllerTests
     [Test]
     public async Task AddToQueue_Failure_ReturnsBadRequest()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext();
         _partyService.Setup(p => p.GetPartyIdForSession("guest-1")).Returns(PartyId).Verifiable(Times.Once);
         _partyService.Setup(p => p.IsHost(PartyId, "guest-1")).Returns(false).Verifiable(Times.Once);
         _partyService.Setup(p => p.IsParticipant(PartyId, "guest-1")).Returns(true).Verifiable(Times.Once);
         var request = TestData.CreateAddToQueueRequest();
-        _queueService.Setup(q => q.AddToQueue(PartyId, "guest-1", request, false)).Returns(((QueueItem?)null, "No credits remaining")).Verifiable(Times.Once);
+        _queueService.Setup(q => q.AddToQueue(PartyId, "guest-1", request, false))
+            .Returns((null, "No credits remaining"))
+            .Verifiable(Times.Once);
 
         var result = await _controller.AddToQueue(request);
 
-        result.Should().BeOfType<BadRequestObjectResult>()
-            .Which.Value.Should().NotBeNull();
+        result.Should()
+            .BeOfType<BadRequestObjectResult>()
+            .Which.Value.Should()
+            .NotBeNull();
     }
 
     [Test]

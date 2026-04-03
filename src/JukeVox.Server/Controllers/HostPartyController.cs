@@ -1,10 +1,11 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using JukeVox.Server.Extensions;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
+using JukeVox.Server.Models;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace JukeVox.Server.Controllers;
 
@@ -12,14 +13,14 @@ namespace JukeVox.Server.Controllers;
 [Route("api/host/party")]
 public class HostPartyController : ControllerBase
 {
-    private readonly IPartyService _partyService;
-    private readonly IQueueService _queueService;
-    private readonly ISpotifyPlayerService _playerService;
-    private readonly ISpotifyPlaylistService _playlistService;
-    private readonly IPlaybackMonitorService _monitorService;
-    private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
     private readonly ConnectionMapping _connectionMapping;
     private readonly HostCredentialService _credentialService;
+    private readonly IHubContext<PartyHub, IPartyClient> _hubContext;
+    private readonly IPlaybackMonitorService _monitorService;
+    private readonly IPartyService _partyService;
+    private readonly ISpotifyPlayerService _playerService;
+    private readonly ISpotifyPlaylistService _playlistService;
+    private readonly IQueueService _queueService;
 
     public HostPartyController(
         IPartyService partyService,
@@ -44,7 +45,11 @@ public class HostPartyController : ControllerBase
     private string? RequireHostAuth()
     {
         var hostId = HttpContext.GetAuthenticatedHostId();
-        if (hostId == null) return null;
+        if (hostId == null)
+        {
+            return null;
+        }
+
         return hostId;
     }
 
@@ -59,15 +64,21 @@ public class HostPartyController : ControllerBase
     {
         var hostId = RequireHostAuth();
         if (hostId == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         if (request.DefaultCredits < 1)
+        {
             return BadRequest(new { error = "Credits per guest must be at least 1" });
+        }
 
         var sessionId = HttpContext.GetSessionId();
         var (party, createError) = _partyService.CreateParty(sessionId, hostId, request.DefaultCredits);
         if (party == null)
+        {
             return Conflict(new { error = createError });
+        }
 
         return Ok(new PartyStateDto
         {
@@ -77,7 +88,7 @@ public class HostPartyController : ControllerBase
             SpotifyConnected = false,
             DefaultCredits = party.DefaultCredits,
             Queue = [],
-            UserVotes = new(),
+            UserVotes = new Dictionary<string, int>(),
             IsSleeping = false
         });
     }
@@ -87,14 +98,18 @@ public class HostPartyController : ControllerBase
     {
         var hostId = RequireHostAuth();
         if (hostId == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var isAdmin = _credentialService.IsAdmin(hostId);
         var summaries = _partyService.GetAllPartySummaries();
 
         // Non-admin hosts only see their own parties
         if (!isAdmin)
+        {
             summaries = summaries.Where(s => s.HostId == hostId).ToList();
+        }
 
         var result = summaries.Select(s => new
         {
@@ -114,16 +129,22 @@ public class HostPartyController : ControllerBase
     {
         var hostId = RequireHostAuth();
         if (hostId == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var party = _partyService.GetParty(partyId);
         if (party == null)
+        {
             return NotFound(new { error = "Party not found" });
+        }
 
         // Only the owning host (or admin) can select a party
         var isAdmin = _credentialService.IsAdmin(hostId);
         if (party.HostId != hostId && !isAdmin)
+        {
             return Forbid();
+        }
 
         var sessionId = HttpContext.GetSessionId();
 
@@ -154,7 +175,7 @@ public class HostPartyController : ControllerBase
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
             UserVotes = _queueService.GetUserVotes(partyId, sessionId),
-            IsSleeping = party.Status == Models.PartyStatus.Sleeping
+            IsSleeping = party.Status == PartyStatus.Sleeping
         });
     }
 
@@ -163,17 +184,23 @@ public class HostPartyController : ControllerBase
     {
         var hostId = RequireHostAuth();
         if (hostId == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         // Resume the first party owned by this host
         var parties = _partyService.GetPartiesForHost(hostId);
         if (parties.Count == 0)
+        {
             return BadRequest(new { error = "No saved party to resume" });
+        }
 
         var sessionId = HttpContext.GetSessionId();
         var party = _partyService.ResumeAsHost(parties[0].Id, sessionId);
         if (party == null)
+        {
             return BadRequest(new { error = "No saved party to resume" });
+        }
 
         return Ok(new PartyStateDto
         {
@@ -186,7 +213,7 @@ public class HostPartyController : ControllerBase
             BasePlaylistId = party.BasePlaylistId,
             BasePlaylistName = party.BasePlaylistName,
             UserVotes = _queueService.GetUserVotes(party.Id, sessionId),
-            IsSleeping = party.Status == Models.PartyStatus.Sleeping
+            IsSleeping = party.Status == PartyStatus.Sleeping
         });
     }
 
@@ -195,11 +222,15 @@ public class HostPartyController : ControllerBase
     {
         var hostId = RequireHostAuth();
         if (hostId == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var parties = _partyService.GetPartiesForHost(hostId);
         if (parties.Count == 0)
+        {
             return Ok(new SavedPartySummaryDto { Exists = false });
+        }
 
         var p = parties[0];
         return Ok(new SavedPartySummaryDto
@@ -217,13 +248,20 @@ public class HostPartyController : ControllerBase
     {
         var hostId = RequireHostAuth();
         if (hostId == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var partyId = GetActivePartyId();
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         if (request.DefaultCredits.HasValue && request.DefaultCredits.Value < 1)
+        {
             return BadRequest(new { error = "Credits per guest must be at least 1" });
+        }
 
         _partyService.UpdateSettings(partyId, request.DefaultCredits);
         return Ok();
@@ -233,7 +271,9 @@ public class HostPartyController : ControllerBase
     public async Task<IActionResult> GetPlaylists([FromQuery] int limit = 50, [FromQuery] int offset = 0)
     {
         if (RequireHostAuth() == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var playlists = await _playlistService.GetUserPlaylistsAsync(limit, offset);
         return Ok(playlists);
@@ -243,16 +283,23 @@ public class HostPartyController : ControllerBase
     public async Task<IActionResult> SetBasePlaylist([FromBody] SetBasePlaylistRequest request)
     {
         if (RequireHostAuth() == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var partyId = GetActivePartyId();
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         var tracks = await _playlistService.GetAllPlaylistTracksAsync(request.PlaylistId);
         if (tracks.Count == 0)
+        {
             return BadRequest(new { error = "Playlist has no playable tracks" });
+        }
 
-        var playlists = await _playlistService.GetUserPlaylistsAsync(50, 0);
+        var playlists = await _playlistService.GetUserPlaylistsAsync();
         var playlist = playlists.FirstOrDefault(p => p.Id == request.PlaylistId);
         var playlistName = playlist?.Name ?? "Base Playlist";
 
@@ -264,8 +311,8 @@ public class HostPartyController : ControllerBase
 
         var cachedPlayback = _monitorService.GetCachedPlaybackState(partyId);
         var isPlayingOurTrack = cachedPlayback?.IsPlaying == true
-            && party.CurrentTrack != null
-            && cachedPlayback.TrackUri == party.CurrentTrack.TrackUri;
+                                && party.CurrentTrack != null
+                                && cachedPlayback.TrackUri == party.CurrentTrack.TrackUri;
 
         if (!isPlayingOurTrack)
         {
@@ -286,10 +333,15 @@ public class HostPartyController : ControllerBase
     public async Task<IActionResult> ClearBasePlaylist()
     {
         if (RequireHostAuth() == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var partyId = GetActivePartyId();
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         _queueService.ClearBasePlaylist(partyId);
 
@@ -303,19 +355,25 @@ public class HostPartyController : ControllerBase
     public IActionResult GetGuests()
     {
         if (RequireHostAuth() == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var partyId = GetActivePartyId();
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         var guests = _partyService.GetAllGuests(partyId);
         var dtos = guests.Select(g => new GuestDto
-        {
-            SessionId = g.SessionId,
-            DisplayName = g.DisplayName,
-            CreditsRemaining = g.CreditsRemaining,
-            JoinedAt = g.JoinedAt
-        }).ToList();
+            {
+                SessionId = g.SessionId,
+                DisplayName = g.DisplayName,
+                CreditsRemaining = g.CreditsRemaining,
+                JoinedAt = g.JoinedAt
+            })
+            .ToList();
 
         return Ok(dtos);
     }
@@ -324,14 +382,21 @@ public class HostPartyController : ControllerBase
     public async Task<IActionResult> SetGuestCredits(string sessionId, [FromBody] AdjustCreditsRequest request)
     {
         if (RequireHostAuth() == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var partyId = GetActivePartyId();
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         var guest = _partyService.SetGuestCredits(partyId, sessionId, request.Credits);
         if (guest == null)
+        {
             return NotFound(new { error = "Guest not found" });
+        }
 
         var connectionId = _connectionMapping.GetConnectionId(sessionId);
         if (connectionId != null)
@@ -352,10 +417,15 @@ public class HostPartyController : ControllerBase
     public async Task<IActionResult> AdjustAllCredits([FromBody] BulkAdjustCreditsRequest request)
     {
         if (RequireHostAuth() == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var partyId = GetActivePartyId();
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         var guests = _partyService.AdjustAllCredits(partyId, request.Credits);
 
@@ -369,12 +439,13 @@ public class HostPartyController : ControllerBase
         }
 
         var dtos = guests.Select(g => new GuestDto
-        {
-            SessionId = g.SessionId,
-            DisplayName = g.DisplayName,
-            CreditsRemaining = g.CreditsRemaining,
-            JoinedAt = g.JoinedAt
-        }).ToList();
+            {
+                SessionId = g.SessionId,
+                DisplayName = g.DisplayName,
+                CreditsRemaining = g.CreditsRemaining,
+                JoinedAt = g.JoinedAt
+            })
+            .ToList();
 
         return Ok(dtos);
     }
@@ -383,13 +454,20 @@ public class HostPartyController : ControllerBase
     public async Task<IActionResult> KickGuest(string sessionId)
     {
         if (RequireHostAuth() == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var partyId = GetActivePartyId();
-        if (partyId == null) return BadRequest(new { error = "No active party" });
+        if (partyId == null)
+        {
+            return BadRequest(new { error = "No active party" });
+        }
 
         if (!_partyService.RemoveGuest(partyId, sessionId))
+        {
             return NotFound(new { error = "Guest not found" });
+        }
 
         var connectionId = _connectionMapping.GetConnectionId(sessionId);
         if (connectionId != null)
@@ -404,11 +482,15 @@ public class HostPartyController : ControllerBase
     public async Task<IActionResult> EndParty()
     {
         if (RequireHostAuth() == null)
+        {
             return Unauthorized(new { error = "Host authentication required" });
+        }
 
         var partyId = GetActivePartyId();
         if (partyId == null)
+        {
             return BadRequest(new { error = "No active party" });
+        }
 
         try
         {
@@ -425,5 +507,4 @@ public class HostPartyController : ControllerBase
 
         return Ok(new { ended = true });
     }
-
 }

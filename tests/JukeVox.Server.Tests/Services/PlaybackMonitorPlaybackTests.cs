@@ -1,31 +1,21 @@
 using FluentAssertions;
+using JukeVox.Server.Configuration;
+using JukeVox.Server.Models;
+using JukeVox.Server.Models.Dto;
+using JukeVox.Server.Services;
+using JukeVox.Server.Tests.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using NUnit.Framework;
-using JukeVox.Server.Configuration;
-using JukeVox.Server.Hubs;
-using JukeVox.Server.Models;
-using JukeVox.Server.Models.Dto;
-using JukeVox.Server.Services;
-using JukeVox.Server.Tests.Helpers;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class PlaybackMonitorPlaybackTests
 {
-    private Mock<ISpotifyPlayerService> _playerService = null!;
-    private Mock<IQueueService> _queueService = null!;
-    private Mock<IPartyService> _partyService = null!;
-    private MockHubContext _hub = null!;
-    private PlaybackMonitorService _monitor = null!;
-    private ServiceProvider _serviceProvider = null!;
-    private FakeTimeProvider _time = null!;
-    private Party _party = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -84,10 +74,19 @@ public class PlaybackMonitorPlaybackTests
         _serviceProvider.Dispose();
     }
 
+    private Mock<ISpotifyPlayerService> _playerService = null!;
+    private Mock<IQueueService> _queueService = null!;
+    private Mock<IPartyService> _partyService = null!;
+    private MockHubContext _hub = null!;
+    private PlaybackMonitorService _monitor = null!;
+    private ServiceProvider _serviceProvider = null!;
+    private FakeTimeProvider _time = null!;
+    private Party _party = null!;
+
     /// <summary>
-    /// Starts the monitor background service and advances fake time to run
-    /// the specified number of poll cycles, then stops the service.
-    /// Each cycle = one poll + one 2-second delay.
+    ///     Starts the monitor background service and advances fake time to run
+    ///     the specified number of poll cycles, then stops the service.
+    ///     Each cycle = one poll + one 2-second delay.
     /// </summary>
     private async Task RunCycles(int count)
     {
@@ -108,8 +107,11 @@ public class PlaybackMonitorPlaybackTests
         await _monitor.StopAsync(CancellationToken.None);
     }
 
-    private static PlaybackStateDto MakeState(string trackUri, bool isPlaying,
-        int progressMs = 50000, int durationMs = 200000, string? deviceId = null) => new()
+    private static PlaybackStateDto MakeState(string trackUri,
+        bool isPlaying,
+        int progressMs = 50000,
+        int durationMs = 200000,
+        string? deviceId = null) => new()
     {
         TrackUri = trackUri,
         TrackName = "Track",
@@ -134,7 +136,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Poll_NormalPlayback_BroadcastsPlaybackStateUpdated()
     {
         _playerService.Setup(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true));
+            .ReturnsAsync(MakeState("spotify:track:a", true));
 
         await RunCycles(1);
 
@@ -145,29 +147,31 @@ public class PlaybackMonitorPlaybackTests
     public async Task Poll_FirstTrack_BroadcastsNowPlayingChanged()
     {
         _playerService.Setup(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true));
+            .ReturnsAsync(MakeState("spotify:track:a", true));
 
         await RunCycles(1);
 
-        _hub.PartyClient.Verify(c => c.NowPlayingChanged(It.Is<PlaybackStateDto>(
-            s => s.TrackUri == "spotify:track:a")), Times.AtLeastOnce);
+        _hub.PartyClient.Verify(c => c.NowPlayingChanged(It.Is<PlaybackStateDto>(s => s.TrackUri == "spotify:track:a")),
+            Times.AtLeastOnce);
     }
 
     [Test]
     public async Task Poll_CurrentTrack_SetsAddedByNameAndIsFromBasePlaylist()
     {
-        _party.CurrentTrack = TestData.CreateQueueItem("My Song", isFromBasePlaylist: true);
+        _party.CurrentTrack = TestData.CreateQueueItem("My Song", true);
         _party.CurrentTrack.AddedByName = "Alice";
 
         _playerService.Setup(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState(_party.CurrentTrack.TrackUri, isPlaying: true));
+            .ReturnsAsync(MakeState(_party.CurrentTrack.TrackUri, true));
 
         _monitor.NotifyTrackStarted(_party.Id, _party.CurrentTrack.TrackUri);
 
         await RunCycles(1);
 
-        _hub.PartyClient.Verify(c => c.PlaybackStateUpdated(It.Is<PlaybackStateDto>(
-            s => s.AddedByName == "Alice" && s.IsFromBasePlaylist)), Times.AtLeastOnce);
+        _hub.PartyClient.Verify(c
+                => c.PlaybackStateUpdated(
+                    It.Is<PlaybackStateDto>(s => s.AddedByName == "Alice" && s.IsFromBasePlaylist)),
+            Times.AtLeastOnce);
     }
 
     // --- Track end detection ---
@@ -179,8 +183,8 @@ public class PlaybackMonitorPlaybackTests
         var nextItem = TestData.CreateQueueItem("Next");
 
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState(trackUri, isPlaying: true, progressMs: 196000, durationMs: 200000))
-            .ReturnsAsync(MakeState(trackUri, isPlaying: false, progressMs: 200000, durationMs: 200000));
+            .ReturnsAsync(MakeState(trackUri, true, 196000, 200000))
+            .ReturnsAsync(MakeState(trackUri, false, 200000, 200000));
 
         _queueService.Setup(q => q.Dequeue(_party.Id)).Returns(nextItem);
         _playerService.Setup(p => p.PlayTrackAsync(nextItem.TrackUri, It.IsAny<string?>())).ReturnsAsync(true);
@@ -197,8 +201,8 @@ public class PlaybackMonitorPlaybackTests
         var nextItem = TestData.CreateQueueItem("Next");
 
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState(trackUri, isPlaying: true, progressMs: 150000, durationMs: 200000))
-            .ReturnsAsync(MakeState(trackUri, isPlaying: false, progressMs: 0, durationMs: 200000));
+            .ReturnsAsync(MakeState(trackUri, true, 150000, 200000))
+            .ReturnsAsync(MakeState(trackUri, false, 0, 200000));
 
         _queueService.Setup(q => q.Dequeue(_party.Id)).Returns(nextItem);
         _playerService.Setup(p => p.PlayTrackAsync(nextItem.TrackUri, It.IsAny<string?>())).ReturnsAsync(true);
@@ -214,8 +218,8 @@ public class PlaybackMonitorPlaybackTests
         var trackUri = "spotify:track:a";
 
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState(trackUri, isPlaying: true, progressMs: 50000, durationMs: 200000))
-            .ReturnsAsync(MakeState(trackUri, isPlaying: false, progressMs: 50000, durationMs: 200000));
+            .ReturnsAsync(MakeState(trackUri, true, 50000, 200000))
+            .ReturnsAsync(MakeState(trackUri, false, 50000, 200000));
 
         await RunCycles(2);
 
@@ -228,7 +232,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Poll_PlaybackNull_WasPlaying_Advances()
     {
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
+            .ReturnsAsync(MakeState("spotify:track:a", true))
             .ReturnsAsync((PlaybackStateDto?)null);
 
         _queueService.Setup(q => q.Dequeue(_party.Id)).Returns(TestData.CreateQueueItem());
@@ -258,8 +262,8 @@ public class PlaybackMonitorPlaybackTests
         var nextItem = TestData.CreateQueueItem("Next");
 
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
-            .ReturnsAsync(MakeState("spotify:track:b", isPlaying: true));
+            .ReturnsAsync(MakeState("spotify:track:a", true))
+            .ReturnsAsync(MakeState("spotify:track:b", true));
 
         _monitor.NotifyTrackStarted(_party.Id, "spotify:track:a");
         // Advance past 5s grace period
@@ -281,8 +285,8 @@ public class PlaybackMonitorPlaybackTests
         _time.Advance(TimeSpan.FromSeconds(6));
 
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
-            .ReturnsAsync(MakeState("spotify:track:b", isPlaying: true));
+            .ReturnsAsync(MakeState("spotify:track:a", true))
+            .ReturnsAsync(MakeState("spotify:track:b", true));
 
         _queueService.Setup(q => q.GetQueue(_party.Id)).Returns([]);
 
@@ -300,7 +304,7 @@ public class PlaybackMonitorPlaybackTests
         // Do NOT advance time — still within 5s grace
 
         _playerService.Setup(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:old", isPlaying: true));
+            .ReturnsAsync(MakeState("spotify:track:old", true));
 
         _queueService.Setup(q => q.GetQueue(_party.Id)).Returns([MakeQueueItemDto()]);
 
@@ -316,7 +320,7 @@ public class PlaybackMonitorPlaybackTests
         _monitor.NotifyTrackStarted(_party.Id, "spotify:track:a");
 
         _playerService.Setup(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true));
+            .ReturnsAsync(MakeState("spotify:track:a", true));
 
         await RunCycles(1);
 
@@ -329,7 +333,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Poll_QueueEmpty_AfterAdvance_EntersIdleMode()
     {
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
+            .ReturnsAsync(MakeState("spotify:track:a", true))
             .ReturnsAsync((PlaybackStateDto?)null);
 
         _queueService.Setup(q => q.Dequeue(_party.Id)).Returns((QueueItem?)null);
@@ -345,26 +349,29 @@ public class PlaybackMonitorPlaybackTests
         var nextItem = TestData.CreateQueueItem("Queued");
 
         var pollCall = 0;
-        _playerService.Setup(p => p.GetPlaybackStateAsync()).ReturnsAsync(() =>
-        {
-            pollCall++;
-            return pollCall switch
+        _playerService.Setup(p => p.GetPlaybackStateAsync())
+            .ReturnsAsync(() =>
             {
-                1 => MakeState("spotify:track:a", isPlaying: true),
-                2 => null,
-                _ => MakeState("spotify:track:a", isPlaying: false)
-            };
-        });
+                pollCall++;
+                return pollCall switch
+                {
+                    1 => MakeState("spotify:track:a", true),
+                    2 => null,
+                    _ => MakeState("spotify:track:a", false)
+                };
+            });
 
         var dequeueCall = 0;
-        _queueService.Setup(q => q.Dequeue(_party.Id)).Returns(() =>
-        {
-            dequeueCall++;
-            return dequeueCall == 1 ? null : nextItem;
-        });
+        _queueService.Setup(q => q.Dequeue(_party.Id))
+            .Returns(() =>
+            {
+                dequeueCall++;
+                return dequeueCall == 1 ? null : nextItem;
+            });
 
-        _queueService.Setup(q => q.GetQueue(_party.Id)).Returns(
-            [MakeQueueItemDto(nextItem.TrackUri)]);
+        _queueService.Setup(q => q.GetQueue(_party.Id))
+            .Returns(
+                [MakeQueueItemDto(nextItem.TrackUri)]);
 
         _playerService.Setup(p => p.PlayTrackAsync(nextItem.TrackUri, It.IsAny<string?>())).ReturnsAsync(true);
 
@@ -379,7 +386,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Advance_FirstPlaySucceeds_DoesNotQueryDevices()
     {
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
+            .ReturnsAsync(MakeState("spotify:track:a", true))
             .ReturnsAsync((PlaybackStateDto?)null);
 
         var next = TestData.CreateQueueItem();
@@ -395,7 +402,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Advance_FirstPlayFails_FallsBackToActiveDevice()
     {
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
+            .ReturnsAsync(MakeState("spotify:track:a", true))
             .ReturnsAsync((PlaybackStateDto?)null);
 
         var next = TestData.CreateQueueItem();
@@ -405,9 +412,10 @@ public class PlaybackMonitorPlaybackTests
             .ReturnsAsync(false)
             .ReturnsAsync(true);
 
-        _playerService.Setup(p => p.GetDevicesAsync()).ReturnsAsync([
-            new SpotifyDeviceDto { Id = "dev-active", Name = "Active", Type = "Speaker", IsActive = true }
-        ]);
+        _playerService.Setup(p => p.GetDevicesAsync())
+            .ReturnsAsync([
+                new SpotifyDeviceDto { Id = "dev-active", Name = "Active", Type = "Speaker", IsActive = true }
+            ]);
 
         await RunCycles(2);
 
@@ -418,7 +426,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Advance_FirstPlayFails_NoActiveDevice_FallsBackToFirst()
     {
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
+            .ReturnsAsync(MakeState("spotify:track:a", true))
             .ReturnsAsync((PlaybackStateDto?)null);
 
         var next = TestData.CreateQueueItem();
@@ -428,10 +436,11 @@ public class PlaybackMonitorPlaybackTests
             .ReturnsAsync(false)
             .ReturnsAsync(true);
 
-        _playerService.Setup(p => p.GetDevicesAsync()).ReturnsAsync([
-            new SpotifyDeviceDto { Id = "dev-first", Name = "First", Type = "Speaker", IsActive = false },
-            new SpotifyDeviceDto { Id = "dev-second", Name = "Second", Type = "Speaker", IsActive = false }
-        ]);
+        _playerService.Setup(p => p.GetDevicesAsync())
+            .ReturnsAsync([
+                new SpotifyDeviceDto { Id = "dev-first", Name = "First", Type = "Speaker", IsActive = false },
+                new SpotifyDeviceDto { Id = "dev-second", Name = "Second", Type = "Speaker", IsActive = false }
+            ]);
 
         await RunCycles(2);
 
@@ -442,7 +451,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Advance_FirstPlayFails_NoDevices_DoesNotBroadcastNowPlaying()
     {
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
+            .ReturnsAsync(MakeState("spotify:track:a", true))
             .ReturnsAsync((PlaybackStateDto?)null);
 
         var next = TestData.CreateQueueItem();
@@ -453,8 +462,8 @@ public class PlaybackMonitorPlaybackTests
 
         await RunCycles(2);
 
-        _hub.PartyClient.Verify(c => c.NowPlayingChanged(It.Is<PlaybackStateDto>(
-            s => s.TrackUri == next.TrackUri)), Times.Never);
+        _hub.PartyClient.Verify(c => c.NowPlayingChanged(It.Is<PlaybackStateDto>(s => s.TrackUri == next.TrackUri)),
+            Times.Never);
         _hub.PartyClient.Verify(c => c.QueueUpdated(It.IsAny<List<QueueItemDto>>()), Times.AtLeastOnce);
     }
 
@@ -464,7 +473,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Advance_Success_BroadcastsNowPlayingAndQueueUpdated()
     {
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true))
+            .ReturnsAsync(MakeState("spotify:track:a", true))
             .ReturnsAsync((PlaybackStateDto?)null);
 
         var next = TestData.CreateQueueItem("Next Song");
@@ -473,8 +482,10 @@ public class PlaybackMonitorPlaybackTests
 
         await RunCycles(2);
 
-        _hub.PartyClient.Verify(c => c.NowPlayingChanged(It.Is<PlaybackStateDto>(
-            s => s.TrackUri == next.TrackUri && s.TrackName == "Next Song")), Times.AtLeastOnce);
+        _hub.PartyClient.Verify(c
+                => c.NowPlayingChanged(It.Is<PlaybackStateDto>(s
+                    => s.TrackUri == next.TrackUri && s.TrackName == "Next Song")),
+            Times.AtLeastOnce);
         _hub.PartyClient.Verify(c => c.QueueUpdated(It.IsAny<List<QueueItemDto>>()), Times.AtLeastOnce);
     }
 
@@ -484,7 +495,7 @@ public class PlaybackMonitorPlaybackTests
     public async Task Poll_PlaybackState_CachesDeviceId()
     {
         _playerService.SetupSequence(p => p.GetPlaybackStateAsync())
-            .ReturnsAsync(MakeState("spotify:track:a", isPlaying: true, deviceId: "dev-1"))
+            .ReturnsAsync(MakeState("spotify:track:a", true, deviceId: "dev-1"))
             .ReturnsAsync((PlaybackStateDto?)null);
 
         var next = TestData.CreateQueueItem();

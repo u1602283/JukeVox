@@ -1,20 +1,20 @@
 using System.Collections.Concurrent;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 using JukeVox.Server.Configuration;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Models;
 using JukeVox.Server.Models.Dto;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 namespace JukeVox.Server.Services;
 
 public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<PlaybackMonitorService> _logger;
     private readonly PartyInactivityOptions _inactivityOptions;
-    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<PlaybackMonitorService> _logger;
     private readonly ConcurrentDictionary<string, PartyPlaybackState> _partyStates = new();
+    private readonly IServiceProvider _serviceProvider;
+    private readonly TimeProvider _timeProvider;
 
     public PlaybackMonitorService(
         IServiceProvider serviceProvider,
@@ -31,15 +31,27 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
     public PlaybackStateDto? GetCachedPlaybackState(string partyId)
     {
         if (!_partyStates.TryGetValue(partyId, out var ps))
+        {
             return null;
+        }
 
         var state = ps.CachedPlaybackState;
-        if (state == null) return null;
+        if (state == null)
+        {
+            return null;
+        }
 
-        if (!state.IsPlaying || state.DurationMs <= 0) return state;
+        if (!state.IsPlaying || state.DurationMs <= 0)
+        {
+            return state;
+        }
 
-        var elapsedMs = (int)((_timeProvider.GetUtcNow().UtcDateTime.Ticks - ps.CachedAtTicks) / TimeSpan.TicksPerMillisecond);
-        if (elapsedMs <= 0) return state;
+        var elapsedMs = (int)((_timeProvider.GetUtcNow().UtcDateTime.Ticks - ps.CachedAtTicks)
+                              / TimeSpan.TicksPerMillisecond);
+        if (elapsedMs <= 0)
+        {
+            return state;
+        }
 
         return new PlaybackStateDto
         {
@@ -79,7 +91,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         // Wake sleeping party
         using var scope = _serviceProvider.CreateScope();
         var partyService = scope.ServiceProvider.GetRequiredService<IPartyService>();
-        if (partyService.SetPartyStatus(partyId, PartyStatus.Active, sleepingSince: null))
+        if (partyService.SetPartyStatus(partyId, PartyStatus.Active, null))
         {
             var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<PartyHub, IPartyClient>>();
             hubContext.Clients.Group(partyId).PartyWoke();
@@ -118,12 +130,17 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         foreach (var partyId in _partyStates.Keys)
         {
             if (!parties.Any(p => p.Id == partyId))
+            {
                 _partyStates.TryRemove(partyId, out _);
+            }
         }
 
         foreach (var party in parties)
         {
-            if (party.SpotifyTokens == null) continue;
+            if (party.SpotifyTokens == null)
+            {
+                continue;
+            }
 
             if (party.Status == PartyStatus.Sleeping)
             {
@@ -156,12 +173,15 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<PartyHub, IPartyClient>>();
 
         var party = partyService.GetParty(partyId);
-        if (party?.SpotifyTokens == null) return;
+        if (party?.SpotifyTokens == null)
+        {
+            return;
+        }
 
         var ps = GetOrCreateState(partyId);
         var state = await playerService.GetPlaybackStateAsync();
 
-        bool shouldAdvance = false;
+        var shouldAdvance = false;
 
         if (state == null || state.TrackName == null)
         {
@@ -174,13 +194,14 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
         else
         {
             if (state.DeviceId != null)
+            {
                 ps.LastDeviceId = state.DeviceId;
+            }
 
             if (!shouldAdvance && ps.WasPlaying && !state.IsPlaying && state.TrackUri == ps.LastTrackUri)
             {
-                bool prevWasNearEnd = ps.LastDurationMs > 0 &&
-                                      ps.LastProgressMs >= ps.LastDurationMs - 5000;
-                bool progressReset = state.ProgressMs < ps.LastProgressMs - 5000;
+                var prevWasNearEnd = ps.LastDurationMs > 0 && ps.LastProgressMs >= ps.LastDurationMs - 5000;
+                var progressReset = state.ProgressMs < ps.LastProgressMs - 5000;
 
                 if (prevWasNearEnd || progressReset)
                 {
@@ -191,10 +212,13 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 
             var inGracePeriod = (_timeProvider.GetUtcNow().UtcDateTime - ps.TrackStartedAt).TotalSeconds < 5;
 
-            if (!shouldAdvance && !inGracePeriod &&
-                (ps.WeStartedCurrentTrack || ps.IdleWatching) && ps.LastTrackUri != null &&
-                state.TrackUri != null && state.TrackUri != ps.LastTrackUri &&
-                state.IsPlaying)
+            if (!shouldAdvance
+                && !inGracePeriod
+                && (ps.WeStartedCurrentTrack || ps.IdleWatching)
+                && ps.LastTrackUri != null
+                && state.TrackUri != null
+                && state.TrackUri != ps.LastTrackUri
+                && state.IsPlaying)
             {
                 var peekQueue = queueService.GetQueue(partyId);
                 if (peekQueue.Count > 0)
@@ -220,7 +244,7 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 
             if (!shouldAdvance)
             {
-                bool staleDuringGrace = inGracePeriod && state!.TrackUri != ps.LastTrackUri;
+                var staleDuringGrace = inGracePeriod && state!.TrackUri != ps.LastTrackUri;
                 if (!staleDuringGrace)
                 {
                     if (party.CurrentTrack != null)
@@ -242,7 +266,9 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
             }
 
             if (inGracePeriod && state!.TrackUri == ps.LastTrackUri)
+            {
                 ps.TrackStartedAt = DateTime.MinValue;
+            }
 
             ps.WasPlaying = state!.IsPlaying;
             ps.LastProgressMs = state.ProgressMs;
@@ -305,57 +331,76 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 
         // Reset activity timer when Spotify is actively playing
         if (state is { IsPlaying: true })
+        {
             ps.LastActivityUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        }
 
         // Check for inactivity → sleep transition
-        if ((_timeProvider.GetUtcNow().UtcDateTime - ps.LastActivityUtc).TotalMinutes >= _inactivityOptions.SleepAfterMinutes)
+        if ((_timeProvider.GetUtcNow().UtcDateTime - ps.LastActivityUtc).TotalMinutes
+            >= _inactivityOptions.SleepAfterMinutes)
         {
             await TransitionToSleepAsync(partyId, partyService, hubContext);
         }
     }
 
     private async Task TransitionToSleepAsync(string partyId,
-        IPartyService partyService, IHubContext<PartyHub, IPartyClient> hubContext)
+        IPartyService partyService,
+        IHubContext<PartyHub, IPartyClient> hubContext)
     {
-        if (!partyService.SetPartyStatus(partyId, PartyStatus.Sleeping, sleepingSince: _timeProvider.GetUtcNow().UtcDateTime))
+        if (!partyService.SetPartyStatus(partyId, PartyStatus.Sleeping, _timeProvider.GetUtcNow().UtcDateTime))
+        {
             return;
+        }
 
         if (_partyStates.TryGetValue(partyId, out var ps))
+        {
             ps.CachedPlaybackState = null;
+        }
 
         await hubContext.Clients.Group(partyId).PartySleeping();
         _logger.LogInformation("[{PartyId}] Party sleeping due to inactivity", partyId);
     }
 
-    private async Task CheckAutoEndAsync(Party party, IPartyService partyService,
+    private async Task CheckAutoEndAsync(Party party,
+        IPartyService partyService,
         IHubContext<PartyHub, IPartyClient> hubContext)
     {
         if (!partyService.TryAutoEndSleepingParty(party.Id, _inactivityOptions.AutoEndAfterMinutes, _timeProvider))
+        {
             return;
+        }
 
         await hubContext.Clients.Group(party.Id).PartyEnded();
         _partyStates.TryRemove(party.Id, out _);
 
         _logger.LogInformation("[{PartyId}] Party auto-ended after sleeping for {Minutes} minutes",
-            party.Id, _inactivityOptions.AutoEndAfterMinutes);
+            party.Id,
+            _inactivityOptions.AutoEndAfterMinutes);
     }
 
     private PartyPlaybackState GetOrCreateState(string partyId)
     {
-        return _partyStates.GetOrAdd(partyId, _ => new PartyPlaybackState
-        {
-            LastActivityUtc = _timeProvider.GetUtcNow().UtcDateTime
-        });
+        return _partyStates.GetOrAdd(partyId,
+            _ => new PartyPlaybackState
+            {
+                LastActivityUtc = _timeProvider.GetUtcNow().UtcDateTime
+            });
     }
 
-    private static async Task<bool> PlayWithDeviceFallback(ISpotifyPlayerService playerService, string trackUri, PartyPlaybackState ps)
+    private static async Task<bool> PlayWithDeviceFallback(ISpotifyPlayerService playerService,
+        string trackUri,
+        PartyPlaybackState ps)
     {
         if (await playerService.PlayTrackAsync(trackUri, ps.LastDeviceId))
+        {
             return true;
+        }
 
         var devices = await playerService.GetDevicesAsync();
         if (devices.Count == 0)
+        {
             return false;
+        }
 
         var target = devices.FirstOrDefault(d => d.Id == ps.LastDeviceId)
                      ?? devices.FirstOrDefault(d => d.IsActive)
@@ -367,16 +412,16 @@ public class PlaybackMonitorService : BackgroundService, IPlaybackMonitorService
 
     private class PartyPlaybackState
     {
-        public string? LastTrackUri;
-        public string? LastDeviceId;
-        public bool WasPlaying;
-        public int LastProgressMs;
-        public int LastDurationMs;
-        public bool WeStartedCurrentTrack;
-        public bool IdleWatching;
-        public DateTime TrackStartedAt = DateTime.MinValue;
-        public volatile PlaybackStateDto? CachedPlaybackState;
         public long CachedAtTicks;
+        public volatile PlaybackStateDto? CachedPlaybackState;
+        public bool IdleWatching;
         public DateTime LastActivityUtc;
+        public string? LastDeviceId;
+        public int LastDurationMs;
+        public int LastProgressMs;
+        public string? LastTrackUri;
+        public DateTime TrackStartedAt = DateTime.MinValue;
+        public bool WasPlaying;
+        public bool WeStartedCurrentTrack;
     }
 }

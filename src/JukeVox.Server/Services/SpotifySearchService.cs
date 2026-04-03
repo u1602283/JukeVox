@@ -6,8 +6,8 @@ namespace JukeVox.Server.Services;
 
 public class SpotifySearchService : ISpotifySearchService
 {
-    private readonly HttpClient _httpClient;
     private readonly ISpotifyAuthService _authService;
+    private readonly HttpClient _httpClient;
     private readonly ILogger<SpotifySearchService> _logger;
 
     public SpotifySearchService(
@@ -23,7 +23,10 @@ public class SpotifySearchService : ISpotifySearchService
     public async Task<List<SearchResultDto>> SearchAsync(string query, int limit = 20)
     {
         var token = await _authService.GetValidAccessTokenAsync();
-        if (token == null) return [];
+        if (token == null)
+        {
+            return [];
+        }
 
         var url = $"https://api.spotify.com/v1/search?q={Uri.EscapeDataString(query)}&type=track&limit={limit}";
 
@@ -38,16 +41,20 @@ public class SpotifySearchService : ISpotifySearchService
         }
 
         var result = await response.Content.ReadFromJsonAsync<SpotifySearchResponse>();
-        if (result?.Tracks?.Items == null) return [];
+        if (result?.Tracks?.Items == null)
+        {
+            return [];
+        }
 
         return result.Tracks.Items.Select(t => new SearchResultDto
-        {
-            TrackUri = t.Uri,
-            TrackName = t.Name,
-            ArtistName = string.Join(", ", t.Artists.Select(a => a.Name)),
-            AlbumName = t.Album?.Name ?? string.Empty,
-            AlbumImageUrl = t.Album?.Images.FirstOrDefault()?.Url,
-            DurationMs = t.DurationMs
-        }).ToList();
+            {
+                TrackUri = t.Uri,
+                TrackName = t.Name,
+                ArtistName = string.Join(", ", t.Artists.Select(a => a.Name)),
+                AlbumName = t.Album?.Name ?? string.Empty,
+                AlbumImageUrl = t.Album?.Images.FirstOrDefault()?.Url,
+                DurationMs = t.DurationMs
+            })
+            .ToList();
     }
 }

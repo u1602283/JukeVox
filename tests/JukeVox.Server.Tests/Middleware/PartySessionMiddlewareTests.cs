@@ -1,9 +1,9 @@
 using FluentAssertions;
+using JukeVox.Server.Middleware;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using JukeVox.Server.Middleware;
 
 namespace JukeVox.Server.Tests.Middleware;
 
@@ -24,7 +24,10 @@ public class PartySessionMiddlewareTests
         services.AddSingleton(DataProtectionProvider);
         var context = new DefaultHttpContext { RequestServices = services.BuildServiceProvider() };
         if (cookieValue != null)
+        {
             context.Request.Headers.Cookie = $"JukeVox.SessionId={cookieValue}";
+        }
+
         return context;
     }
 

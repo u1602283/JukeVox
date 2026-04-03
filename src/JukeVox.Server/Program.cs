@@ -1,8 +1,9 @@
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.AspNetCore.HttpOverrides;
 using JukeVox.Server.Extensions;
 using JukeVox.Server.Hubs;
 using JukeVox.Server.Middleware;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,9 +24,9 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
         policy.WithOrigins(frontendUrl)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -36,8 +37,9 @@ if (File.Exists(certPath) && File.Exists(keyPath))
 {
     builder.WebHost.ConfigureKestrel(options =>
     {
-        options.ListenAnyIP(5001, listenOptions => listenOptions.UseHttps(
-            X509Certificate2.CreateFromPemFile(certPath, keyPath)));
+        options.ListenAnyIP(5001,
+            listenOptions => listenOptions.UseHttps(
+                X509Certificate2.CreateFromPemFile(certPath, keyPath)));
     });
 }
 
@@ -46,7 +48,7 @@ var app = builder.Build();
 app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 app.UseCors();
-app.UseMiddleware<PartySessionMiddleware>(app.Services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>());
+app.UseMiddleware<PartySessionMiddleware>(app.Services.GetRequiredService<IDataProtectionProvider>());
 app.UseMiddleware<PartyContextMiddleware>();
 app.UseMiddleware<HostActivityMiddleware>();
 

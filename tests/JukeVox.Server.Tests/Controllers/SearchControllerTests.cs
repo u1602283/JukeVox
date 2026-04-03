@@ -1,22 +1,17 @@
 using FluentAssertions;
-using Microsoft.AspNetCore.Mvc;
-using Moq;
-using NUnit.Framework;
 using JukeVox.Server.Controllers;
 using JukeVox.Server.Models.Dto;
 using JukeVox.Server.Services;
 using JukeVox.Server.Tests.Helpers;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using NUnit.Framework;
 
 namespace JukeVox.Server.Tests.Controllers;
 
 [TestFixture]
 public class SearchControllerTests
 {
-    private const string PartyId = "test1234";
-    private Mock<ISpotifySearchService> _searchService = null!;
-    private Mock<IPartyService> _partyService = null!;
-    private SearchController _controller = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -25,13 +20,24 @@ public class SearchControllerTests
         _controller = new SearchController(_searchService.Object, _partyService.Object);
     }
 
+    private const string PartyId = "test1234";
+    private Mock<ISpotifySearchService> _searchService = null!;
+    private Mock<IPartyService> _partyService = null!;
+    private SearchController _controller = null!;
+
     [Test]
     public async Task Search_AsHost_ReturnsResults()
     {
         _controller.ControllerContext.HttpContext = TestHttpContext.CreateHostContext();
         _partyService.Setup(p => p.GetPartyIdForSession("host-session")).Returns(PartyId);
         _partyService.Setup(p => p.IsHost(PartyId, "host-session")).Returns(true);
-        var results = new List<SearchResultDto> { new() { TrackUri = "uri", TrackName = "Song", ArtistName = "Artist", AlbumName = "Album", DurationMs = 200000 } };
+        var results = new List<SearchResultDto>
+        {
+            new()
+            {
+                TrackUri = "uri", TrackName = "Song", ArtistName = "Artist", AlbumName = "Album", DurationMs = 200000
+            }
+        };
         _searchService.Setup(s => s.SearchAsync("test", 20)).ReturnsAsync(results);
 
         var result = await _controller.Search("test");
@@ -42,7 +48,7 @@ public class SearchControllerTests
     [Test]
     public async Task Search_AsParticipant_ReturnsResults()
     {
-        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext("guest-1");
+        _controller.ControllerContext.HttpContext = TestHttpContext.CreateGuestContext();
         _partyService.Setup(p => p.GetPartyIdForSession("guest-1")).Returns(PartyId);
         _partyService.Setup(p => p.IsHost(PartyId, "guest-1")).Returns(false);
         _partyService.Setup(p => p.IsParticipant(PartyId, "guest-1")).Returns(true);

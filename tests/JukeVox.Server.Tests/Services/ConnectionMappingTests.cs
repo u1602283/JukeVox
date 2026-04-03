@@ -1,16 +1,16 @@
 using FluentAssertions;
-using NUnit.Framework;
 using JukeVox.Server.Services;
+using NUnit.Framework;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class ConnectionMappingTests
 {
-    private ConnectionMapping _mapping = null!;
-
     [SetUp]
     public void SetUp() => _mapping = new ConnectionMapping();
+
+    private ConnectionMapping _mapping = null!;
 
     [Test]
     public void Add_And_GetConnectionId_ReturnsStoredValue()
@@ -21,10 +21,7 @@ public class ConnectionMappingTests
     }
 
     [Test]
-    public void GetConnectionId_UnknownSession_ReturnsNull()
-    {
-        _mapping.GetConnectionId("unknown").Should().BeNull();
-    }
+    public void GetConnectionId_UnknownSession_ReturnsNull() => _mapping.GetConnectionId("unknown").Should().BeNull();
 
     [Test]
     public void Add_SameSessionTwice_OverwritesPrevious()

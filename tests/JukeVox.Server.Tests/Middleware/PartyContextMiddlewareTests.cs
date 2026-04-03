@@ -1,9 +1,9 @@
 using FluentAssertions;
+using JukeVox.Server.Middleware;
+using JukeVox.Server.Services;
 using Microsoft.AspNetCore.Http;
 using Moq;
 using NUnit.Framework;
-using JukeVox.Server.Middleware;
-using JukeVox.Server.Services;
 
 namespace JukeVox.Server.Tests.Middleware;
 

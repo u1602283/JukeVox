@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Mvc;
 using JukeVox.Server.Middleware;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace JukeVox.Server.Controllers;
 
@@ -8,8 +8,8 @@ namespace JukeVox.Server.Controllers;
 [Route("api/search")]
 public class SearchController : ControllerBase
 {
-    private readonly ISpotifySearchService _searchService;
     private readonly IPartyService _partyService;
+    private readonly ISpotifySearchService _searchService;
 
     public SearchController(ISpotifySearchService searchService, IPartyService partyService)
     {
@@ -22,14 +22,21 @@ public class SearchController : ControllerBase
     {
         var sessionId = HttpContext.GetSessionId();
         var partyId = _partyService.GetPartyIdForSession(sessionId);
-        if (partyId == null) return Unauthorized();
+        if (partyId == null)
+        {
+            return Unauthorized();
+        }
 
         var isHost = _partyService.IsHost(partyId, sessionId);
         if (!isHost && !_partyService.IsParticipant(partyId, sessionId))
+        {
             return Unauthorized();
+        }
 
         if (string.IsNullOrWhiteSpace(q))
+        {
             return Ok(Array.Empty<object>());
+        }
 
         var results = await _searchService.SearchAsync(q, Math.Clamp(limit, 1, 50));
         return Ok(results);

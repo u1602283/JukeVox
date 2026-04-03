@@ -1,21 +1,17 @@
 using System.Net;
 using FluentAssertions;
+using JukeVox.Server.Services;
+using JukeVox.Server.Tests.Helpers;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
-using JukeVox.Server.Services;
-using JukeVox.Server.Tests.Helpers;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class SpotifySearchServiceTests
 {
-    private MockHttpHandler _handler = null!;
-    private Mock<ISpotifyAuthService> _authService = null!;
-    private SpotifySearchService _service = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -37,64 +33,72 @@ public class SpotifySearchServiceTests
         _handler.Dispose();
     }
 
+    private MockHttpHandler _handler = null!;
+    private Mock<ISpotifyAuthService> _authService = null!;
+    private SpotifySearchService _service = null!;
+
     [Test]
     public async Task SearchAsync_Success_MapsResults()
     {
         _handler.EnqueueSuccess("""
-        {
-            "tracks": {
-                "items": [
-                    {
-                        "uri": "spotify:track:aaa",
-                        "name": "Song A",
-                        "duration_ms": 210000,
-                        "artists": [
-                            { "name": "Artist X" }
-                        ],
-                        "album": {
-                            "name": "Album One",
-                            "images": [
-                                { "url": "https://img.spotify.com/a.jpg", "height": 640, "width": 640 }
-                            ]
-                        }
-                    },
-                    {
-                        "uri": "spotify:track:bbb",
-                        "name": "Song B",
-                        "duration_ms": 180000,
-                        "artists": [
-                            { "name": "Artist Y" },
-                            { "name": "Artist Z" }
-                        ],
-                        "album": {
-                            "name": "Album Two",
-                            "images": []
-                        }
-                    }
-                ]
-            }
-        }
-        """);
+                                {
+                                    "tracks": {
+                                        "items": [
+                                            {
+                                                "uri": "spotify:track:aaa",
+                                                "name": "Song A",
+                                                "duration_ms": 210000,
+                                                "artists": [
+                                                    { "name": "Artist X" }
+                                                ],
+                                                "album": {
+                                                    "name": "Album One",
+                                                    "images": [
+                                                        { "url": "https://img.spotify.com/a.jpg", "height": 640, "width": 640 }
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "uri": "spotify:track:bbb",
+                                                "name": "Song B",
+                                                "duration_ms": 180000,
+                                                "artists": [
+                                                    { "name": "Artist Y" },
+                                                    { "name": "Artist Z" }
+                                                ],
+                                                "album": {
+                                                    "name": "Album Two",
+                                                    "images": []
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                                """);
 
         var results = await _service.SearchAsync("test query", 10);
 
         results.Should().HaveCount(2);
 
-        results[0].Should().BeEquivalentTo(new
-        {
-            TrackUri = "spotify:track:aaa",
-            TrackName = "Song A",
-            ArtistName = "Artist X",
-            AlbumName = "Album One",
-            AlbumImageUrl = "https://img.spotify.com/a.jpg",
-            DurationMs = 210000
-        });
+        results[0]
+            .Should()
+            .BeEquivalentTo(new
+            {
+                TrackUri = "spotify:track:aaa",
+                TrackName = "Song A",
+                ArtistName = "Artist X",
+                AlbumName = "Album One",
+                AlbumImageUrl = "https://img.spotify.com/a.jpg",
+                DurationMs = 210000
+            });
 
-        results[1].Should().BeEquivalentTo(new
-        {
-            ArtistName = "Artist Y, Artist Z",
-            AlbumImageUrl = (string?)null // empty images list
-        });
+        results[1]
+            .Should()
+            .BeEquivalentTo(new
+            {
+                ArtistName = "Artist Y, Artist Z",
+                AlbumImageUrl = (string?)null // empty images list
+            });
     }
 
     [Test]
@@ -142,20 +146,20 @@ public class SpotifySearchServiceTests
     public async Task SearchAsync_NullAlbum_DefaultsAlbumNameToEmpty()
     {
         _handler.EnqueueSuccess("""
-        {
-            "tracks": {
-                "items": [
-                    {
-                        "uri": "spotify:track:abc",
-                        "name": "No Album Song",
-                        "duration_ms": 120000,
-                        "artists": [{ "name": "Solo" }],
-                        "album": null
-                    }
-                ]
-            }
-        }
-        """);
+                                {
+                                    "tracks": {
+                                        "items": [
+                                            {
+                                                "uri": "spotify:track:abc",
+                                                "name": "No Album Song",
+                                                "duration_ms": 120000,
+                                                "artists": [{ "name": "Solo" }],
+                                                "album": null
+                                            }
+                                        ]
+                                    }
+                                }
+                                """);
 
         var results = await _service.SearchAsync("query");
 

@@ -1,4 +1,8 @@
 using FluentAssertions;
+using JukeVox.Server.Configuration;
+using JukeVox.Server.Hubs;
+using JukeVox.Server.Models;
+using JukeVox.Server.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -6,23 +10,12 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using NUnit.Framework;
-using JukeVox.Server.Configuration;
-using JukeVox.Server.Hubs;
-using JukeVox.Server.Models;
-using JukeVox.Server.Services;
 
 namespace JukeVox.Server.Tests.Services;
 
 [TestFixture]
 public class PlaybackMonitorInactivityTests
 {
-    private Mock<IPartyService> _partyService = null!;
-    private Mock<IHubContext<PartyHub, IPartyClient>> _hubContext = null!;
-    private Mock<IPartyClient> _partyClients = null!;
-    private PlaybackMonitorService _monitor = null!;
-    private ServiceProvider _serviceProvider = null!;
-    private FakeTimeProvider _time = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -61,6 +54,13 @@ public class PlaybackMonitorInactivityTests
         _monitor.Dispose();
         _serviceProvider.Dispose();
     }
+
+    private Mock<IPartyService> _partyService = null!;
+    private Mock<IHubContext<PartyHub, IPartyClient>> _hubContext = null!;
+    private Mock<IPartyClient> _partyClients = null!;
+    private PlaybackMonitorService _monitor = null!;
+    private ServiceProvider _serviceProvider = null!;
+    private FakeTimeProvider _time = null!;
 
     private async Task RunOnePollCycle()
     {

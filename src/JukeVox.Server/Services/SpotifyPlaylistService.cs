@@ -8,8 +8,9 @@ namespace JukeVox.Server.Services;
 
 public class SpotifyPlaylistService : ISpotifyPlaylistService
 {
-    private readonly HttpClient _httpClient;
+    private const int MaxRetries = 5;
     private readonly ISpotifyAuthService _authService;
+    private readonly HttpClient _httpClient;
     private readonly ILogger<SpotifyPlaylistService> _logger;
 
     public SpotifyPlaylistService(
@@ -26,37 +27,54 @@ public class SpotifyPlaylistService : ISpotifyPlaylistService
     {
         var url = $"https://api.spotify.com/v1/me/playlists?limit={limit}&offset={offset}";
         var response = await SendAsync(HttpMethod.Get, url);
-        if (response == null || !response.IsSuccessStatusCode) return [];
+        if (response == null || !response.IsSuccessStatusCode)
+        {
+            return [];
+        }
 
         var result = await response.Content.ReadFromJsonAsync<SpotifyPlaylistsResponse>();
-        if (result == null) return [];
+        if (result == null)
+        {
+            return [];
+        }
 
         return result.Items.Select(p => new SpotifyPlaylistDto
-        {
-            Id = p.Id,
-            Name = p.Name,
-            ImageUrl = p.Images.FirstOrDefault()?.Url,
-            TrackCount = p.Tracks?.Total ?? 0
-        }).ToList();
+            {
+                Id = p.Id,
+                Name = p.Name,
+                ImageUrl = p.Images.FirstOrDefault()?.Url,
+                TrackCount = p.Tracks?.Total ?? 0
+            })
+            .ToList();
     }
 
     public async Task<List<BasePlaylistTrack>> GetAllPlaylistTracksAsync(string playlistId)
     {
         var tracks = new List<BasePlaylistTrack>();
         var fields = "items(track(uri,name,duration_ms,artists(name),album(name,images)),is_local),next,total";
-        var url = $"https://api.spotify.com/v1/playlists/{playlistId}/tracks?fields={Uri.EscapeDataString(fields)}&limit=100";
+        var url =
+            $"https://api.spotify.com/v1/playlists/{playlistId}/tracks?fields={Uri.EscapeDataString(fields)}&limit=100";
 
         while (url != null)
         {
             var response = await SendAsync(HttpMethod.Get, url);
-            if (response == null || !response.IsSuccessStatusCode) break;
+            if (response == null || !response.IsSuccessStatusCode)
+            {
+                break;
+            }
 
             var result = await response.Content.ReadFromJsonAsync<SpotifyPlaylistTracksResponse>();
-            if (result == null) break;
+            if (result == null)
+            {
+                break;
+            }
 
             foreach (var item in result.Items)
             {
-                if (item.IsLocal || item.Track == null) continue;
+                if (item.IsLocal || item.Track == null)
+                {
+                    continue;
+                }
 
                 tracks.Add(new BasePlaylistTrack
                 {
@@ -75,14 +93,15 @@ public class SpotifyPlaylistService : ISpotifyPlaylistService
         return tracks;
     }
 
-    private const int MaxRetries = 5;
-
     private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url)
     {
-        for (var attempt = 0; ; attempt++)
+        for (var attempt = 0;; attempt++)
         {
             var token = await _authService.GetValidAccessTokenAsync();
-            if (token == null) return null;
+            if (token == null)
+            {
+                return null;
+            }
 
             var request = new HttpRequestMessage(method, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -95,7 +114,9 @@ public class SpotifyPlaylistService : ISpotifyPlaylistService
                 {
                     var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(1);
                     _logger.LogWarning("Spotify rate limited (attempt {Attempt}/{Max}). Retry after: {RetryAfter}",
-                        attempt + 1, MaxRetries, retryAfter);
+                        attempt + 1,
+                        MaxRetries,
+                        retryAfter);
                     response.Dispose();
                     await Task.Delay(retryAfter);
                     continue;

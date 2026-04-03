@@ -1,12 +1,12 @@
-using Microsoft.AspNetCore.SignalR;
 using JukeVox.Server.Services;
+using Microsoft.AspNetCore.SignalR;
 
 namespace JukeVox.Server.Hubs;
 
 public class PartyHub : Hub<IPartyClient>
 {
-    private readonly IPartyService _partyService;
     private readonly ConnectionMapping _connectionMapping;
+    private readonly IPartyService _partyService;
 
     public PartyHub(IPartyService partyService, ConnectionMapping connectionMapping)
     {
@@ -29,7 +29,9 @@ public class PartyHub : Hub<IPartyClient>
         var partyId = httpContext?.Request.Query["partyId"].ToString();
         var sessionId = httpContext?.Items["SessionId"] as string;
 
-        if (!string.IsNullOrEmpty(partyId) && !string.IsNullOrEmpty(sessionId) && _partyService.IsParticipant(partyId, sessionId))
+        if (!string.IsNullOrEmpty(partyId)
+            && !string.IsNullOrEmpty(sessionId)
+            && _partyService.IsParticipant(partyId, sessionId))
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, partyId);
         }
