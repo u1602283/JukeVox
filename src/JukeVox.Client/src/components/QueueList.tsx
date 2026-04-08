@@ -274,7 +274,7 @@ export function QueueList() {
                 <GripVertical size={20} />
               </div>
             )}
-            <span className={styles.index}>{draggedItem ? stableNumbers.get(draggedItem.id) ?? '' : ''}</span>
+            <span className={styles.index}>{drag.fromIndex !== null ? stableNumbers[drag.fromIndex] ?? '' : ''}</span>
             {draggedItem.albumImageUrl && (
               <img src={draggedItem.albumImageUrl} alt="" className={styles.thumb} />
             )}

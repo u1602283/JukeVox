@@ -19,3 +19,13 @@ repos:
         exclude: tsconfig\.
       - id: check-yaml
       - id: detect-private-key
+
+  # Frontend lint
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd src/JukeVox.Client && npm run lint'
+        language: system
+        files: ^src/JukeVox\.Client/.*\.(ts|tsx)$
+        pass_filenames: false
