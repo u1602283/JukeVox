@@ -84,8 +84,7 @@ export function QueueList() {
     ));
 
     try {
-      const { queue: sorted } = await api.vote(itemId, newVote);
-      setQueue(sorted);
+      await api.vote(itemId, newVote);
     } catch (err) {
       setUserVote(itemId, currentVote);
       setQueue(prev => prev.map(item =>
@@ -103,13 +102,12 @@ export function QueueList() {
     );
   }
 
-  // Precompute stable numbers from original order (unaffected by drag reorder)
-  const stableNumbers = new Map<string, number>();
+  // Precompute stable numbers from original order (unaffected by drag reorder).
+  // Uses index-based array instead of key-based Map to handle duplicate IDs safely.
+  const stableNumbers: number[] = [];
   let stableCount = 0;
   for (const ai of animatedItems) {
-    if (ai.phase !== 'exiting') {
-      stableNumbers.set(ai.key, ++stableCount);
-    }
+    stableNumbers.push(ai.phase !== 'exiting' ? ++stableCount : 0);
   }
 
   // Find the boundary between manual and base playlist items (exclude exiting items)
@@ -162,7 +160,7 @@ export function QueueList() {
         const isBeingDragged = drag.dragging && key === draggedKey;
         const showDivider = index === firstBaseDisplayIndex && firstBaseIndex > 0;
         const myVote = userVotes[item.id] ?? 0;
-        const visibleNum = stableNumbers.get(key) ?? 0;
+        const visibleNum = stableNumbers[index] ?? 0;
 
         // Compute shift margin: the item at gapTargetKey gets extra space
         let shiftStyle: React.CSSProperties | undefined;
