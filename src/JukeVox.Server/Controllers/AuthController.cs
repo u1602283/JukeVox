@@ -13,12 +13,14 @@ public class AuthController : ControllerBase
     private readonly ISpotifyAuthService _authService;
     private readonly string _frontendUrl;
     private readonly IPartyService _partyService;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(ISpotifyAuthService authService, IPartyService partyService, IConfiguration configuration)
+    public AuthController(ISpotifyAuthService authService, IPartyService partyService, IConfiguration configuration, ILogger<AuthController> logger)
     {
         _authService = authService;
         _partyService = partyService;
         _frontendUrl = configuration["FrontendUrl"] ?? "http://localhost:5173";
+        _logger = logger;
     }
 
     [HttpGet("login")]
@@ -55,21 +57,41 @@ public class AuthController : ControllerBase
     }
 
     [HttpGet("callback")]
-    public async Task<IActionResult> Callback([FromQuery] string code, [FromQuery] string state)
+    public async Task<IActionResult> Callback(
+        [FromQuery] string? code,
+        [FromQuery] string? state,
+        [FromQuery] string? error)
     {
         var storedState = Request.Cookies[OAuthStateCookie];
         Response.Cookies.Delete(OAuthStateCookie, new CookieOptions { Path = "/api/auth/callback" });
 
+        // Spotify can redirect back without a code — e.g. error=access_denied (user
+        // declined) or error=server_error (Spotify-side fault). Handle it gracefully
+        // instead of failing model validation with a raw 400.
+        if (!string.IsNullOrEmpty(error))
+        {
+            _logger.LogWarning("Spotify authorization returned an error: {Error}", error);
+            return RedirectToHostWithError(error);
+        }
+
+        if (string.IsNullOrEmpty(code))
+        {
+            _logger.LogWarning("Spotify callback received without an authorization code");
+            return RedirectToHostWithError("missing_code");
+        }
+
         if (string.IsNullOrEmpty(storedState) || storedState != state)
         {
-            return BadRequest("Invalid OAuth state");
+            _logger.LogWarning("Spotify callback received with invalid OAuth state");
+            return RedirectToHostWithError("invalid_state");
         }
 
         // Parse partyId from state: "{partyId}:{nonce}"
         var colonIndex = state.IndexOf(':');
         if (colonIndex < 0)
         {
-            return BadRequest("Invalid OAuth state format");
+            _logger.LogWarning("Spotify callback received with malformed OAuth state");
+            return RedirectToHostWithError("invalid_state");
         }
 
         var partyId = state[..colonIndex];
@@ -77,11 +99,15 @@ public class AuthController : ControllerBase
         var tokens = await _authService.ExchangeCodeAsync(code, partyId);
         if (tokens == null)
         {
-            return BadRequest("Failed to exchange authorization code");
+            _logger.LogWarning("Spotify token exchange failed for party {PartyId}", partyId);
+            return RedirectToHostWithError("exchange_failed");
         }
 
         return Redirect($"{_frontendUrl}/host");
     }
+
+    private RedirectResult RedirectToHostWithError(string reason) =>
+        Redirect($"{_frontendUrl}/host?spotify_error={Uri.EscapeDataString(reason)}");
 
     [HttpGet("status")]
     public IActionResult Status()

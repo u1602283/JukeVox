@@ -21,6 +21,17 @@ import type { HostStatus, PartySummary } from '../types';
 import styles from './HostPortalPage.module.css';
 import partyStyles from './PartyPage.module.css';
 
+function spotifyErrorMessage(code: string): string {
+  switch (code) {
+    case 'access_denied':
+      return 'Spotify connection was cancelled.';
+    case 'server_error':
+      return 'Spotify had a temporary problem. Please try connecting again.';
+    default:
+      return "Couldn't connect to Spotify. Please try again.";
+  }
+}
+
 export function HostPortalPage() {
   const { party, setParty, isSleeping } = useParty();
   const { query, setQuery, results, loading: searchLoading } = useSearch();
@@ -41,6 +52,19 @@ export function HostPortalPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [spotifyError, setSpotifyError] = useState<string | null>(null);
+
+  // Surface a Spotify connection failure passed back by the OAuth callback
+  // (e.g. ?spotify_error=server_error), then strip it from the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('spotify_error');
+    if (!err) return;
+    setSpotifyError(err);
+    params.delete('spotify_error');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+  }, []);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -347,6 +371,18 @@ export function HostPortalPage() {
       panels={panels}
       overlays={
         <>
+          {spotifyError && (
+            <div className={styles.spotifyToast} role="alert">
+              <span>{spotifyErrorMessage(spotifyError)}</span>
+              <button
+                className={styles.spotifyToastClose}
+                onClick={() => setSpotifyError(null)}
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <SearchOverlay
             open={searchOpen}
             onClose={handleCloseSearch}
