@@ -6,7 +6,23 @@ const PINCH_SIGMA = 0.12;
 const EDGE_MARGIN = 0.08;
 const NUM_POINTS = 20;
 const SMOOTHING = 0.4;   // frame-to-frame carry-over for soft inertia
-const SETTLE_MS = 500;
+const SETTLE_MS = 800;
+const JANK_FRAME_MS = 32;    // a frame slower than ~30fps counts as a dropped frame
+const JANK_TRIP_COUNT = 5;   // sustained dropped frames before we give up
+
+// The liquid-pinch clip-path is a per-frame flourish (recomputes a polygon and
+// reads layout every frame). Rather than guess device capability up front
+// (navigator.hardwareConcurrency is unreliable — iOS Safari under-reports it),
+// we run it and watch real frame timing: if a device can't sustain it, we bail
+// and disable it for the rest of the session. The CSS transform still slides
+// the pill smoothly regardless.
+let pinchDisabled = false;
+
+function pinchAllowed(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (pinchDisabled) return false;
+  return !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 interface TabIndicatorProps {
   tabIndex: number;
@@ -23,16 +39,38 @@ export function TabIndicator({ tabIndex, tabCount }: TabIndicatorProps) {
       return;
     }
 
+    // The pill itself slides via CSS transform; only the optional pinch
+    // flourish runs here, and only where the device can sustain it.
+    if (!pinchAllowed()) return;
+
     const el = ref.current;
     const parent = el?.parentElement;
     if (!el || !parent) return;
 
     let running = true;
     let rafId: number;
+    let lastTs: number | null = null;
+    let slowFrames = 0;
     const prev = new Float64Array(NUM_POINTS + 1);
 
-    const animate = () => {
+    const animate = (ts: number) => {
       if (!running) return;
+
+      // Watch real frame timing; if this device can't keep up, disable the
+      // pinch for the session and fall back to the plain transform slide.
+      if (lastTs !== null) {
+        if (ts - lastTs > JANK_FRAME_MS) {
+          if (++slowFrames >= JANK_TRIP_COUNT) {
+            pinchDisabled = true;
+            running = false;
+            el.style.clipPath = '';
+            return;
+          }
+        } else if (slowFrames > 0) {
+          slowFrames--;
+        }
+      }
+      lastTs = ts;
 
       const pRect = parent.getBoundingClientRect();
       const eRect = el.getBoundingClientRect();

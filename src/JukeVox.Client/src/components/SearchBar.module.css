@@ -53,7 +53,7 @@
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--track-bg);
   color: var(--text-secondary);
   border-radius: 50%;
   width: 28px;
@@ -65,6 +65,6 @@
 }
 
 .clearBtn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--border-hover);
   color: var(--text-primary);
 }

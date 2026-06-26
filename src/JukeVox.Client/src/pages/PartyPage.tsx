@@ -8,6 +8,7 @@ import { SearchOverlay } from '../components/SearchOverlay';
 import { HelpOverlay } from '../components/HelpOverlay';
 import { ShareOverlay } from '../components/ShareOverlay';
 import { CreditsBadge } from '../components/CreditsBadge';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { PartyLayout } from '../components/PartyLayout';
 import type { PanelDefinition } from '../components/PartyLayout';
 import styles from './PartyPage.module.css';
@@ -52,6 +53,10 @@ export function PartyPage() {
             <span className={styles.spotifyStatus}>Connected</span>
           )}
           <div className={styles.headerIcons}>
+            <ThemeToggle
+              variant="icon"
+              className={`${styles.searchToggle} ${styles.desktopOnly}`}
+            />
             <button
               className={styles.searchToggle}
               onClick={() => setShareOpen(true)}

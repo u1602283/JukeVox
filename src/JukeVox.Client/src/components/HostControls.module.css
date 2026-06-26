@@ -75,7 +75,7 @@
   flex: 1;
   height: 3px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--track-bg);
   outline: none;
   transition: height var(--duration-fast) var(--ease-out);
   cursor: pointer;

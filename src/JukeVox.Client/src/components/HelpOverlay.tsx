@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { api } from '../api/client';
 import { useParty } from '../hooks/useParty';
+import { ThemeToggle } from './ThemeToggle';
 import styles from './HelpOverlay.module.css';
 
 interface HelpOverlayProps {
@@ -85,6 +86,11 @@ export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
               and that overrides everything. Benevolent dictatorship with
               democratic characteristics.
             </p>
+          </section>
+
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Preferences</h3>
+            <ThemeToggle variant="row" />
           </section>
 
           <section className={styles.section}>

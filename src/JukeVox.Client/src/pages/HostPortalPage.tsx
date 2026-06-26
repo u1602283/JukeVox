@@ -14,6 +14,7 @@ import { DeviceSelector } from '../components/DeviceSelector';
 import { BasePlaylistSelector } from '../components/BasePlaylistSelector';
 import { ManagePanel } from '../components/ManagePanel';
 import { ShareOverlay } from '../components/ShareOverlay';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { PartyLayout } from '../components/PartyLayout';
 import type { PanelDefinition } from '../components/PartyLayout';
 import type { HostStatus, PartySummary } from '../types';
@@ -314,6 +315,10 @@ export function HostPortalPage() {
             )}
             <DeviceSelector />
             <div className={partyStyles.headerIcons}>
+              <ThemeToggle
+                variant="icon"
+                className={`${partyStyles.searchToggle} ${partyStyles.desktopOnly}`}
+              />
               <button
                 className={partyStyles.searchToggle}
                 onClick={() => setShareOpen(true)}

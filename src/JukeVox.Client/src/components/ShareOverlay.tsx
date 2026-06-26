@@ -60,7 +60,7 @@ export function ShareOverlay({ open, onClose, joinToken }: ShareOverlayProps) {
             value={joinUrl}
             size={200}
             bgColor="transparent"
-            fgColor="#ffffff"
+            fgColor="#0a0a0a"
             level="M"
           />
         </div>

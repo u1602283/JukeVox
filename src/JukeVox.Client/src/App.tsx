@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { PartyProvider } from './context/PartyContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { useParty } from './hooks/useParty';
 import { api } from './api/client';
 import { GuestLandingPage } from './pages/GuestLandingPage';
@@ -33,16 +34,18 @@ function GuestRoute() {
 function App() {
   return (
     <BrowserRouter>
-      <PartyProvider>
-        <Routes>
-          <Route path="/" element={<GuestRoute />} />
-          <Route path="/host/setup" element={<HostSetupPage />} />
-          <Route path="/host/register" element={<HostRegisterPage />} />
-          <Route path="/join/:token" element={<JoinPage />} />
-          <Route path="/host/admin" element={<HostAdminPage />} />
-          <Route path="/host" element={<HostPortalPage />} />
-        </Routes>
-      </PartyProvider>
+      <ThemeProvider>
+        <PartyProvider>
+          <Routes>
+            <Route path="/" element={<GuestRoute />} />
+            <Route path="/host/setup" element={<HostSetupPage />} />
+            <Route path="/host/register" element={<HostRegisterPage />} />
+            <Route path="/join/:token" element={<JoinPage />} />
+            <Route path="/host/admin" element={<HostAdminPage />} />
+            <Route path="/host" element={<HostPortalPage />} />
+          </Routes>
+        </PartyProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

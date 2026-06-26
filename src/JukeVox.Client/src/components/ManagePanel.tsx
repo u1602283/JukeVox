@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, RefreshCw, Minus, Plus, UserX } from 'lucide-react';
 import { api } from '../api/client';
 import type { GuestInfo } from '../types';
+import { ThemeToggle } from './ThemeToggle';
 import styles from './ManagePanel.module.css';
 
 interface ManagePanelProps {
@@ -155,6 +156,13 @@ export function ManagePanel({ mode, visible = true, onClose, onPartyEnded }: Man
               <button className={styles.bulkBtn} onClick={() => handleBulkAdd(5)}>+5</button>
               <button className={styles.bulkBtn} onClick={() => handleBulkAdd(-1)}>-1</button>
             </div>
+          </div>
+        )}
+
+        {isInline && (
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>Preferences</div>
+            <ThemeToggle variant="row" />
           </div>
         )}
 
