@@ -78,6 +78,17 @@ When the tab regains visibility, `PartyContext` fetches fresh state via REST to 
 
 The frontend dev server proxies `/api/*` and `/hubs/*` (including WebSocket upgrades) to `https://127.0.0.1:5001`.
 
+### Theming (light/dark + liquid glass)
+
+The app supports light and dark themes, both styled with a "liquid glass" aesthetic. Key file: `src/styles/design-tokens.css`.
+
+- **Token structure:** Theme-independent tokens (radii, durations, easings, layout, the Spotify-green accent) live in `:root`. Theme-dependent tokens (backgrounds, text, borders, shadows, glass, scrim, ambient) are defined per theme under `[data-theme="dark"]` and `[data-theme="light"]`, with the dark values also mirrored in `:root` as a no-attribute fallback. `color-scheme` is set per theme.
+- **Semantic tokens, not literals:** Component CSS must use semantic tokens (`--surface-hover`, `--surface-subtle`, `--track-bg`, `--scrim`, `--accent-text`, `--indicator-bg`, `--danger-subtle/-strong`, etc.) so colors flip with the theme. Do **not** hardcode `rgba(255,255,255,…)`, `rgba(0,0,0,…)`, `#000`, or `#fff` for theme-dependent surfaces. Intentional exceptions: white text on a solid-red danger button, and the share QR card (see Gotchas).
+- **Glass tokens:** `--glass-bg`/`--glass-bg-2` (gradient fill), `--glass-border`, `--glass-highlight` (specular edge), `--glass-blur`, `--glass-saturate`. Reading-heavy modals (Search/Help/Manage) use the more opaque `--glass-panel-bg`/`-2` for text contrast; the floating mobile nav pill uses the near-transparent `--glass-nav-bg` + `--glass-nav-edge`. The shared `.glass` recipe lives in `utilities.css`.
+- **State:** `ThemeProvider` (`src/context/ThemeContext.tsx`) wraps the app **outside** `PartyProvider` in `App.tsx`. `useTheme()` (`src/hooks/useTheme.ts`) exposes `theme`, `toggleTheme`, `setTheme`. The choice persists to `localStorage['jukevox-theme']`; with no stored value it follows `prefers-color-scheme` and live-updates on OS changes until the user manually overrides.
+- **No-flash bootstrap:** An inline script in `index.html` sets `document.documentElement.dataset.theme` (and the `theme-color` meta) before the bundle loads, so there's no flash of the wrong theme.
+- **Toggle placement:** `ThemeToggle` has an `icon` variant (desktop header, hidden on mobile via `desktopOnly`) and a `row` variant (segmented Light/Dark control) used inside `HelpOverlay` (guests) and the mobile `ManagePanel` (host).
+
 ## Queue Sorting & Voting
 
 The queue uses a 3-tier sort system. Key file: `Services/QueueService.cs` — `SortQueue()`, `Vote()`, `Reorder()`.
@@ -212,6 +223,10 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 - **Party status mutations under lock**: `Party.Status` and `Party.SleepingSince` must only be mutated via `PartyService.SetPartyStatus`, which acquires the per-party lock. Never mutate these fields directly on the `Party` object.
 - **TimeProvider in PlaybackMonitorService**: The service accepts an optional `TimeProvider` parameter (defaults to `TimeProvider.System`). Tests inject `FakeTimeProvider` to control time deterministically. All `DateTime.UtcNow` and `Task.Delay` calls go through this provider.
 - **HostActivityMiddleware runs after response**: The middleware calls `next(context)` first, then records activity. This means it doesn't block the response, but the activity timestamp is set after the request completes.
+- **Floating mobile nav pill**: `.mobileNav` is a detached, centered pill (`position: fixed`, `border-radius: pill`, near-transparent `--glass-nav-bg`). Mobile scroll panels (`.slidePanel`) carry a `padding-bottom` so the last item clears it while content scrolls underneath. The active-tab `.indicator` animates via GPU `transform` (not `left`/`right`); its width is one tab slot and the `+8px` in the `translateX` calc compensates for the inter-tab gap so each step lands on a tab (works for both 2-tab guest and 3-tab host).
+- **TabIndicator adaptive pinch**: `TabIndicator.tsx` adds an optional liquid "pinch" `clip-path` flourish at the tab boundary via a short RAF loop. It self-monitors frame timing and sets a module-level `pinchDisabled` flag if the device drops sustained frames (and respects `prefers-reduced-motion`) — do not gate it on `navigator.hardwareConcurrency` (unreliable, esp. iOS Safari). The pill slide itself is pure CSS transform and always runs.
+- **Swipe to change tabs**: `PartyLayout` handles horizontal touch swipes to switch tabs (reusing the slide transition). It commits only when the gesture is clearly horizontal (so vertical scroll is unaffected), is clamped at the ends, and ignores swipes starting on `input[type="range"]` or any `[data-no-swipe]` element. Add `data-no-swipe` to new horizontal-gesture controls.
+- **Share QR card is intentionally fixed-color**: `ShareOverlay` renders the QR with dark modules (`fgColor="#0a0a0a"`) on an always-white `.qrWrapper` card so it stays scannable in both themes — don't tokenize these.
 
 ## API Route Map
 
@@ -233,7 +248,9 @@ Authorization code flow with CSRF state cookie (10-minute TTL, narrow `Path=/api
 | File | Responsibility |
 |---|---|
 | `PartyContext.tsx` | Single source of truth, SignalR lifecycle, visibility refresh |
-| `PartyLayout.tsx` | Shared layout shell for PartyPage and HostPortalPage (scroll sentinel, sticky header, slide-track panels, mobile tab nav) |
+| `ThemeContext.tsx` / `useTheme.ts` | Light/dark theme state, localStorage persistence, `prefers-color-scheme` sync (see [Theming](#theming-lightdark--liquid-glass)) |
+| `ThemeToggle.tsx` | Theme switch — `icon` variant (desktop header) and `row` variant (Help/Manage panels on mobile) |
+| `PartyLayout.tsx` | Shared layout shell for PartyPage and HostPortalPage (scroll sentinel, sticky header, slide-track panels, floating mobile nav pill, horizontal swipe-to-change-tabs) |
 | `NowPlaying.tsx` | RAF-based progress bar, seeking, quip generation, ambient art crossfade, marquee |
 | `QueueList.tsx` | Voting (optimistic updates), drag-and-drop reorder (host only, clamped at base playlist boundary) |
 | `SearchOverlay.tsx` / `useSearch.ts` | Debounced search with request cancellation |
